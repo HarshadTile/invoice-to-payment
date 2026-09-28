@@ -117,3 +117,16 @@ def test_filter_by_invoice_number():
     assert data["total"] == 1
     assert len(data["items"]) == 1
     assert data["items"][0]["invoice_number"] == "26-27/IT/101"
+
+
+def test_internal_login_success():
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": "admin123", "channelScope": "all"},
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["auth"]["authType"] == "internal"
+    assert data["auth"]["username"] == "admin"
