@@ -1,0 +1,514 @@
+/* ============================================================
+   Invoice to Payment Tracker — login
+   Slim header · red branded hero (left) · white login card (right)
+
+   Layout rule: the page is exactly the viewport tall and never scrolls on a
+   normal desktop. NOTHING inside measures its own size or reacts to it, and no
+   inner box uses overflow:auto — so there is no scrollbar-toggle / reflow loop.
+   Very short windows (max-height 720) fall back to natural document scroll.
+
+   Spacing scale used throughout: 4 / 8 / 12 / 16 / 24 / 32
+   ============================================================ */
+
+.lgn-page {
+  /* robust viewport column: header (auto) + main (fills the rest).
+     min-height (not fixed height) so a genuinely-too-short window can still
+     scroll the document rather than clip content. No overflow:hidden here. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #F1F2F5;
+  color: var(--text-body);
+  font-family: var(--font-body);
+}
+
+/* ---------------- Header ---------------- */
+.lgn-hdr {
+  flex: 0 0 auto;
+  height: 60px;
+  box-sizing: border-box;
+  background: #fff;
+  border-bottom: 1px solid #E6E7EB;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(16px, 4vw, 40px);
+}
+.lgn-hdr-brand { display: flex; align-items: center; gap: 12px; }
+.lgn-hdr-brand img { height: 26px; width: auto; display: block; }
+.lgn-hdr-brand span {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding-left: 12px;
+  border-left: 1px solid #E0E1E5;
+}
+.lgn-hdr-nav { display: flex; gap: 4px; }
+.lgn-hdr-nav button {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color .15s ease, background .15s ease;
+}
+.lgn-hdr-nav button:hover { color: var(--brand); background: #F5F5F7; }
+.lgn-hdr-nav button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+/* main = the remaining viewport height after the header (flex:1) */
+.lgn-hero {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(300px, 43%) 1fr;  /* auth area is the larger, primary column */
+  background: var(--brand);
+  /* clip only the x-axis: contains decorative shards/illustration without
+     forcing a scroll container, so a too-short viewport can still scroll the
+     document vertically instead of hiding the card */
+  overflow-x: clip;
+}
+.lgn-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 92%, rgba(0, 0, 0, .22), transparent 42%),
+    radial-gradient(circle at 92% 4%, rgba(255, 255, 255, .06), transparent 40%);
+  pointer-events: none;
+}
+
+/* diagonal Mahindra shards — self-clipping, never affect flow */
+.lgn-hero-deco { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.lgn-hero-deco .shard { position: absolute; background: rgba(255, 255, 255, .05); transform: skewX(-18deg); }
+.lgn-hero-deco .shard.a { width: 120px; left: 30%; top: -10%; height: 120%; background: rgba(255, 255, 255, .045); }
+.lgn-hero-deco .shard.b { width: 46px; left: calc(30% + 150px); top: -10%; height: 120%; background: rgba(255, 255, 255, .06); }
+.lgn-hero-deco .shard.c { width: 260px; right: -120px; top: -20%; height: 140%; background: rgba(0, 0, 0, .06); }
+
+/* hero left */
+.lgn-hero-left {
+  position: relative;
+  z-index: 1;
+  overflow-x: clip;
+  color: #fff;
+  padding: clamp(28px, 4vw, 60px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.lgn-hero-content { position: relative; z-index: 1; max-width: 440px; }
+.lgn-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .88);
+  margin: 0 0 16px;
+}
+.lgn-hero-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: clamp(24px, 2.8vw, 34px);
+  line-height: 1.18;
+  margin: 0 0 16px;
+  color: #fff;
+}
+.lgn-hero-text {
+  font-size: clamp(14px, 1.2vw, 15px);
+  line-height: 1.6;
+  color: rgba(255, 255, 255, .9);
+  margin: 0;
+  max-width: 40ch;
+}
+.lgn-hero-visual { width: min(100%, 440px); margin-top: clamp(24px, 4vw, 40px); }
+
+/* hero right — holds the card. Its height is the grid track (viewport − header),
+   NOT derived from the card, and it does not scroll. */
+.lgn-hero-right {
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;        /* centre the card within the main area (§7) */
+  justify-content: center;
+  padding: clamp(16px, 3vh, 32px) clamp(24px, 4vw, 56px);
+}
+
+/* ---------------- Login card ---------------- */
+.lgn-card {
+  width: min(100%, 440px);
+  background: #fff;
+  border: 1px solid rgba(23, 24, 26, .06);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(60, 4, 14, .26);
+  padding: 26px 28px;
+  animation: lgn-card-in .28s ease both;
+}
+@keyframes lgn-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.lgn-card-head { margin-bottom: 14px; }
+.lgn-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--brand);
+  margin: 0 0 6px;
+}
+.lgn-card-head h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -.005em;
+  color: #1B2333;
+  margin: 0 0 4px;
+  line-height: 1.3;
+}
+.lgn-card-sub { font-size: 12.5px; color: #5A6270; margin: 0; }
+
+/* segmented control */
+.lgn-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  background: #EEEFF3;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.lgn-seg button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 11px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: #5A6270;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.lgn-seg button:hover { color: var(--text-body); }
+.lgn-seg button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.lgn-seg button[data-active="true"] {
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(196, 18, 46, .35);
+}
+
+/* fields */
+.lgn-form { display: flex; flex-direction: column; gap: 12px; }
+/* the Supplier tab has one field fewer than Internal Team — this invisible
+   spacer takes exactly one field's place so the card height never changes */
+.lgn-form-spacer { height: 67px; flex-shrink: 0; }
+.lgn-form-spacer.supplier-code-only { height: 24px; }
+.lgn-field { display: flex; flex-direction: column; gap: 6px; }
+.lgn-field label { font-size: 12.5px; font-weight: 600; color: #333A47; line-height: 1.2; }
+.lgn-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lgn-label-row .lgn-link { font-size: 12px; }
+.lgn-field-note {
+  font-size: 11.5px;
+  color: #6B7280;
+  line-height: 1.4;
+  margin-top: 1px;
+}
+
+.lgn-input { position: relative; display: block; }
+.lgn-input .lgn-ic {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: #8A909B;
+  pointer-events: none;
+}
+.lgn-input input,
+.lgn-input select {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px 0 40px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid #D3D7DE;
+  border-radius: 8px;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.lgn-input input::placeholder { color: #9AA0AC; }
+.lgn-input select { appearance: none; padding-right: 36px; cursor: pointer; }
+.lgn-input .lgn-caret {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: #8A909B;
+  pointer-events: none;
+}
+.lgn-input input:focus,
+.lgn-input select:focus,
+.lgn-input input:focus-visible,
+.lgn-input select:focus-visible {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(196, 18, 46, .16);
+}
+.lgn-input input[aria-invalid="true"],
+.lgn-input select[aria-invalid="true"] {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(196, 18, 46, .12);
+}
+/* keep autofilled fields white, not browser-blue/yellow */
+.lgn-input input:-webkit-autofill,
+.lgn-input input:-webkit-autofill:hover,
+.lgn-input input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  -webkit-box-shadow: 0 0 0 40px #fff inset;
+  box-shadow: 0 0 0 40px #fff inset;
+  caret-color: var(--text);
+}
+.lgn-pw-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #8A909B;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color .15s ease, background .15s ease;
+}
+.lgn-pw-toggle:hover { color: var(--text-body); background: #F1F2F5; }
+.lgn-pw-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+.lgn-field-msg { font-size: 11.5px; color: var(--brand); line-height: 1.3; }
+
+/* remember me (forgot-password now lives in the password label row) */
+.lgn-remember {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1;
+  color: #333A47;
+  cursor: pointer;
+  user-select: none;
+}
+.lgn-remember input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+.lgn-remember input:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.lgn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--brand);
+  cursor: pointer;
+}
+.lgn-link:hover { color: var(--brand-dark); text-decoration: underline; text-underline-offset: 2px; }
+.lgn-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
+
+/* alerts */
+.lgn-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  margin-bottom: 12px;
+}
+.lgn-alert.error { background: var(--red-bg); color: var(--brand-dark); border-color: #F0C7CE; }
+.lgn-alert.success { background: var(--green-bg); color: #0F5F38; border-color: #BBE9CD; }
+.lgn-alert svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; }
+
+/* submit */
+.lgn-submit {
+  height: 46px;
+  margin-top: 4px;
+  border: none;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  transition: background .18s ease, box-shadow .18s ease;
+}
+.lgn-submit:hover:not(:disabled) {
+  background: var(--brand-dark);
+  box-shadow: 0 8px 20px rgba(196, 18, 46, .26);
+}
+.lgn-submit:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.lgn-submit:disabled { opacity: .6; cursor: not-allowed; }
+
+.lgn-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, .45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: lgn-spin .7s linear infinite;
+}
+@keyframes lgn-spin { to { transform: rotate(360deg); } }
+
+/* minimal in-card legal line */
+.lgn-legal {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #ECEDF1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 11px;
+  color: #8A909B;
+}
+.lgn-legal button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  color: #8A909B;
+  cursor: pointer;
+}
+.lgn-legal button:hover { color: var(--brand); }
+.lgn-legal button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
+.lgn-legal-help { margin-left: auto; color: var(--brand) !important; font-weight: 600; }
+
+/* ---------------- Responsive ---------------- */
+@media (max-width: 1280px) {
+  .lgn-hero { grid-template-columns: minmax(280px, 40%) 1fr; }
+  .lgn-hero-visual { max-width: 380px; }
+}
+
+/* SHORT desktop viewports — 1366x768, and 1080p at 125-150% Windows scale
+   (1080/1.5 = 720 CSS px, minus browser chrome ≈ 600 visible). Compact the
+   whole card so the full experience fits with no page scroll. */
+@media (min-width: 1025px) and (max-height: 820px) {
+  .lgn-hdr { height: 56px; }
+  .lgn-hero-right { padding: 12px clamp(20px, 3vw, 44px); }
+  .lgn-card { padding: 18px 24px; width: min(100%, 420px); }
+  .lgn-card-head { margin-bottom: 10px; }
+  .lgn-kicker { margin-bottom: 4px; font-size: 10.5px; }
+  .lgn-card-head h2 { font-size: 16px; line-height: 1.25; }
+  .lgn-card-sub { font-size: 11.5px; }
+  .lgn-seg { margin-bottom: 10px; }
+  .lgn-seg button { padding: 8px; }
+  .lgn-form { gap: 9px; }
+  .lgn-form-spacer { height: 62px; }
+  .lgn-form-spacer.supplier-code-only { height: 18px; }
+  .lgn-field { gap: 5px; }
+  .lgn-input input, .lgn-input select { height: 42px; }
+  .lgn-submit { height: 44px; margin-top: 2px; }
+  .lgn-remember { margin-top: 2px; }
+  .lgn-alert { margin-bottom: 10px; }
+  .lgn-legal { margin-top: 10px; padding-top: 8px; }
+  .lgn-hero-left { padding: clamp(24px, 3vw, 48px); }
+  .lgn-eyebrow { margin-bottom: 10px; }
+  .lgn-hero-title { font-size: clamp(20px, 2.3vw, 28px); margin-bottom: 10px; }
+  .lgn-hero-text { font-size: 13.5px; }
+  .lgn-hero-visual { width: min(100%, 340px); max-height: 24vh; margin-top: 12px; }
+}
+
+/* very short desktop windows — let the document scroll rather than clip */
+@media (min-width: 1025px) and (max-height: 560px) {
+  .lgn-page { min-height: 0; }
+  .lgn-hero-right { align-items: flex-start; }
+}
+
+/* stack below ~1024 — no side-by-side compression; document scrolls naturally */
+@media (max-width: 1024px) {
+  .lgn-hero {
+    grid-template-columns: 1fr;
+    grid-auto-rows: min-content auto;
+  }
+  .lgn-hero-deco { display: none; }
+  .lgn-hero-left { padding: 26px 22px; }
+  .lgn-hero-content { max-width: none; }
+  .lgn-hero-title { font-size: 20px; margin-bottom: 10px; }
+  .lgn-hero-title br { display: none; }
+  .lgn-eyebrow { margin-bottom: 10px; }
+  .lgn-hero-text { display: none; }
+  .lgn-hero-visual { display: none; }
+  .lgn-hero-right {
+    background: #F1F2F5;
+    padding: 24px 20px 32px;
+    align-items: flex-start;
+  }
+  .lgn-card { width: min(100%, 460px); margin: 0 auto; }
+}
+
+/* phones / small tablets */
+@media (max-width: 560px) {
+  .lgn-hdr { height: 56px; gap: 8px; }
+  .lgn-hdr-brand span { font-size: 11px; letter-spacing: .04em; }
+  .lgn-hdr-nav button { padding: 8px 8px; font-size: 12px; }
+  .lgn-hero-left { padding: 22px 18px; }
+  .lgn-hero-title { font-size: 18px; }
+  .lgn-hero-right { padding: 16px 16px 28px; }
+  .lgn-card {
+    width: 100%;
+    padding: 22px 18px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(23, 24, 26, .1);
+  }
+  .lgn-legal { gap: 6px 12px; }
+  .lgn-legal-help { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lgn-submit, .lgn-seg button, .lgn-input input, .lgn-input select { transition: none; }
+  .lgn-card { animation: none; }
+  .lgn-spinner { animation-duration: 1.4s; }
+}

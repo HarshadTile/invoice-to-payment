@@ -1,0 +1,17 @@
+{
+  "//": "Hide dependency + build folders from the Explorer and search. These are not project files — node_modules is restored by `npm install`, dist by `npm run build`.",
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.git": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/package-lock.json": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true
+  }
+}
