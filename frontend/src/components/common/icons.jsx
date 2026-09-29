@@ -38,3 +38,4 @@ export const X =(p) => <Ic {...p} d={<path d="M6 6l12 12M18 6 6 18" />} />;
 export const Inbox = (p) => <Ic {...p} d={<><path d="M4 13h4l2 3h4l2-3h4" /><path d="M4 13 6 5h12l2 8v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" /></>} />;
 export const Edit = (p) => <Ic {...p} d={<><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>} />;
 export const Trash = (p) => <Ic {...p} d={<><path d="M4 7h16M10 11v6M14 11v6" /><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3" /></>} />;
+export const Key = (p) => <Ic {...p} d={<><circle cx="8" cy="15" r="4" /><path d="m10.5 12.5 8-8M16 6l2 2M19 3l2 2" /></>} />;

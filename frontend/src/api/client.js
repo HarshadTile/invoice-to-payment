@@ -30,7 +30,8 @@ async function req(method, path, body) {
     let message = `Request failed (${res.status})`;
     try {
       const data = await res.json();
-      if (data && data.error) message = data.error;
+      // FastAPI's HTTPException uses "detail"; a couple of legacy endpoints use "error".
+      if (data && (data.detail || data.error)) message = data.detail || data.error;
     } catch {
       /* response had no JSON body */
     }
@@ -55,6 +56,7 @@ export const api = {
   post: (path, body) => req('POST', path, body),
   patch: (path, body) => req('PATCH', path, body),
   put: (path, body) => req('PUT', path, body),
+  delete: (path) => req('DELETE', path),
   setToken(value, { persist = true } = {}) {
     token = value;
     writeToken(value, persist);

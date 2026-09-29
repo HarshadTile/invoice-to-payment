@@ -33,10 +33,12 @@ def supplier_login(request: SupplierLoginRequest, db: Session = Depends(get_db))
         }
     }
 
+VALID_CHANNEL_SCOPES = ["all", "msetuSrm", "poPortal", "mfoxPortal"]
+
 class InternalLoginRequest(BaseModel):
     username: str
     password: str
-    channelScope: Optional[str] = "all"
+    channelScope: Optional[str] = None
 
 @router.post("/login")
 def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db)):
@@ -58,14 +60,22 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
     
     if not is_valid:
         raise HTTPException(status_code=401, detail="Invalid username or password.")
-          
-    wants_all = request.channelScope == "all"
-    if wants_all and user.role != "Admin":
-        raise HTTPException(status_code=403, detail="This account can only sign in to a specific channel portal.")
-        
-    valid_scopes = ["all", "msetuSrm", "poPortal", "mfoxPortal"]
-    final_scope = request.channelScope if request.channelScope in valid_scopes else "all"
-    
+
+    if user.status != "Active":
+        raise HTTPException(status_code=403, detail="This account has been deactivated. Contact an administrator.")
+
+    # An account locked to one portal (Settings > Users) can never sign in anywhere else,
+    # no matter what the login form sends. An "all"-access (Admin) account may still narrow
+    # its own session to a single channel to preview that view — it already has the access,
+    # this only changes what's shown, not what's permitted.
+    requested = request.channelScope
+    if user.channel_scope != "all":
+        if requested and requested != user.channel_scope:
+            raise HTTPException(status_code=403, detail="This account can only sign in to its assigned portal.")
+        final_scope = user.channel_scope
+    else:
+        final_scope = requested if requested in VALID_CHANNEL_SCOPES else "all"
+
     login_by = "username" if user.username.lower() == login_id else "email"
     scope_data = {"channelScope": final_scope, "loginBy": login_by, "loginId": login_id}
     
@@ -113,6 +123,10 @@ def get_me(payload: dict = Depends(get_current_user_token), db: Session = Depend
     else:
         user_id = int(payload.get("sub"))
         user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid session.")
+        if user.status != "Active":
+            raise HTTPException(status_code=403, detail="This account has been deactivated.")
         scope_data = payload.get("scope", {})
         return {
             "auth": {

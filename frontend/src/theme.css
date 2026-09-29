@@ -507,3 +507,9 @@ thead th.col-actions{background:#F7F8FA;z-index:3;}
 .pf-row:last-child{border-bottom:0;}
 .pf-row-title{font-size:14px;font-weight:600;color:var(--text);}
 .pf-row-desc{font-size:12.5px;color:var(--text-muted);margin-top:2px;}
+
+/* ── Form error banner (used in modals) ── */
+.form-error{background:var(--red-bg,#FDECEE);border:1px solid #F0C7CE;color:var(--brand-dark);font-size:12.5px;padding:9px 12px;border-radius:8px;margin-bottom:14px;}
+
+/* ── Users management table ── */
+.role-chip{display:inline-block;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;background:var(--gray-bg);color:var(--text-body);white-space:nowrap;}

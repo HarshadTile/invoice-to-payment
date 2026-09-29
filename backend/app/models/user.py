@@ -13,6 +13,9 @@ class User(Base):
     dept = Column(String(64), nullable=False, default="")
     title = Column(String(128), nullable=False, default="")
     status = Column(String(32), nullable=False, default="Active")
+    # Which portal this account may sign in to: "all" (Admin only) or one of the specific
+    # channels (msetuSrm/poPortal/mfoxPortal). Assigned by an admin, never chosen at login.
+    channel_scope = Column(String(32), nullable=False, default="all")
 
 class OTPCode(Base):
     __tablename__ = "otp_codes"

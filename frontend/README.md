@@ -9,67 +9,67 @@ lifted directly from mahindra.com; the logo is used as supplied.
 
 ## Getting started
 
-Requires a local **MySQL 8+/9** server running on `localhost:3306`.
+This app is a Vite + React frontend talking to a **FastAPI backend** in
+[../backend](../backend) — start that first (see its own README for
+first-time setup: creating a database, seeding a login account).
 
 ```bash
 npm install
-cp server/.env.example server/.env     # then edit DB_PASSWORD to match your MySQL
-npm run seed                           # creates the `mahindra_i2p` database + demo data
-npm run dev:all                        # API on :3001 + Vite web app together
+cp .env.example .env.local   # then check VITE_USE_FASTAPI_INVOICES=true
+npm run dev
 ```
+
+`.env.local` is required, not optional — without `VITE_USE_FASTAPI_INVOICES=true`
+the app tries to call a different, unrelated server for invoices/dashboard
+data and renders blank. It's gitignored (one per machine), which is why a
+fresh checkout doesn't already have it.
 
 Other scripts:
 
 ```bash
-npm run server       # API only
-npm run dev          # web only (expects the API already running)
-npm run build        # production build to /dist
-npm run test         # client test suite (Vitest + RTL)
-npm run test:server  # server test suite (local MySQL, separate `mahindra_i2p_test` database — demo data is never touched)
-npm run lint         # oxlint
+npm run build   # production build to /dist
+npm run test    # client test suite (Vitest + RTL)
+npm run lint    # oxlint
 ```
 
-### Authentication and data provisioning
+### Authentication
 
-The seed command creates the schema and clears application tables. It does not
-insert demo invoices, tickets, or settings. For local development only, it
-creates one temporary administrator account: `admin` / `admin@123`. This
-account can select either All Channels or Internal Team. Provision real
-internal users and supplier/vendor records through your deployment or data
-import process before production use. Supplier access has no password in this
-prototype; the vendor code must already exist in FastAPI and is resolved
-server-side.
+Sign in with the account you (or an admin) created via the backend's
+`seed_admin.py` or Settings → Users. There's no demo/seed account baked into
+this frontend — if login fails, the backend most likely has no accounts yet.
+Supplier sign-in accepts any vendor code today (no password); see
+[../backend/README.md](../backend/README.md) for details on that and on the
+role/portal model.
 
-## Database
+## Backend
 
-A small Express API (`server/`) owns a MySQL database, `mahindra_i2p`:
+The FastAPI service in [../backend](../backend) owns everything except the
+invoice register itself, which it reads directly from an Excel file:
 
-| Table | Holds |
+| Data | Source |
 |---|---|
-| `users`, `sessions` | login accounts (bcrypt) and active bearer-token sessions |
-| `invoices` | the invoice register, plus `stage_index` for stage moves |
-| `tickets`, `ticket_comments`, `ticket_activity` | the inquiry desk |
-| `table_rows` | the editable Settings grids (users, notification rules, audit) |
-| `settings`, `sync_log`, `integrations` | role matrix, 2FA, sync history, connectors |
+| Invoices | `backend/data/gcp_invoice_data.xlsx` (read on request, not cached in a DB) |
+| Login accounts, roles, portal access | `users` table |
+| Tickets, editable Settings grids, audit log, sync log | SQL tables, written on every change |
 
-The React app loads everything once after login (`GET /api/workspace`) and every
-in-app change (raise a ticket, drag a Kanban card, toggle a permission, advance
-an invoice stage) is written straight back to MySQL, so it survives a restart.
-Re-run `npm run seed` at any time to reset to the demo dataset.
-
-The full endpoint list is in [docs/API.md](docs/API.md).
+The React app loads everything once after login (`GET /v1/workspace` plus a
+few FastAPI invoice endpoints) and writes changes straight back, so they
+survive a restart. The full endpoint list is in [docs/API.md](docs/API.md) —
+note it may describe an earlier prototype's endpoint shapes in places; the
+backend's own code and `/docs` (Swagger UI at `http://127.0.0.1:8000/docs`)
+are the source of truth.
 
 ### Access control (enforced by the API, not just the UI)
 
-- Sessions are bearer tokens that expire after 12 hours (`SESSION_TTL_HOURS`).
-- A **supplier** session only ever receives its own vendor code's invoices and the
-  tickets on them; it can raise tickets and reply on those, and nothing else.
-- Internal writes are checked against the role matrix stored in the database:
-  moving an invoice, editing a ticket, and editing the Settings tables need
-  `editRows`; changing the role matrix needs `manageUsers`.
-- The Internal Team scope is applied server-side to the dashboard aggregates too.
-- The top-bar identity switcher is still a demo convenience: it only re-scopes the
-  *view*. The server keeps enforcing the permissions of the session you signed in with.
+- A **supplier** session only ever receives its own vendor code's invoices and
+  the tickets on them; internal-only fields (approver IDs, etc.) are stripped
+  from what it's sent.
+- Internal writes are checked against the role matrix: moving an invoice,
+  editing a ticket, and editing the Settings tables need `editRows`; managing
+  users needs `manageUsers`.
+- Every account is locked to one portal (channel) except Admin, which has all
+  of them; this is enforced at login and when an admin assigns a role, not
+  just hidden in the UI.
 
 ## What's in it
 
