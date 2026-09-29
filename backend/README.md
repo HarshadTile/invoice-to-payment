@@ -22,22 +22,33 @@ pip install -r requirements.txt
 
 ### 1. Point the app at a database
 
-The code defaults to MySQL (`mysql+pymysql://root:root@localhost:3306/mahindra_i2p`)
-if `DATABASE_URL` isn't set. If you don't have MySQL, use a local SQLite file
-instead — no server needed, and it's what this project is normally run with
-day to day:
+Copy `.env.example` to `.env` and set `DATABASE_URL` there — it's read
+automatically on startup (`app/core/database.py`) and gitignored, so a real
+password never needs to be typed into a terminal or committed anywhere:
 
 ```powershell
-$env:DATABASE_URL = "sqlite:///./data/app.db"
+copy .env.example .env
+notepad .env
 ```
 
-Set that in **every terminal** where you run `uvicorn`, `pytest`, or
-`seed_admin.py` — it isn't persisted anywhere. `data/app.db` is created
-automatically on first use and is not (and should not be) committed to git.
+The code falls back to MySQL (`mysql+pymysql://root:root@localhost:3306/mahindra_i2p`)
+if `.env` doesn't exist and `DATABASE_URL` isn't set some other way. If you
+don't have MySQL, use a local SQLite file instead — no server needed:
 
-To use MySQL instead, create the database first (`CREATE DATABASE
-mahindra_i2p;`) and set `DATABASE_URL` to your real connection string,
-URL-encoding any special characters in the password (`@` → `%40`, etc).
+```
+DATABASE_URL=sqlite:///./data/app.db
+```
+
+`data/app.db` is created automatically on first use and is not (and should
+not be) committed to git.
+
+To use MySQL, create the database first (`CREATE DATABASE mahindra_i2p;`)
+and put your real connection string in `.env`, URL-encoding any special
+characters in the password (`@` → `%40`, `:` → `%3A`, etc).
+
+If you'd rather not keep it in a file (e.g. a one-off terminal session), you
+can still set `$env:DATABASE_URL = "..."` before running a command instead —
+that overrides `.env` for that terminal only.
 
 ### 2. Create your first login account
 
