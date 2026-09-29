@@ -1,9 +1,17 @@
 from fastapi.testclient import TestClient
 
+from app.core.security import create_access_token
 from app.main import app
 
 
-client = TestClient(app)
+def _auth(auth_type, subject, scope=None):
+    token = create_access_token(subject=subject, auth_type=auth_type, scope=scope)
+    return {"Authorization": f"Bearer {token}"}
+
+
+anonymous = TestClient(app)
+client = TestClient(app, headers=_auth("internal", 1, {"channelScope": "all"}))
+supplier = TestClient(app, headers=_auth("supplier", "DIM00505AA", {"company": "Forvis Mazars LLP"}))
 
 
 def test_get_invoice_by_number(): 
@@ -130,3 +138,35 @@ def test_internal_login_success():
     data = response.json()
     assert data["auth"]["authType"] == "internal"
     assert data["auth"]["username"] == "admin"
+
+def test_invoice_endpoints_require_login():
+    for path in ("/api/v1/invoices", "/api/v1/invoices/summary", "/api/v1/invoices/recent",
+                 "/api/v1/invoices/INV-2627000165"):
+        assert anonymous.get(path).status_code in (401, 403), path
+
+
+def test_supplier_only_sees_own_vendor_code():
+    # asking for someone else's vendor code must not widen the result
+    data = supplier.get("/api/v1/invoices?page_size=1000&vendor_code=DIG00356AA").json()
+
+    assert data["total"] > 0
+    assert {i["supplier"]["vendor_code"] for i in data["items"]} == {"DIM00505AA"}
+    assert supplier.get("/api/v1/invoices/summary?vendor_code=DIG00356AA").json()["total"] == data["total"]
+
+
+def test_supplier_cannot_open_another_suppliers_invoice():
+    other = client.get("/api/v1/invoices?page_size=1&vendor_code=DIG00356AA").json()["items"][0]
+
+    response = supplier.get(f"/api/v1/invoices/{other['invoice_number']}")
+
+    assert response.status_code == 404
+
+
+def test_supplier_responses_hide_internal_approval_details():
+    item = supplier.get("/api/v1/invoices?page_size=1").json()["items"][0]
+    workflow = item["workflow"]
+
+    assert workflow["pending_with"] is None
+    assert workflow["accountant"] is None
+    assert workflow["approver_remarks"] is None
+    assert all(v is None for v in workflow["approvers"].values())

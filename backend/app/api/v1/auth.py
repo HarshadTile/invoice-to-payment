@@ -80,6 +80,8 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
             "name": user.name,
             "email": user.email,
             "role": user.role,
+            "title": user.title,
+            "dept": user.dept,
             "channelScope": final_scope
         }
     }
@@ -120,6 +122,8 @@ def get_me(payload: dict = Depends(get_current_user_token), db: Session = Depend
                 "name": user.name,
                 "email": user.email,
                 "role": user.role,
+                "title": user.title,
+                "dept": user.dept,
                 "channelScope": scope_data.get("channelScope", "all")
             }
         }

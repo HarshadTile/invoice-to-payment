@@ -1,12 +1,11 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { useSearchParams } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CHANNELS, LOGIN_CHANNELS, CHANNEL_LABEL } from '../data/constants';
+import { getFiscalYear } from '../utils/businessLogic';
 import { selectScopedInvoices, selectInternalScopeLabel } from '../features/invoices/selectors';
 import { selectIsChannelLocked } from '../features/auth/authSlice';
-import { setInvoicesTopTab } from '../features/ui/uiSlice';
 import { api } from '../api/client';
-import GlobalLogsBody from '../components/common/GlobalLogsBody.jsx';
 import StatCard from '../components/common/StatCard.jsx';
 import BarChart from '../components/common/BarChart.jsx';
 import DonutChart from '../components/common/DonutChart.jsx';
@@ -62,24 +61,33 @@ function recentFrom(invoices) {
 }
 
 export default function InvoicesPage() {
-  const dispatch = useDispatch();
   const invoices = useSelector(selectScopedInvoices);
   const scopeLabel = useSelector(selectInternalScopeLabel);
   const isChannelLocked = useSelector(selectIsChannelLocked);
   const { channelScope } = useSelector((s) => s.auth);
-  const topTab = useSelector((s) => s.ui.invoicesTopTab);
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  /** Open Search Invoice(s) showing only this status, across all dates so the list matches the number clicked. */
+  const openSearchByStatus = (status) => {
+    const next = new URLSearchParams({ status, date_from: '', date_to: '' });
+    ['channel', 'vcode', 'fy'].forEach((k) => { if (searchParams.get(k)) next.set(k, searchParams.get(k)); }); // keep top-bar scope
+    navigate(`/app/search?${next.toString()}`);
+  };
 
   const topbarChannel = searchParams.get('channel');
   const topbarVcode = searchParams.get('vcode');
+  // Absent means "current financial year", same default as the top-bar dropdown shows; 'all' is explicit "every year"
+  const topbarFY = searchParams.get('fy') || getFiscalYear(new Date().toISOString());
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter((i) => {
       if (topbarChannel && i.channel !== topbarChannel) return false;
       if (topbarVcode && i.vcode !== topbarVcode) return false;
+      if (topbarFY !== 'all' && getFiscalYear(i.date) !== topbarFY) return false;
       return true;
     });
-  }, [invoices, topbarChannel, topbarVcode]);
+  }, [invoices, topbarChannel, topbarVcode, topbarFY]);
 
   // Server-side aggregation; falls back to the loaded list if the call fails.
   const [summary, setSummary] = useState(null);
@@ -118,7 +126,7 @@ export default function InvoicesPage() {
   }, [fetchKey, channelScope]);
 
   // If local topbar filters are active, bypass the server summary and compute locally.
-  const isFiltering = topbarChannel || topbarVcode;
+  const isFiltering = topbarChannel || topbarVcode || topbarFY !== 'all';
   const useServerSummary = !isFiltering && summary?.key === fetchKey;
   
   const scopedChannels = isChannelLocked ? CHANNELS.filter((c) => c.key === channelScope) : CHANNELS;
@@ -141,44 +149,30 @@ export default function InvoicesPage() {
         <h1 className="page-title">{isChannelLocked ? `${scopeLabel} Invoice Tracking` : 'Invoice Tracking'}</h1>
       </header>
 
-      <div className="seg-tabs" role="tablist" aria-label="Invoice view">
-        <button type="button" role="tab" aria-selected={topTab === 'All Invoices'}
-          className={`seg-tab${topTab === 'All Invoices' ? ' active' : ''}`}
-          onClick={() => dispatch(setInvoicesTopTab('All Invoices'))}>Overview</button>
-        {/* value stays 'All Invoices' for store compatibility; label reads 'Overview' */}
-        <button type="button" role="tab" aria-selected={topTab === 'History'}
-          className={`seg-tab${topTab === 'History' ? ' active' : ''}`}
-          onClick={() => dispatch(setInvoicesTopTab('History'))}>History / Logs</button>
-      </div>
+      <div className="dash">
+        <div className="kpi-grid">
+          <StatCard tone="warn" icon={<ClockIcon />} label="Pending Approval" value={agg.kpi.pendingApproval} sub="Awaiting approver action" onClick={() => openSearchByStatus('Pending Approval')} />
+          <StatCard tone="brand" icon={<CheckCircleIcon />} label="Approved" value={agg.kpi.approved} sub="Approved by business" onClick={() => openSearchByStatus('Approved')} />
+          <StatCard tone="brand" icon={<CardIcon />} label="Payment Due" value={agg.kpi.paymentDue} sub="Booked, due this cycle" onClick={() => openSearchByStatus('Payment Due')} />
+          <StatCard tone="good" icon={<CheckCircleIcon />} label="Paid" value={agg.kpi.paid} sub="Payment cleared" onClick={() => openSearchByStatus('Paid')} />
+        </div>
 
-      {topTab === 'History' ? (
-        <GlobalLogsBody invoiceList={invoices} tableKey="invoicesHistory" />
-      ) : (
-        <div className="dash">
-          <div className="kpi-grid">
-            <StatCard tone="warn" icon={<ClockIcon />} label="Pending Approval" value={agg.kpi.pendingApproval} sub="Awaiting approver action" />
-            <StatCard tone="brand" icon={<CheckCircleIcon />} label="Approved" value={agg.kpi.approved} sub="Approved by business" />
-            <StatCard tone="brand" icon={<CardIcon />} label="Payment Due" value={agg.kpi.paymentDue} sub="Booked, due this cycle" />
-            <StatCard tone="good" icon={<CheckCircleIcon />} label="Paid" value={agg.kpi.paid} sub="Payment cleared" />
+        <div className="chart-grid">
+          <div className="card chart-card">
+            <h3>Invoices by Channel</h3>
+            <DonutChart segments={channelSegments} total={agg.total} />
           </div>
-
-          <div className="chart-grid">
-            <div className="card chart-card">
-              <h3>Invoices by Channel</h3>
-              <DonutChart segments={channelSegments} total={agg.total} />
-            </div>
-            <div className="card chart-card">
-              <h3>Invoice Status</h3>
-              <BarChart bars={statusBars} />
-            </div>
-          </div>
-
-          <div className="card recent-card">
-            <h3>Recent Invoices <span className="card-hint">Latest {recentRows.length}</span></h3>
-            <RecentInvoices rows={recentRows} />
+          <div className="card chart-card">
+            <h3>Invoice Status</h3>
+            <BarChart bars={statusBars} onBarClick={openSearchByStatus} />
           </div>
         </div>
-      )}
+
+        <div className="card recent-card">
+          <h3>Recent Invoices <span className="card-hint">Latest {recentRows.length}</span></h3>
+          <RecentInvoices rows={recentRows} />
+        </div>
+      </div>
     </>
   );
 }

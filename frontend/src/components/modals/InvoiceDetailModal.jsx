@@ -74,7 +74,7 @@ export default function InvoiceDetailModal({ ctx }) {
       foot={(
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'notifyPreview', ctx: { no: inv.no } }))}>Ã¢Å“â€° Notify Supplier</button>
+            <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'notifyPreview', ctx: { no: inv.no } }))}>✉ Notify Supplier</button>
           </div>
           <button type="button" className="btn" onClick={() => dispatch(closeModal())}>Close</button>
         </div>
@@ -115,7 +115,7 @@ export default function InvoiceDetailModal({ ctx }) {
             <div style={{ display: 'flex', gap: 10 }} key={i}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <div style={{ width: 22, height: 22, borderRadius: '50%', background: dotBg, color: dotFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                  {st === 'done' ? 'Ã¢Å“â€œ' : st === 'fail' ? 'Ã¢Å“â€¢' : idx}
+                  {st === 'done' ? '✓' : st === 'fail' ? '✕' : idx}
                 </div>
                 {i < stages.length - 1 && <div style={{ width: 2, flex: 1, minHeight: 14, background: idx < done ? 'var(--blue)' : '#E2E8F0' }} />}
               </div>
@@ -143,7 +143,7 @@ export default function InvoiceDetailModal({ ctx }) {
               />
             )}
             <button type="button" className="btn primary" disabled={moving} onClick={advance}>
-              {moving ? 'SavingÃ¢â‚¬Â¦' : `Mark ${next}`}
+              {moving ? 'Saving…' : `Mark ${next}`}
             </button>
           </span>
         </div>

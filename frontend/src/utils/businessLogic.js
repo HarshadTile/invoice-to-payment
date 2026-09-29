@@ -102,6 +102,7 @@ export function currentStageName(inv) {
 export function combinedStatusFor(inv) {
   if (inv.status === 'Paid') return { label: 'Fully Paid', tone: 'green', reason: 'Settled in full. UTR and payment date are shown below.' };
   if (inv.status === 'Rejected' || inv.status === 'Deleted') return { label: inv.status, tone: 'red', reason: 'Blocked. See the current stage above for why.' };
+  if (inv.status === 'Approved') return { label: 'Approved', tone: 'blue', reason: 'Approved. Waiting for the invoice to be booked in SAP (MIRO).' };
   if (['Payment Due', 'Miro Booked'].includes(inv.status)) return { label: 'Unpaid', tone: 'blue', reason: 'Booked, not yet due for payment.' };
   return { label: 'In Approval', tone: 'amber', reason: 'Awaiting internal review or approver action.' };
 }

@@ -1,3 +1,5 @@
+import { api } from './client';
+
 const INVOICE_BASE_URL = '/api/v1/invoices';
 
 function displayDate(value) {
@@ -61,7 +63,7 @@ export function toWorkspaceInvoice(invoice) {
 }
 
 async function request(path = '') {
-  const response = await fetch(`${INVOICE_BASE_URL}${path}`);
+  const response = await fetch(`${INVOICE_BASE_URL}${path}`, { headers: api.authHeaders() });
 
   if (!response.ok) {
     let message = `Invoice request failed (${response.status})`;

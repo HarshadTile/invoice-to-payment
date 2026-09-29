@@ -65,4 +65,5 @@ export const api = {
     try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
   },
   hasToken: () => !!token,
+  authHeaders: () => (token ? { Authorization: `Bearer ${token}` } : {}),
 };

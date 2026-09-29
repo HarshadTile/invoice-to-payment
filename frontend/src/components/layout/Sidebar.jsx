@@ -29,7 +29,7 @@ export default function Sidebar() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const { authType, channelScope, supplierLoginVcode } = useSelector((s) => s.auth);
+  const { authType, channelScope } = useSelector((s) => s.auth);
   const perm = useSelector(selectPerm);
   const expandedNav = useSelector((s) => s.ui.expandedNav);
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
@@ -38,14 +38,12 @@ export default function Sidebar() {
 
   // ── Supplier sidebar ──
   if (authType === 'supplier') {
-    const code = supplierLoginVcode;
     return (
       <aside className="sidebar">
         <Brand />
         <div className="sidebar-scroll">
           <nav className="nav-tree" aria-label="Primary">
             <NavItem icon={<FileText />} label="My Invoices" active={isActive('/supplier/home')} onClick={() => navigate('/supplier/home')} />
-            <NavItem icon={<Building />} label="Supplier Visibility" active={isActive('/supplier/vendor-code')} onClick={() => navigate(`/supplier/vendor-code/${code}`)} />
             <NavItem icon={<History />} label="Logs" active={isActive('/supplier/logs')} onClick={() => navigate('/supplier/logs')} />
             <NavItem icon={<MessageSquare />} label="My Queries" active={isActive('/supplier/tickets')} onClick={() => navigate('/supplier/tickets')} />
           </nav>

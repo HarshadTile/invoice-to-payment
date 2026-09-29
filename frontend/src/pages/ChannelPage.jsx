@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { CHANNELS, VIEW_COLUMNS, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
 import { selectScopedInvoices } from '../features/invoices/selectors';
@@ -9,11 +9,47 @@ import { setChannelViewTab, setChannelQueryViewMode, openModal } from '../featur
 import { setRows, selectTable } from '../features/tables/tablesSlice';
 import { selectPerm } from '../features/auth/authSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
+import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
 import EditableTable from '../components/common/EditableTable.jsx';
 import StatCard from '../components/common/StatCard.jsx';
 import Badge from '../components/common/Badge.jsx';
 import TicketTable from '../components/tickets/TicketTable.jsx';
 import TicketBoard from '../components/tickets/TicketBoard.jsx';
+
+/** Status + date-range filter (same one used on My Invoices / Search Invoice(s)), scoped to this channel's invoices. */
+function useChannelInvoiceFilter(channelInvoices) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = defaultInvoiceRange();
+  const status = searchParams.get('status') || '';
+  const dateFrom = searchParams.has('date_from') ? searchParams.get('date_from') : range.from;
+  const dateTo = searchParams.has('date_to') ? searchParams.get('date_to') : range.to;
+
+  const update = (changes) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(changes).forEach(([k, v]) => { if (v === null) next.delete(k); else next.set(k, v); });
+    setSearchParams(next, { replace: true });
+  };
+
+  const inRange = channelInvoices.filter((i) => {
+    const ymd = invoiceYMD(i);
+    return (!dateFrom || ymd >= dateFrom) && (!dateTo || ymd <= dateTo);
+  });
+  const shown = inRange.filter((i) => !status || i.status === status);
+  const isDefaultRange = dateFrom === range.from && dateTo === range.to;
+  const rangeLabel = !dateFrom && !dateTo ? 'all dates' : (isDefaultRange ? 'last 90 days' : `${dateFrom || 'earliest'} to ${dateTo || 'latest'}`);
+
+  const bar = (
+    <InvoiceFilterBar
+      status={status} dateFrom={dateFrom} dateTo={dateTo}
+      onStatusChange={(v) => update({ status: v || null })} onDateFrom={(v) => update({ date_from: v })} onDateTo={(v) => update({ date_to: v })}
+      onLast90Days={() => update({ date_from: null, date_to: null })}
+      onAllDates={() => update({ date_from: '', date_to: '' })}
+      onClear={() => update({ status: null, date_from: '', date_to: '' })}
+      statusCountBase={inRange} resultCount={shown.length} rangeLabel={rangeLabel}
+    />
+  );
+  return { shown, bar };
+}
 
 export default function ChannelPage() {
   const { key } = useParams();
@@ -22,11 +58,12 @@ export default function ChannelPage() {
   const scopedInvoices = useSelector(selectScopedInvoices);
   const savedViewTab = useSelector((s) => s.ui.channelViewTab[key]);
   const perm = useSelector(selectPerm);
+  const channelInvoices = scopedInvoices.filter((i) => i.channel === key);
+  const { shown: filteredChannelInvoices, bar: channelFilterBar } = useChannelInvoiceFilter(channelInvoices);
 
   if (!channel) return <p>Unknown channel.</p>;
 
   const activeView = savedViewTab && channel.views.includes(savedViewTab) ? savedViewTab : channel.views[0];
-  const channelInvoices = scopedInvoices.filter((i) => i.channel === key);
 
   return (
     <>
@@ -40,7 +77,10 @@ export default function ChannelPage() {
       </div>
 
       {activeView === 'Invoice Log' && (
-        <div className="card"><InvoiceTable invoices={channelInvoices} tableKey={`channel-${key}`} mode="full" /></div>
+        <>
+          {channelFilterBar}
+          <div className="card"><InvoiceTable invoices={filteredChannelInvoices} tableKey={`channel-${key}`} mode="full" /></div>
+        </>
       )}
       {activeView === 'History' && <ChannelHistory channelKey={key} channelInvoices={channelInvoices} />}
       {activeView === 'Queries' && <ChannelQueries channelKey={key} />}

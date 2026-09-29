@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { runtime } from '../../data/runtime';
-import { CHANNEL_LABEL } from '../../data/constants';
+import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
 import { handlerFor, supplierEmailFor, currentStageName } from '../../utils/businessLogic';
 import { closeModal, pushToast } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
+import Badge from '../common/Badge.jsx';
 
 export default function NotifyPreviewModal({ ctx }) {
   const dispatch = useDispatch();
@@ -21,12 +22,13 @@ export default function NotifyPreviewModal({ ctx }) {
     ['Channel', CHANNEL_LABEL[inv.channel]],
     ['PO No', inv.po],
     ['Amount', inv.amount],
-    ['Status', inv.status],
+    ['Status', <Badge key="status" tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge>],
     ['Current Stage', currentStageName(inv)],
     ['UTR No', inv.utr === '-' ? 'Not yet visible' : inv.utr],
     ['Invoice Date', inv.date],
   ];
   if (inv.shortPayReason) bodyRows.push(['Short-Payment Reason', inv.shortPayReason]);
+  const monoKeys = new Set(['Invoice No', 'Vendor Code', 'PO No', 'Amount', 'UTR No']);
 
   function send() {
     dispatch(closeModal());
@@ -40,20 +42,27 @@ export default function NotifyPreviewModal({ ctx }) {
       foot={(
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
           <button type="button" className="btn" onClick={() => dispatch(closeModal())}>Cancel</button>
-          <button type="button" className="btn primary" onClick={send}>✉ Send</button>
+          <button type="button" className="btn primary" onClick={send}>Send Email</button>
         </div>
       )}
     >
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 14px' }}>This is what would go out. Nothing is sent until you confirm.</p>
-      <div className="validation-row"><span>To</span><span style={{ textAlign: 'right' }}>{inv.vendor}<br /><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{supplierEmail}</span></span></div>
-      <div className="validation-row"><span>CC : Approver</span><span style={{ textAlign: 'right' }}>{h.approver}<br /><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{h.approverEmail}</span></span></div>
-      <div className="validation-row"><span>CC : Accounts</span><span style={{ textAlign: 'right' }}>{h.accounts}<br /><span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{h.accountsEmail}</span></span></div>
-      <div className="validation-row"><span>Subject</span><span style={{ textAlign: 'right' }}>Status update : Invoice {inv.no}</span></div>
-      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em', display: 'block', margin: '16px 0 8px' }}>Mail Body : Combined Status</label>
-      <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', background: 'var(--bg)' }}>
-        {bodyRows.map(([k, v]) => (
-          <div className="validation-row" style={{ padding: '6px 0' }} key={k}><span>{k}</span><span style={{ textAlign: 'right', maxWidth: 280 }}>{v}</span></div>
-        ))}
+      <div className="mail-preview">
+        <div className="mail-head">
+          <div className="kv-row"><span className="kv-k">To</span><span className="kv-v">{inv.vendor}<span className="kv-sub">{supplierEmail}</span></span></div>
+          <div className="kv-row"><span className="kv-k">CC (Approver)</span><span className="kv-v">{h.approver}<span className="kv-sub">{h.approverEmail}</span></span></div>
+          <div className="kv-row"><span className="kv-k">CC (Accounts)</span><span className="kv-v">{h.accounts}<span className="kv-sub">{h.accountsEmail}</span></span></div>
+          <div className="kv-row"><span className="kv-k">Subject</span><span className="kv-v">Status update: Invoice {inv.no}</span></div>
+        </div>
+        <div className="mail-body">
+          <p className="mail-title">Combined status</p>
+          {bodyRows.map(([k, v]) => (
+            <div className="kv-row" key={k}>
+              <span className="kv-k">{k}</span>
+              <span className={`kv-v${monoKeys.has(k) ? ' mono' : ''}`}>{v}</span>
+            </div>
+          ))}
+        </div>
       </div>
       <div className="form-field" style={{ marginTop: 16 }}>
         <label>Add a note (optional)</label>

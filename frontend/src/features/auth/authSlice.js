@@ -26,6 +26,13 @@ const initialState = {
 
 const CHANNEL_KEYS = new Set(['msetuSrm', 'poPortal', 'mfoxPortal']);
 
+/** Profile details for the signed-in internal user, from the auth payload the API returns. */
+function userFromAuth(auth) {
+  const name = auth.name || auth.username || '';
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  return { name, fullName: name, initials, title: auth.title || '', dept: auth.dept || '', email: auth.email || '' };
+}
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -55,6 +62,9 @@ const authSlice = createSlice({
     // Apply the auth object returned by POST /api/login or GET /api/me.
     setAuthFromServer(state, action) {
       Object.assign(state, action.payload, { loggedIn: true });
+      if (state.authType === 'internal' && !action.payload.currentUser && (action.payload.name || action.payload.username)) {
+        state.currentUser = userFromAuth(action.payload);
+      }
       if (state.authType === 'supplier') {
         state.supplierLoginVcode = state.vcode;
         state.supplierQuery = state.company;

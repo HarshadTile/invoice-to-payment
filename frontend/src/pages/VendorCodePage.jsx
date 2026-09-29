@@ -1,14 +1,50 @@
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { VENDOR_CODE_MAP, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
 import { supplierForVendorCode, panFor, posForVendorCode, getInvoiceHistory, ticketInvoice } from '../utils/businessLogic';
 import { selectScopedInvoices } from '../features/invoices/selectors';
 import { setVcodeViewTab, openModal } from '../features/ui/uiSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
+import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
 import Timeline from '../components/common/Timeline.jsx';
 
 const VCODE_VIEWS = ['Invoice Log', 'History'];
+
+/** Status + date-range filter (same one used on My Invoices / Search Invoice(s)), scoped to this vendor code's invoices. */
+function useVendorInvoiceFilter(invoices) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = defaultInvoiceRange();
+  const status = searchParams.get('status') || '';
+  const dateFrom = searchParams.has('date_from') ? searchParams.get('date_from') : range.from;
+  const dateTo = searchParams.has('date_to') ? searchParams.get('date_to') : range.to;
+
+  const update = (changes) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(changes).forEach(([k, v]) => { if (v === null) next.delete(k); else next.set(k, v); });
+    setSearchParams(next, { replace: true });
+  };
+
+  const inRange = invoices.filter((i) => {
+    const ymd = invoiceYMD(i);
+    return (!dateFrom || ymd >= dateFrom) && (!dateTo || ymd <= dateTo);
+  });
+  const shown = inRange.filter((i) => !status || i.status === status);
+  const isDefaultRange = dateFrom === range.from && dateTo === range.to;
+  const rangeLabel = !dateFrom && !dateTo ? 'all dates' : (isDefaultRange ? 'last 90 days' : `${dateFrom || 'earliest'} to ${dateTo || 'latest'}`);
+
+  const bar = (
+    <InvoiceFilterBar
+      status={status} dateFrom={dateFrom} dateTo={dateTo}
+      onStatusChange={(v) => update({ status: v || null })} onDateFrom={(v) => update({ date_from: v })} onDateTo={(v) => update({ date_to: v })}
+      onLast90Days={() => update({ date_from: null, date_to: null })}
+      onAllDates={() => update({ date_from: '', date_to: '' })}
+      onClear={() => update({ status: null, date_from: '', date_to: '' })}
+      statusCountBase={inRange} resultCount={shown.length} rangeLabel={rangeLabel}
+    />
+  );
+  return { shown, bar };
+}
 
 export default function VendorCodePage() {
   const { code } = useParams();
@@ -23,6 +59,8 @@ export default function VendorCodePage() {
   const supplier = supplierForVendorCode(code);
   const siblingCodes = VENDOR_CODE_MAP.rows.filter((r) => r[1] === supplier).map((r) => r[0]).filter((c) => c !== code);
   const invoices = scoped.filter((i) => i.vcode === code);
+  // The header stats above always cover every invoice on this code; the filter bar below only narrows the Invoice Log table.
+  const { shown: filteredInvoices, bar: invoiceFilterBar } = useVendorInvoiceFilter(invoices);
   const byPO = posForVendorCode(code);
   const poCount = Object.keys(byPO).length;
   const paid = invoices.filter((i) => i.status === 'Paid').length;
@@ -89,7 +127,8 @@ export default function VendorCodePage() {
           <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '-4px 0 14px' }}>
             {code}'s own invoices: one vendor code, several purchase orders ({poCount}), each kept as its own record with its own Invoice No, PO No, Channel, Status, Current Stage, Handled By and UTR. Search below covers only this code.
           </p>
-          <div className="card"><InvoiceTable invoices={invoices} tableKey={`vendorCodePage-${code}`} mode="supplierSafe" /></div>
+          {invoiceFilterBar}
+          <div className="card"><InvoiceTable invoices={filteredInvoices} tableKey={`vendorCodePage-${code}`} mode="supplierSafe" /></div>
         </>
       ) : (
         <VendorCodeHistory code={code} invoices={invoices} />

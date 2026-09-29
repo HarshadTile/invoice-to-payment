@@ -1,12 +1,11 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
-import { runtime, suppliersFromRuntime } from '../../data/runtime';
-import { vendorCodesFor, getFiscalYear } from '../../utils/businessLogic';
+import { runtime } from '../../data/runtime';
+import { getFiscalYear } from '../../utils/businessLogic';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
-import { switchIdentity } from '../../features/auth/authSlice';
-import { pushToast, resetFiltersOnIdentitySwitch, toggleSidebar } from '../../features/ui/uiSlice';
+import { pushToast, toggleSidebar } from '../../features/ui/uiSlice';
 import { Bell, HelpCircle, ChevronDown, Menu } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
 
@@ -225,10 +224,10 @@ function TopbarChannelDropdown({ searchParams, onUpdate, channelScope }) {
 
 /* ── Topbar ────────────────────────────────────────────────────────── */
 
-function TopbarFiscalYearDropdown({ searchParams, onUpdate }) {
+function TopbarFiscalYearDropdown({ searchParams, onUpdate, defaultFY }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
-  const currentFY = searchParams.get('fy') || getFiscalYear(new Date().toISOString());
+  const currentFY = searchParams.get('fy') || defaultFY;
   const isAll = currentFY === 'all';
   const invoices = useSelector(selectScopedInvoices);
   const fyOptions = useMemo(() => {
@@ -319,7 +318,11 @@ export default function Topbar() {
 
       <div className="topbar-right">
         {authType === 'supplier' && (
-          <TopbarFiscalYearDropdown searchParams={searchParams} onUpdate={updateSearchParam} />
+          <TopbarFiscalYearDropdown searchParams={searchParams} onUpdate={updateSearchParam} defaultFY={getFiscalYear(new Date().toISOString())} />
+        )}
+        {/* Internal users: financial year filter, shown on every page next to Channel and Vendor; defaults to the current FY */}
+        {authType === 'internal' && (
+          <TopbarFiscalYearDropdown searchParams={searchParams} onUpdate={updateSearchParam} defaultFY={getFiscalYear(new Date().toISOString())} />
         )}
         {/* Channel + Vendor search dropdowns — shown for all internal users on all pages */}
         {authType === 'internal' && (

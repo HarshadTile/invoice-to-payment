@@ -66,7 +66,7 @@ export default function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route path="/supplier" element={<Navigate to="/supplier/home" replace />} />
           <Route path="/supplier/home" element={<SupplierHomePage />} />
-          <Route path="/supplier/vendor-code/:code" element={<VendorCodePage />} />
+          <Route path="/supplier/vendor-code/:code" element={<Navigate to="/supplier/home" replace />} />
           <Route path="/supplier/logs" element={<SupplierLogsPage />} />
           <Route path="/supplier/tickets" element={<SupplierTicketsPage />} />
           <Route path="/supplier/profile" element={<ProfilePage />} />

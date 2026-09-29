@@ -16,7 +16,6 @@ const initialState = {
   inquiryViewMode: 'list',
   inquiryChannelTab: null,
   channelQueryViewMode: 'list',
-  supplierHomeTab: 'current',
   supplierVisibilityQuery: 'Tata Communications Ltd',
   globalLogsChannel: null,
   globalLogsStatus: null,
@@ -104,9 +103,6 @@ const uiSlice = createSlice({
     setChannelQueryViewMode(state, action) {
       state.channelQueryViewMode = action.payload;
     },
-    setSupplierHomeTab(state, action) {
-      state.supplierHomeTab = action.payload;
-    },
     setSupplierVisibilityQuery(state, action) {
       state.supplierVisibilityQuery = action.payload;
     },
@@ -127,7 +123,7 @@ export const {
   setSearch, setTablePage, toggleSelectRow, setSelectAll, clearSelection,
   setInvoicesTopTab, setTicketFilterStatus,
   setChannelViewTab, setVcodeViewTab, setInquiryViewMode, setInquiryChannelTab,
-  setChannelQueryViewMode, setSupplierHomeTab, setSupplierVisibilityQuery,
+  setChannelQueryViewMode, setSupplierVisibilityQuery,
   setGlobalLogsChannel, setGlobalLogsStatus, resetFiltersOnIdentitySwitch,
 } = uiSlice.actions;
 export default uiSlice.reducer;

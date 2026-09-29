@@ -1,25 +1,40 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { runtime } from '../../data/runtime';
-import { CHANNEL_STAGES, CHANNEL_LABEL } from '../../data/constants';
-import { combinedStatusFor, currentHandlerFor, getFiscalYear, stageProgress } from '../../utils/businessLogic';
+import { getFiscalYear } from '../../utils/businessLogic';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
-import { setSupplierHomeTab, openModal } from '../../features/ui/uiSlice';
+import { setSearch } from '../../features/ui/uiSlice';
 import InvoiceTable from '../../components/invoices/InvoiceTable.jsx';
 import StatCard from '../../components/common/StatCard.jsx';
+import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../../components/invoices/InvoiceFilterBar.jsx';
+import InvoiceProgressCard from '../../components/invoices/InvoiceProgressCard.jsx';
 
 export default function SupplierHomePage() {
   const dispatch = useDispatch();
   const invoices = useSelector(selectScopedInvoices);
-  const { vcode: code, company: supplier, pan: supplierPAN } = useSelector((s) => s.auth);
-  const activeTab = useSelector((s) => s.ui.supplierHomeTab) || 'current';
+  const code = useSelector((s) => s.auth.supplierLoginVcode);
   const [activeKpi, setActiveKpi] = useState('total');
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Filters live in the URL so they survive opening an invoice and coming back
+  // Default window is the last 90 days; once a financial year is picked in the top bar, that year sets the scope instead
+  const fyChosen = searchParams.has('fy');
+  const range = fyChosen ? { from: '', to: '' } : defaultInvoiceRange();
+  const status = searchParams.get('status') || '';
+  const dateFrom = searchParams.has('date_from') ? searchParams.get('date_from') : range.from;
+  const dateTo = searchParams.has('date_to') ? searchParams.get('date_to') : range.to;
+  const openNo = searchParams.get('open') || '';
+  const openItem = searchParams.get('item') || '';
   const invoiceSearch = searchParams.get('invoice_number') || '';
   const poSearch = searchParams.get('po_number') || '';
   const poItemSearch = searchParams.get('po_item') || '';
   const fySearch = searchParams.get('fy') || getFiscalYear(new Date().toISOString());
+
+  const update = (changes, { replace = true } = {}) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(changes).forEach(([k, v]) => { if (v === null) next.delete(k); else next.set(k, v); });
+    setSearchParams(next, { replace });
+  };
 
   const codeInvoices = invoices.filter((i) => {
     if (i.vcode !== code) return false;
@@ -29,44 +44,76 @@ export default function SupplierHomePage() {
     const fyMatches = fySearch === 'all' || getFiscalYear(i.date) === fySearch;
     return invoiceMatches && poMatches && itemMatches && fyMatches;
   });
-  const inProgress = codeInvoices.filter((i) => !['Paid', 'Rejected', 'Deleted'].includes(i.status));
-  const byLabel = {};
-  codeInvoices.forEach((inv) => { const l = combinedStatusFor(inv).label; byLabel[l] = (byLabel[l] || 0) + 1; });
-  const pan = invoices.find((invoice) => invoice.vcode === code)?.pan || supplierPAN || '-';
+
+  // ── Invoice progress view (opened by clicking an invoice number) ──
+  if (openNo) {
+    const opened = codeInvoices.filter((i) => i.no === openNo && (!openItem || String(i.poItem) === openItem));
+    return (
+      <>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+          <button type="button" className="btn" onClick={() => update({ open: null, item: null }, { replace: false })}>← All Invoices</button>
+        </div>
+        {opened.length
+          ? opened.map((inv, rowIndex) => <InvoiceProgressCard key={`${inv.no}-${inv.poItem}-${rowIndex}`} inv={inv} />)
+          : <div className="card"><p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>Invoice {openNo} was not found on {code}.</p></div>}
+      </>
+    );
+  }
+
+  // ── All Invoices: date range first, then KPI cards, status filter and table ──
+  const inRange = codeInvoices.filter((i) => {
+    const ymd = invoiceYMD(i);
+    return (!dateFrom || ymd >= dateFrom) && (!dateTo || ymd <= dateTo);
+  });
+  // Every invoice falls in exactly one group, so Paid + In Progress + Rejected/Deleted = Total
   const kpiFilters = {
-    total: codeInvoices,
-    paid: codeInvoices.filter((i) => combinedStatusFor(i).label === 'Fully Paid'),
-    rejected: codeInvoices.filter((i) => combinedStatusFor(i).label === 'Rejected'),
-    approval: codeInvoices.filter((i) => combinedStatusFor(i).label === 'In Approval'),
+    total: inRange,
+    paid: inRange.filter((i) => i.status === 'Paid'),
+    progress: inRange.filter((i) => !['Paid', 'Rejected', 'Deleted'].includes(i.status)),
+    rejected: inRange.filter((i) => i.status === 'Rejected' || i.status === 'Deleted'),
   };
-  const kpiInvoices = kpiFilters[activeKpi] || codeInvoices;
-  const displayedCurrentInvoices = activeKpi === 'total' ? inProgress : kpiInvoices;
-  const displayedAllInvoices = activeKpi === 'total' ? codeInvoices : kpiInvoices;
-  const selectKpi = (id) => setActiveKpi((current) => (current === id ? 'total' : id));
+  const shown = (kpiFilters[activeKpi] || inRange).filter((i) => !status || i.status === status);
+  // A KPI card and the status dropdown both narrow by status, so using one clears the other
+  const selectKpi = (id) => {
+    if (status) update({ status: null });
+    setActiveKpi((current) => (current === id ? 'total' : id));
+  };
+  const pickStatus = (value) => {
+    setActiveKpi('total');
+    update({ status: value || null });
+  };
+  const isDefaultRange = dateFrom === range.from && dateTo === range.to;
+  const rangeLabel = !dateFrom && !dateTo ? 'all dates' : (isDefaultRange ? 'last 90 days' : `${dateFrom || 'earliest'} → ${dateTo || 'latest'}`);
+  // No time limit at all: every date, every financial year
+  const showAllDates = () => update({ date_from: '', date_to: '', fy: 'all' });
+  // Back to the page defaults: last 90 days, current financial year
+  const showLast90Days = () => update({ date_from: null, date_to: null, fy: null });
+  // Remove every filter: table search, KPI card, status, any search params, and the time limit
+  const clearFilters = () => {
+    ['total', activeKpi].forEach((k) => dispatch(setSearch({ key: `supplierAllInvoices-${k}`, value: '' })));
+    setActiveKpi('total');
+    update({ status: null, date_from: '', date_to: '', fy: 'all', invoice_number: null, po_number: null, po_item: null });
+  };
 
   return (
     <>
       <div className="supplier-kpis">
-        <SupplierKpi label="Total Invoices" value={codeInvoices.length} onClick={() => setActiveKpi('total')} active={activeKpi === 'total'} />
-        <SupplierKpi label="Fully Paid" value={byLabel['Fully Paid'] || 0} onClick={() => selectKpi('paid')} active={activeKpi === 'paid'} />
-        <SupplierKpi label="Rejected" value={byLabel['Rejected'] || 0} tone="red" onClick={() => selectKpi('rejected')} active={activeKpi === 'rejected'} />
-        <SupplierKpi label="In Approval" value={byLabel['In Approval'] || 0} onClick={() => selectKpi('approval')} active={activeKpi === 'approval'} />
+        <SupplierKpi label="Total Invoices" value={kpiFilters.total.length} onClick={() => { setActiveKpi('total'); if (status) update({ status: null }); }} active={activeKpi === 'total' && !status} />
+        <SupplierKpi label="Fully Paid" value={kpiFilters.paid.length} onClick={() => selectKpi('paid')} active={activeKpi === 'paid'} />
+        <SupplierKpi label="Rejected / Deleted" value={kpiFilters.rejected.length} tone="red" onClick={() => selectKpi('rejected')} active={activeKpi === 'rejected'} />
+        <SupplierKpi label="In Progress" value={kpiFilters.progress.length} onClick={() => selectKpi('progress')} active={activeKpi === 'progress'} />
       </div>
 
-      <div className="sheet-carousel" style={{ marginBottom: 14 }}>
-        <div className="car-track">
-          <button type="button" className={`car-chip${activeTab === 'current' ? ' active' : ''}`} onClick={() => dispatch(setSupplierHomeTab('current'))}>Current Invoice{displayedCurrentInvoices.length ? ` (${displayedCurrentInvoices.length})` : ''}</button>
-          <button type="button" className={`car-chip${activeTab === 'all' ? ' active' : ''}`} onClick={() => dispatch(setSupplierHomeTab('all'))}>All Invoices ({displayedAllInvoices.length})</button>
-        </div>
-      </div>
+      <InvoiceFilterBar
+        status={status} dateFrom={dateFrom} dateTo={dateTo}
+        onStatusChange={pickStatus} onDateFrom={(v) => update({ date_from: v })} onDateTo={(v) => update({ date_to: v })}
+        onLast90Days={showLast90Days} onAllDates={showAllDates} onClear={clearFilters}
+        statusCountBase={inRange} resultCount={shown.length} rangeLabel={rangeLabel}
+      />
 
-      {activeTab === 'current' ? (
-        displayedCurrentInvoices.length ? displayedCurrentInvoices.map((inv, rowIndex) => <CurrentInvoiceCard key={`${inv.no}-${rowIndex}`} inv={inv} />) : (
-          <div className="card"><p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>Nothing currently in progress on {code} right now. Everything is either fully closed out or has not started yet. Check the All Invoices tab.</p></div>
-        )
-      ) : (
-        <div className="card"><InvoiceTable invoices={displayedAllInvoices} tableKey={`supplierAllInvoices-${activeKpi}`} mode="supplierSafe" /></div>
-      )}
+      <div className="card">
+        <InvoiceTable invoices={shown} tableKey={`supplierAllInvoices-${activeKpi}`} mode="supplierSafe" />
+      </div>
     </>
   );
 }
@@ -80,76 +127,5 @@ function SupplierKpi({ label, value, tone = '', onClick, active }) {
       onClick={onClick}
       active={active}
     />
-  );
-}
-
-function displayDate(value) {
-  if (!value) return null;
-  return new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-const LADDER = ['Invoice Uploaded', 'Pending Approval', 'Approved', 'Miro Booked', 'Payment Due', 'Paid'];
-
-function CurrentInvoiceCard({ inv }) {
-  const dispatch = useDispatch();
-  const stages = LADDER;
-  const currentIndex = stages.indexOf(inv.status);
-  const done = inv.status === 'Rejected' || inv.status === 'Deleted' ? 1 : (currentIndex >= 0 ? currentIndex + 1 : 1);
-  const cs = combinedStatusFor(inv);
-  const contact = currentHandlerFor(inv);
-
-  const getStageDate = (stage) => {
-    switch (stage) {
-      case 'Invoice Uploaded':
-        return displayDate(inv.rawDate);
-      case 'Pending Approval':
-        return null;
-      case 'Approved':
-        return displayDate(inv.workflow?.final_approval_date);
-      case 'Miro Booked':
-        return displayDate(inv.sap?.document_date || inv.sap?.posting_date);
-      case 'Payment Due':
-        return displayDate(inv.sap?.net_due_date);
-      case 'Paid':
-        return inv.utr && inv.utr !== '-' ? `${displayDate(inv.sap?.clearing_date)} (${inv.utr})` : displayDate(inv.sap?.clearing_date);
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div className="card" style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-        <div>
-          <button type="button" className="link-hero" style={{ fontSize: 15 }} onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no } }))}>{inv.no}</button>
-          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>{CHANNEL_LABEL[inv.channel]} : PO {inv.po} : {inv.amount}</div>
-        </div>
-        <span className={`chip ${cs.tone}`}>{cs.label}</span>
-      </div>
-      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Progress</label>
-      <div style={{ display: 'flex', alignItems: 'flex-start', margin: '10px 0 4px', overflowX: 'auto' }}>
-        {stages.map((s, i) => {
-          const idx = i + 1;
-          const st = idx < done ? 'done' : idx === done ? 'current' : 'todo';
-          const dotBg = st === 'done' ? 'var(--green)' : st === 'current' ? 'var(--blue)' : '#E2E8F0';
-          const dotFg = st === 'todo' ? 'var(--text-muted)' : '#fff';
-          const dateStr = getStageDate(s);
-          return (
-            <div key={i} style={{ flex: 1, minWidth: 88, textAlign: 'center', position: 'relative' }}>
-              {i > 0 && <div style={{ position: 'absolute', top: 11, left: '-50%', width: '100%', height: 2, background: idx <= done ? 'var(--blue)' : '#E2E8F0', zIndex: 0 }} />}
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: dotBg, color: dotFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, margin: '0 auto', position: 'relative', zIndex: 1 }}>{st === 'done' ? '✓' : idx}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.3 }}>{s}</div>
-              {dateStr && <div style={{ fontSize: 9.5, color: 'var(--text)', fontWeight: 600, marginTop: 3 }}>{dateStr}</div>}
-            </div>
-          );
-        })}
-      </div>
-      <div className="validation-row" style={{ marginTop: 10 }}><span>UTR No.</span><span>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</span></div>
-      {inv.shortPayReason && <div className="validation-row"><span>Reason for Less Paid</span><span style={{ textAlign: 'right', maxWidth: 280 }}>{inv.shortPayReason}</span></div>}
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'raiseTicket', ctx: { no: inv.no } }))}>Raise a Query</button>
-        <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no } }))}>View Full Detail</button>
-      </div>
-    </div>
   );
 }

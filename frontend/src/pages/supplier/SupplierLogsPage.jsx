@@ -1,19 +1,22 @@
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
 import { getFiscalYear } from '../../utils/businessLogic';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CHANNEL_LABEL } from '../../data/constants';
 import { activityLogRows } from '../../utils/businessLogic';
-import { openModal } from '../../features/ui/uiSlice';
 
 export default function SupplierLogsPage() {
-  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const openInvoice = (inv) => {
+    const item = inv.poItem !== undefined && inv.poItem !== '' ? `&item=${encodeURIComponent(inv.poItem)}` : '';
+    navigate(`/supplier/home?open=${encodeURIComponent(inv.no)}${item}`);
+  };
   const code = useSelector((s) => s.auth.supplierLoginVcode);
   const [searchParams] = useSearchParams();
   const fySearch = searchParams.get('fy') || getFiscalYear(new Date().toISOString());
   const scopedInvoices = useSelector(selectScopedInvoices);
   const invoices = scopedInvoices.filter((i) => i.vcode === code && (fySearch === 'all' || getFiscalYear(i.date) === fySearch));
-  const done = invoices.filter((i) => i.status === 'Paid');
+  const done = invoices.filter((i) => ['Paid', 'Rejected', 'Deleted'].includes(i.status));
   const activityRows = activityLogRows(invoices);
 
   return (
@@ -32,7 +35,7 @@ export default function SupplierLogsPage() {
               {activityRows.length ? activityRows.map(({ inv, stage }) => (
                 <tr key={`${inv.no}-${stage}`}>
                   <td>{inv.date}</td>
-                  <td><button type="button" className="link-hero" onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no } }))}>{inv.no}</button></td>
+                  <td><button type="button" className="link-hero" onClick={() => openInvoice(inv)}>{inv.no}</button></td>
                   <td>{inv.po}</td>
                   <td>{stage}</td>
                 </tr>
@@ -50,9 +53,9 @@ export default function SupplierLogsPage() {
             <tbody>
               {done.length ? done.map((inv, rowIndex) => (
                 <tr key={`${inv.no}-${rowIndex}`}>
-                  <td><button type="button" className="link-hero" onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no } }))}>{inv.no}</button></td>
+                  <td><button type="button" className="link-hero" onClick={() => openInvoice(inv)}>{inv.no}</button></td>
                   <td>{CHANNEL_LABEL[inv.channel]}</td><td>{inv.po}</td><td>{inv.amount}</td>
-                  <td><span className={`chip ${inv.status === 'Paid' ? 'green' : 'amber'}`}>{inv.status}</span></td>
+                  <td><span className={`chip ${inv.status === 'Paid' ? 'green' : 'red'}`}>{inv.status}</span></td>
                   <td>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</td>
                   <td>{inv.date}</td>
                 </tr>
