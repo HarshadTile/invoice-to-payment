@@ -7,6 +7,7 @@ import { selectScopedInvoices } from '../features/invoices/selectors';
 import { setSupplierVisibilityQuery } from '../features/ui/uiSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import StatCard from '../components/common/StatCard.jsx';
+import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
 
 export default function SupplierVisibilityPage() {
   const dispatch = useDispatch();
@@ -17,7 +18,7 @@ export default function SupplierVisibilityPage() {
   const codes = vendorCodesFor(supplier);
   const scoped = useSelector(selectScopedInvoices);
   const invoices = scoped.filter((i) => i.vendor === supplier);
-  const ticketItems = useSelector((s) => s.tickets.items);
+  const { data: ticketItems = [] } = useGetTicketsQuery();
   const openIssues = ticketItems.filter((t) => ticketInvoice(t)?.vendor === supplier).filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
   const paid = invoices.filter((i) => i.status === 'Paid').length;
   const due = invoices.filter((i) => i.status === 'Payment Due').length;

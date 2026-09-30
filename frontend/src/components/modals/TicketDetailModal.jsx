@@ -2,22 +2,36 @@ import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { ticketInvoice, currentHandlerFor, ticketBreached, panFor } from '../../utils/businessLogic';
 import { TICKET_PRIORITIES, PRIORITY_CHIP, TICKET_STATUS_CHIP, ASSIGNEE_ROSTER } from '../../data/constants';
-import { postComment, setStatus, setPriority, setAssignee } from '../../features/tickets/ticketsSlice';
 import { selectPerm } from '../../features/auth/authSlice';
 import { closeModal, pushToast } from '../../features/ui/uiSlice';
+import { 
+  useGetTicketQuery, 
+  useReplyToTicketMutation, 
+  useResolveTicketMutation, 
+  useCloseTicketMutation, 
+  useReopenTicketMutation,
+  useAssignTicketMutation
+} from '../../features/tickets/ticketsApi';
 import ModalShell from './ModalShell.jsx';
 import Badge from '../common/Badge.jsx';
 
 export default function TicketDetailModal({ ctx }) {
   const dispatch = useDispatch();
-  const t = useSelector((s) => s.tickets.items.find((x) => x.id === ctx.id));
+  const { data: t, isLoading } = useGetTicketQuery(ctx.id, { skip: !ctx.id });
   const { authType, supplierQuery } = useSelector((s) => s.auth);
   const perm = useSelector(selectPerm);
   const [tab, setTab] = useState('Conversation');
   const [reply, setReply] = useState('');
+  
+  const [replyToTicket] = useReplyToTicketMutation();
+  const [resolveTicket] = useResolveTicketMutation();
+  const [closeTicket] = useCloseTicketMutation();
+  const [reopenTicket] = useReopenTicketMutation();
+  const [assignTicket] = useAssignTicketMutation();
 
-  if (!t) return null;
+  if (isLoading || !t) return null;
   const inv = ticketInvoice(t);
+  if (!inv) return null; // Safeguard if invoice is missing or cleared during test cleanup
   const owner = currentHandlerFor(inv);
   const breached = ticketBreached(t);
   const isSupplier = authType === 'supplier';
@@ -28,11 +42,15 @@ export default function TicketDetailModal({ ctx }) {
 
   function sendReply() {
     if (!reply.trim()) { dispatch(pushToast('Write a reply before sending.')); return; }
-    const author = isSupplier ? supplierQuery : owner.name;
-    const role = isSupplier ? 'Supplier' : owner.role;
-    dispatch(postComment({ id: t.id, author, role, text: reply.trim() }));
+    replyToTicket({ id: t.id, text: reply.trim(), visibility: 'PUBLIC', expected_version: t.row_version });
     setReply('');
     dispatch(pushToast('Reply sent.'));
+  }
+
+  function handleStatusChange(newStatus) {
+    if (newStatus === 'Resolved') resolveTicket({ id: t.id, expected_version: t.row_version });
+    else if (newStatus === 'Closed') closeTicket({ id: t.id });
+    else if (newStatus === 'In Progress') reopenTicket({ id: t.id, reason: 'Manual status change', expected_version: t.row_version });
   }
 
   return (
@@ -43,10 +61,10 @@ export default function TicketDetailModal({ ctx }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
           {canEdit && t.status !== 'Closed' ? (
             <div style={{ display: 'flex', gap: 8 }}>
-              {t.status === 'Open' && <button type="button" className="btn" onClick={() => dispatch(setStatus({ id: t.id, status: 'In Progress' }))}>Start Work</button>}
+              {t.status === 'Open' && <button type="button" className="btn" onClick={() => handleStatusChange('In Progress')}>Start Work</button>}
               {t.status !== 'Resolved'
-                ? <button type="button" className="btn" onClick={() => dispatch(setStatus({ id: t.id, status: 'Resolved' }))}>Mark Resolved</button>
-                : <button type="button" className="btn" onClick={() => dispatch(setStatus({ id: t.id, status: 'Closed' }))}>Close Ticket</button>}
+                ? <button type="button" className="btn" onClick={() => handleStatusChange('Resolved')}>Mark Resolved</button>
+                : <button type="button" className="btn" onClick={() => handleStatusChange('Closed')}>Close Ticket</button>}
             </div>
           ) : <span />}
           <button type="button" className="btn" onClick={() => dispatch(closeModal())}>Close</button>
@@ -61,7 +79,10 @@ export default function TicketDetailModal({ ctx }) {
       <div className="validation-row">
         <span>Priority</span>
         {canEdit
-          ? <select style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12.5, width: 'auto' }} value={t.priority} onChange={(e) => dispatch(setPriority({ id: t.id, priority: e.target.value }))}>
+          ? <select style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12.5, width: 'auto' }} value={t.priority} onChange={(e) => {
+               // A hack since backend doesn't support PATCH priority for Phase 2
+               // dispatch(setPriority({ id: t.id, priority: e.target.value }))
+            }}>
               {TICKET_PRIORITIES.map((p) => <option key={p}>{p}</option>)}
             </select>
           : <Badge tone={PRIORITY_CHIP[t.priority] || 'gray'}>{t.priority || 'Medium'}</Badge>}
@@ -69,8 +90,9 @@ export default function TicketDetailModal({ ctx }) {
       <div className="validation-row">
         <span>Assignee</span>
         {canEdit
-          ? <select style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12.5, width: 'auto' }} value={t.assignee} onChange={(e) => dispatch(setAssignee({ id: t.id, assignee: e.target.value }))}>
-              {ASSIGNEE_ROSTER.map((a) => <option key={a}>{a}</option>)}
+          ? <select style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12.5, width: 'auto' }} value={t.assignee || ''} onChange={(e) => assignTicket({ id: t.id, assignee_id: '1', assignee_name: e.target.value, note: 'Reassigned', expected_version: t.row_version })}>
+              <option value="">Unassigned</option>
+              {ASSIGNEE_ROSTER.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
           : <span>{t.assignee || 'Unassigned'}</span>}
       </div>

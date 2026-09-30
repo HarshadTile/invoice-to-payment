@@ -2,14 +2,17 @@ import { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { CHANNEL_LABEL, TICKET_STATUSES, TICKET_STATUS_CHIP, PRIORITY_CHIP } from '../../data/constants';
 import { ticketInvoice, ticketBreached } from '../../utils/businessLogic';
-import { moveStatus } from '../../features/tickets/ticketsSlice';
 import { openModal } from '../../features/ui/uiSlice';
+import { useResolveTicketMutation, useReopenTicketMutation, useCloseTicketMutation } from '../../features/tickets/ticketsApi';
 import Badge from '../common/Badge.jsx';
 
 export default function TicketBoard({ tickets }) {
   const dispatch = useDispatch();
   const [dragId, setDragId] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
+  const [resolveTicket] = useResolveTicketMutation();
+  const [reopenTicket] = useReopenTicketMutation();
+  const [closeTicket] = useCloseTicketMutation();
 
   return (
     <>
@@ -25,7 +28,14 @@ export default function TicketBoard({ tickets }) {
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOverCol(null);
-                if (dragId) dispatch(moveStatus({ id: dragId, status }));
+                if (dragId) {
+                  const t = tickets.find(x => x.id === dragId);
+                  if (t && t.status !== status) {
+                    if (status === 'Resolved') resolveTicket({ id: dragId, expected_version: t.row_version });
+                    else if (status === 'Closed') closeTicket({ id: dragId });
+                    else if (status === 'In Progress' || status === 'Open') reopenTicket({ id: dragId, reason: 'Moved on board', expected_version: t.row_version });
+                  }
+                }
                 setDragId(null);
               }}
             >

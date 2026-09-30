@@ -2,23 +2,27 @@ import { useDispatch, useSelector } from 'react-redux';
 import { CHANNELS, INTERNAL_TEAM_CHANNELS } from '../data/constants';
 import { ticketInvoice, ticketBreached } from '../utils/businessLogic';
 import { setInquiryViewMode, setInquiryChannelTab, setTicketFilterStatus } from '../features/ui/uiSlice';
+import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
 import StatCard from '../components/common/StatCard.jsx';
 import TicketTable from '../components/tickets/TicketTable.jsx';
 import TicketBoard from '../components/tickets/TicketBoard.jsx';
 
 export default function InquiryDeskPage() {
   const dispatch = useDispatch();
-  const allTickets = useSelector((s) => s.tickets.items);
-  const { authType, channelScope } = useSelector((s) => s.auth);
-  const scopeTickets = (authType === 'internal' && channelScope === 'internalTeam')
-    ? allTickets.filter((t) => { const inv = ticketInvoice(t); return inv && INTERNAL_TEAM_CHANNELS.includes(inv.channel); })
-    : allTickets;
+  const { data: allTickets = [], isLoading } = useGetTicketsQuery();
   const inquiryChannelTab = useSelector((s) => s.ui.inquiryChannelTab);
   const inquiryViewMode = useSelector((s) => s.ui.inquiryViewMode);
   const ticketFilterStatus = useSelector((s) => s.ui.ticketFilterStatus);
 
   const chTab = inquiryChannelTab && CHANNELS.some((c) => c.key === inquiryChannelTab) ? inquiryChannelTab : CHANNELS[0].key;
-  const byChannel = allTickets.filter((t) => { const inv = ticketInvoice(t); return inv && inv.channel === chTab; }).filter((t) => scopeTickets.includes(t));
+  
+  // The backend already handles authorization and filtering out tickets we shouldn't see
+  const byChannel = allTickets.filter((t) => { 
+    const inv = ticketInvoice(t); 
+    // Fallback to checking t.channel if invoice not locally cached
+    const channel = inv ? inv.channel : t.channel;
+    return channel === chTab; 
+  });
 
   const open = byChannel.filter((t) => t.status === 'Open').length;
   const inProgress = byChannel.filter((t) => t.status === 'In Progress').length;
@@ -50,7 +54,7 @@ export default function InquiryDeskPage() {
       <div className="sheet-carousel" style={{ marginBottom: 14 }}>
         <div className="car-track">
           {CHANNELS.map((c) => {
-            const n = allTickets.filter((t) => { const inv = ticketInvoice(t); return inv && inv.channel === c.key; }).filter((t) => scopeTickets.includes(t)).length;
+            const n = allTickets.filter((t) => { const inv = ticketInvoice(t); return inv && inv.channel === c.key; }).length;
             return <button type="button" key={c.key} className={`car-chip${chTab === c.key ? ' active' : ''}`} onClick={() => dispatch(setInquiryChannelTab(c.key))}>{c.label} ({n})</button>;
           })}
         </div>

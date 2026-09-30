@@ -5,13 +5,15 @@ import { CHANNEL_LABEL } from '../data/constants';
 import { selectScopedInvoices } from '../features/invoices/selectors';
 import { toggleTwoFactor } from '../features/settings/settingsSlice';
 import { pushToast } from '../features/ui/uiSlice';
+import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
 
 export default function ProfilePage() {
   const { authType, currentUser, supplierQuery, supplierPAN, supplierLoginVcode, channelScope, role } = useSelector((s) => s.auth);
   const dispatch = useDispatch();
   const twoFactorOn = useSelector((s) => s.settings.twoFactorOn);
   const scopedInvoices = useSelector(selectScopedInvoices);
-  const openQueries = useSelector((s) => s.tickets.items.filter((t) => t.status === 'Open' || t.status === 'In Progress').length);
+  const { data: ticketItems = [] } = useGetTicketsQuery();
+  const openQueries = ticketItems.filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
 
   if (authType === 'supplier') {
     const pan = runtime.invoices.find((invoice) => invoice.vcode === supplierLoginVcode)?.pan || supplierPAN || '-';

@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { runtime } from '../../data/runtime';
 import { CHANNEL_LABEL, CHANNEL_ROUTING_RULE, TICKET_CATEGORIES, TICKET_PRIORITIES } from '../../data/constants';
 import { combinedStatusFor, currentHandlerFor, currentStageName } from '../../utils/businessLogic';
-import { submitTicket } from '../../features/tickets/ticketsSlice';
+import { useCreateTicketMutation } from '../../features/tickets/ticketsApi';
 import { closeModal, pushToast } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
 
@@ -14,13 +14,23 @@ export default function RaiseTicketModal({ ctx }) {
   const [category, setCategory] = useState(TICKET_CATEGORIES[0]);
   const [priority, setPriority] = useState('Medium');
   const [desc, setDesc] = useState('');
+  
+  const [createTicket] = useCreateTicketMutation();
+  
   if (!inv) return null;
   const cs = combinedStatusFor(inv);
   const contact = currentHandlerFor(inv);
 
-  function submit() {
-    const raisedBy = authType === 'supplier' ? 'Supplier' : 'Internal';
-    dispatch(submitTicket({ no: inv.no, category, priority, desc: desc.trim(), raisedBy }));
+  async function submit() {
+    await createTicket({
+      invoice_id: inv.id || inv.no, // Assuming backend uses invoice_id
+      category,
+      priority: priority.toUpperCase(),
+      subject: `Query regarding ${inv.no}`,
+      description: desc.trim(),
+      vendor_code: inv.vcode,
+      idempotencyKey: crypto.randomUUID()
+    });
     dispatch(closeModal());
     dispatch(pushToast('Query submitted and routed.'));
   }

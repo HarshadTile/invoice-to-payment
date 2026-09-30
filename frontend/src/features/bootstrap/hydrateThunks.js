@@ -1,6 +1,5 @@
 import { api } from '../../api/client';
 import { setAuthFromServer, logout as logoutLocal } from '../auth/authSlice';
-import { hydrateTickets } from '../tickets/ticketsSlice';
 import { hydrateTables } from '../tables/tablesSlice';
 import { hydrateSettings } from '../settings/settingsSlice';
 import { setRuntimeData } from '../../data/runtime';
@@ -24,7 +23,6 @@ export const loadBootstrap = (auth) => async (dispatch) => {
   const invoices = await loadInvoices(auth, b.invoices);
   setRuntimeData({ invoices, syncLog: b.syncLog });
   dispatch(bumpData()); // memoised invoice selectors must re-read the new data
-  dispatch(hydrateTickets({ items: b.tickets, seq: b.ticketSeq }));
   dispatch(hydrateTables(b.tables));
   dispatch(hydrateSettings(b.settings));
   return b;

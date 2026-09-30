@@ -2,6 +2,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { CHANNELS } from '../../data/constants';
 import { getGlobalHistory } from '../../utils/businessLogic';
 import { setSearch, setTablePage, setGlobalLogsChannel, setGlobalLogsStatus, openModal } from '../../features/ui/uiSlice';
+import { useGetTicketsQuery } from '../../features/tickets/ticketsApi';
 import PagerFoot from './PagerFoot.jsx';
 import Badge from './Badge.jsx';
 
@@ -10,7 +11,7 @@ const TONE = { Failed: 'red', Completed: 'green', 'In Progress': 'blue' };
 
 export default function GlobalLogsBody({ invoiceList, tableKey }) {
   const dispatch = useDispatch();
-  const tickets = useSelector((s) => s.tickets.items);
+  const { data: tickets = [] } = useGetTicketsQuery();
   const search = useSelector((s) => s.ui.search[tableKey] || '');
   const page = useSelector((s) => s.ui.tablePage[tableKey] || 1);
   const chFilter = useSelector((s) => s.ui.globalLogsChannel) || '';

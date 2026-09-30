@@ -3,11 +3,12 @@ import { ticketInvoice } from '../../utils/businessLogic';
 import { setTicketFilterStatus } from '../../features/ui/uiSlice';
 import StatCard from '../../components/common/StatCard.jsx';
 import TicketTable from '../../components/tickets/TicketTable.jsx';
+import { useGetTicketsQuery } from '../../features/tickets/ticketsApi';
 
 export default function SupplierTicketsPage() {
   const dispatch = useDispatch();
   const code = useSelector((s) => s.auth.supplierLoginVcode);
-  const ticketItems = useSelector((s) => s.tickets.items);
+  const { data: ticketItems = [] } = useGetTicketsQuery();
   const allTickets = ticketItems.filter((t) => ticketInvoice(t)?.vcode === code);
   const ticketFilterStatus = useSelector((s) => s.ui.ticketFilterStatus);
 

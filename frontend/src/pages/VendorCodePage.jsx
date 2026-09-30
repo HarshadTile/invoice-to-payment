@@ -8,6 +8,7 @@ import { setVcodeViewTab, openModal } from '../features/ui/uiSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
 import Timeline from '../components/common/Timeline.jsx';
+import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
 
 const VCODE_VIEWS = ['Invoice Log', 'History'];
 
@@ -53,7 +54,7 @@ export default function VendorCodePage() {
   const { authType, channelScope } = useSelector((s) => s.auth);
   const scoped = useSelector(selectScopedInvoices);
   const savedTab = useSelector((s) => s.ui.vcodeViewTab[code]);
-  const ticketItems = useSelector((s) => s.tickets.items);
+  const { data: ticketItems = [] } = useGetTicketsQuery();
   const openIssues = ticketItems.filter((t) => ticketInvoice(t)?.vcode === code).filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
 
   const supplier = supplierForVendorCode(code);
@@ -139,7 +140,7 @@ export default function VendorCodePage() {
 
 function VendorCodeHistory({ code, invoices }) {
   const dispatch = useDispatch();
-  const tickets = useSelector((s) => s.tickets.items);
+  const { data: tickets = [] } = useGetTicketsQuery();
   const done = invoices.filter((i) => i.status === 'Paid').length;
   const failed = invoices.filter((i) => i.status === 'Rejected' || i.status === 'Deleted').length;
   const ongoing = invoices.length - done - failed;

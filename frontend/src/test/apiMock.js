@@ -57,7 +57,7 @@ function authFor(form) {
       supplierLoginVcode: form.vcode || 'DIT00388AC', currentUser: DEFAULT_USER,
     };
   }
-  const channelScope = form.channelScope === 'internalTeam' ? 'internalTeam' : 'all';
+  const channelScope = form.channelScope || 'all';
   return {
     authType: 'internal', channelScope,
     role: channelScope === 'all' ? 'Admin' : 'MDE Invoice Team',
@@ -68,10 +68,11 @@ function authFor(form) {
 
 export function installApiMock() {
   let seq = 1005;
+  let persistedTickets = JSON.parse(JSON.stringify(INITIAL_TICKETS));
   const bootstrap = () => ({
     invoices: INVOICE_DATA.map((r) => ({ ...r, stageIndex: 1 })),
     syncLog: SYNC_LOG,
-    tickets: JSON.parse(JSON.stringify(INITIAL_TICKETS)),
+    tickets: persistedTickets,
     ticketSeq: 1005,
     tables: JSON.parse(JSON.stringify(TABLE_SEED)),
     settings: {
@@ -88,45 +89,74 @@ export function installApiMock() {
   });
 
   const get = vi.fn(async (path) => {
-    if (path === '/workspace') return bootstrap();
-    if (path === '/auth/me') throw Object.assign(new Error('no session'), { status: 401 });
+    if (path === '/v1/workspace') return bootstrap();
+    if (path === '/v1/auth/me') throw Object.assign(new Error('no session'), { status: 401 });
     if (path.startsWith('/tables/')) return TABLE_SEED[path.slice('/tables/'.length)] || [];
     if (path === '/settings') return bootstrap().settings;
+    if (path.startsWith('/v1/tickets/')) {
+      const id = path.split('/').pop();
+      const t = persistedTickets.find(x => x.id === id);
+      if (!t) throw Object.assign(new Error('Not found'), { status: 404 });
+      return {...t, raised_by: t.raisedBy, sla_hours: t.slaHours, status: t.status.toUpperCase().replace(' ', '_'), priority: t.priority.toUpperCase()};
+    }
+    if (path.startsWith('/v1/tickets')) return persistedTickets.map(t => ({...t, raised_by: t.raisedBy, sla_hours: t.slaHours, status: t.status.toUpperCase().replace(' ', '_'), priority: t.priority.toUpperCase()}));
     return {};
   });
 
   const CREDS = { admin: 'admin123', 'admin@company.com': 'admin123', ravi: 'ravi123', 'r.kulkarni@company.com': 'ravi123', priya: 'priya123' };
 
   const post = vi.fn(async (path, body) => {
-    if (path === '/auth/login') {
+    if (path === '/v1/auth/login' || path === '/v1/auth/supplier/login') {
       const form = body || {};
       if (form.mode !== 'supplier') {
         const u = String(form.username || '').toLowerCase();
         if (CREDS[u] !== form.password) {
-          throw Object.assign(new Error('Invalid username or password.'), { status: 401 });
+          throw Object.assign(new Error('Invalid EAML ID or password.'), { status: 401 });
         }
       }
       return { token: 'test-token', auth: authFor(form) };
     }
-    if (path === '/auth/logout') return { ok: true };
-    if (path === '/tickets') {
+    if (path === '/v1/auth/logout') return { ok: true };
+    if (path === '/v1/tickets') {
       seq += 1;
       const id = 'TCK-' + seq;
-      return {
-        ticket: {
-          id, no: body.no, category: body.category, desc: body.desc || 'No description provided.',
-          status: 'Open', priority: body.priority || 'Medium', assignee: 'MDE Invoice Team',
-          raisedBy: body.raisedBy, raisedDate: '09 Sep 2026', slaHours: 24,
-          comments: [], activity: [{ date: '09 Sep 2026', text: `Ticket created by ${body.raisedBy}.` }],
-        },
-        seq,
+      const newTicket = {
+        id, no: body.invoice_id, category: body.category, description: body.description || 'No description provided.',
+        status: 'OPEN', priority: body.priority || 'MEDIUM', assignee_id: '1', assignee: null,
+        raisedBy: body.raised_by || 'Supplier', raisedDate: '09 Sep 2026', slaHours: 24,
+        comments: [], activities: [{ createdAt: '09 Sep 2026', event: `Ticket created`, metaData: '' }],
+        row_version: 1
       };
+      // add to in-memory store so the next refetch includes it
+      persistedTickets.unshift(newTicket);
+      return { ...newTicket, status: newTicket.status, priority: newTicket.priority, raised_by: newTicket.raisedBy, sla_hours: newTicket.slaHours };
     }
     // comment posts: let the optimistic reducer keep the local update
-    return {};
+    if (path.includes('/comments') || path.includes('/reply')) {
+      const ticketId = path.split('/')[3];
+      const t = persistedTickets.find(x => x.id === ticketId);
+      if (t) {
+        if (path.includes('comments')) {
+           t.comments.push({ id: 999, ...body });
+        } else {
+           t.activities.push({ createdAt: 'Just now', event: 'Replied' });
+        }
+      }
+      return {};
+    }
+    throw new Error(`Unmocked POST path: ${path}`);
   });
 
-  const patch = vi.fn(async () => ({}));
+  const patch = vi.fn(async (path, body) => {
+    if (path.startsWith('/v1/tickets/')) {
+      const id = path.split('/')[3];
+      const t = persistedTickets.find(x => x.id === id);
+      if (t) {
+        if (body.status) t.status = body.status;
+      }
+    }
+    return {};
+  });
   const put = vi.fn(async (_path, body) => (body && body.rows ? body.rows : {}));
 
   return {

@@ -15,6 +15,7 @@ import StatCard from '../components/common/StatCard.jsx';
 import Badge from '../components/common/Badge.jsx';
 import TicketTable from '../components/tickets/TicketTable.jsx';
 import TicketBoard from '../components/tickets/TicketBoard.jsx';
+import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
 
 /** Status + date-range filter (same one used on My Invoices / Search Invoice(s)), scoped to this channel's invoices. */
 function useChannelInvoiceFilter(channelInvoices) {
@@ -171,9 +172,13 @@ function ChannelHistory({ channelKey, channelInvoices }) {
 
 function ChannelQueries({ channelKey }) {
   const dispatch = useDispatch();
-  const allTickets = useSelector((s) => s.tickets.items);
+  const { data: allTickets = [] } = useGetTicketsQuery();
   const viewMode = useSelector((s) => s.ui.channelQueryViewMode);
-  const tickets = allTickets.filter((t) => { const inv = ticketInvoice(t); return inv && inv.channel === channelKey; });
+  const tickets = allTickets.filter((t) => { 
+    const inv = ticketInvoice(t); 
+    const channel = inv ? inv.channel : t.channel;
+    return channel === channelKey; 
+  });
   const open = tickets.filter((t) => t.status === 'Open').length;
   const inProgress = tickets.filter((t) => t.status === 'In Progress').length;
   const breached = tickets.filter(ticketBreached).length;
