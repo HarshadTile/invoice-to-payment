@@ -82,19 +82,32 @@ export default function Sidebar() {
           />
           <NavItem icon={<Search />} label="Search Invoice(s)" active={isActive('/app/search')} onClick={() => navigate('/app/search')} />
 
-          <NavItem
-            icon={<Layers />}
-            label={isChannelLocked ? `${channelLabel} : Processing` : 'Processing Channels'}
-            hasChildren
-            open={isOpen('channels')}
-            onClick={() => dispatch(toggleNavExpanded('channels'))}
-          />
-          {isOpen('channels') && (
-            <div className="nav-children lvl1">
-              {channelsToShow.map((c) => (
-                <NavItem key={c.key} icon={<span className="nav-dot" />} label={c.label} active={isActive(`/app/channel/${c.key}`)} onClick={() => navigate(`/app/channel/${c.key}`)} />
-              ))}
-            </div>
+          {isChannelLocked ? (
+            // Only one channel to show — a dropdown that expands to itself is just an
+            // extra click, so this account's single channel is its own direct link.
+            <NavItem
+              icon={<Layers />}
+              label={channelLabel}
+              active={isActive(`/app/channel/${channelScope}`)}
+              onClick={() => navigate(`/app/channel/${channelScope}`)}
+            />
+          ) : (
+            <>
+              <NavItem
+                icon={<Layers />}
+                label="Processing Channels"
+                hasChildren
+                open={isOpen('channels')}
+                onClick={() => dispatch(toggleNavExpanded('channels'))}
+              />
+              {isOpen('channels') && (
+                <div className="nav-children lvl1">
+                  {channelsToShow.map((c) => (
+                    <NavItem key={c.key} icon={<span className="nav-dot" />} label={c.label} active={isActive(`/app/channel/${c.key}`)} onClick={() => navigate(`/app/channel/${c.key}`)} />
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {/* Supplier Visibility and Reports — HQ only */}

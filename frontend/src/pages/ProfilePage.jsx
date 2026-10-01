@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { vendorCodesFor } from '../utils/businessLogic';
 import { runtime } from '../data/runtime';
@@ -5,6 +6,7 @@ import { CHANNEL_LABEL } from '../data/constants';
 import { selectScopedInvoices } from '../features/invoices/selectors';
 import { toggleTwoFactor } from '../features/settings/settingsSlice';
 import { pushToast } from '../features/ui/uiSlice';
+import { authApi } from '../api/authApi';
 
 export default function ProfilePage() {
   const { authType, currentUser, supplierQuery, supplierPAN, supplierLoginVcode, channelScope, role } = useSelector((s) => s.auth);
@@ -12,6 +14,19 @@ export default function ProfilePage() {
   const twoFactorOn = useSelector((s) => s.settings.twoFactorOn);
   const scopedInvoices = useSelector(selectScopedInvoices);
   const openQueries = useSelector((s) => s.tickets.items.filter((t) => t.status === 'Open' || t.status === 'In Progress').length);
+  const [sendingReset, setSendingReset] = useState(false);
+
+  async function requestPasswordReset() {
+    setSendingReset(true);
+    try {
+      await authApi.forgotPassword(currentUser.email);
+      dispatch(pushToast(`If ${currentUser.email} has an account, a reset link has been sent to it.`));
+    } catch (err) {
+      dispatch(pushToast(err.message || 'Something went wrong. Please try again.'));
+    } finally {
+      setSendingReset(false);
+    }
+  }
 
   if (authType === 'supplier') {
     const pan = runtime.invoices.find((invoice) => invoice.vcode === supplierLoginVcode)?.pan || supplierPAN || '-';
@@ -104,7 +119,9 @@ export default function ProfilePage() {
                 <div className="pf-row-title">Password</div>
                 <div className="pf-row-desc">Change it regularly and never share it.</div>
               </div>
-              <button type="button" className="btn" onClick={() => dispatch(pushToast('Password change link sent to your email.'))}>Change password</button>
+              <button type="button" className="btn" onClick={requestPasswordReset} disabled={sendingReset}>
+                {sendingReset ? 'Sending…' : 'Change password'}
+              </button>
             </div>
             <div className="pf-row">
               <div>

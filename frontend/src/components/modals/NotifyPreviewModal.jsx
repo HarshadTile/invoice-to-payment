@@ -1,17 +1,31 @@
 import { useState } from 'react';
 import { useDispatch } from 'react-redux';
-import { runtime } from '../../data/runtime';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
-import { handlerFor, supplierEmailFor, currentStageName } from '../../utils/businessLogic';
+import { handlerFor, supplierEmailFor, currentStageName, findInvoice } from '../../utils/businessLogic';
 import { closeModal, pushToast } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
 import Badge from '../common/Badge.jsx';
 
 export default function NotifyPreviewModal({ ctx }) {
   const dispatch = useDispatch();
-  const inv = runtime.invoices.find((i) => i.no === ctx.no);
+  const inv = findInvoice(ctx.no, ctx.poItem);
   const [note, setNote] = useState('');
-  if (!inv) return null;
+
+  if (!inv) {
+    return (
+      <ModalShell
+        title="Notify Supplier"
+        width={440}
+        foot={<button type="button" className="btn" onClick={() => dispatch(closeModal())}>Close</button>}
+      >
+        <p style={{ color: 'var(--text-muted)' }}>
+          No invoice record found for <b>{ctx.no || '(blank)'}</b>, so there's no supplier/approver/accounts contact
+          to notify. This usually means the row's "Invoice No" doesn't match a real invoice in Invoice Log — check
+          the value and try again.
+        </p>
+      </ModalShell>
+    );
+  }
   const h = handlerFor(inv);
   const supplierEmail = supplierEmailFor(inv.vendor);
 

@@ -1,18 +1,20 @@
 import { useDispatch } from 'react-redux';
 import { runtime } from '../../data/runtime';
 import { CHANNEL_LABEL } from '../../data/constants';
-import { combinedStatusFor, currentHandlerFor, currentStageName } from '../../utils/businessLogic';
+import { combinedStatusFor, currentHandlerFor, currentStageName, findInvoice } from '../../utils/businessLogic';
 import { openModal } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
 import Badge from '../common/Badge.jsx';
 
 export default function SupplierInvoiceDetailModal({ ctx }) {
   const dispatch = useDispatch();
-  const inv = runtime.invoices.find((i) => i.no === ctx.no);
+  const inv = findInvoice(ctx.no, ctx.poItem);
   if (!inv) return null;
   const cs = combinedStatusFor(inv);
   const contact = currentHandlerFor(inv);
-  const siblingInvoices = runtime.invoices.filter((i) => i.po === inv.po && i.no !== inv.no);
+  // Same invoice number can legitimately repeat as separate PO line items — exclude
+  // this exact row (by no + poItem), not every row sharing just the invoice number.
+  const siblingInvoices = runtime.invoices.filter((i) => i.po === inv.po && !(i.no === inv.no && i.poItem === inv.poItem));
 
   return (
     <ModalShell
@@ -20,7 +22,7 @@ export default function SupplierInvoiceDetailModal({ ctx }) {
       width={480}
       foot={(
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-          <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'raiseTicket', ctx: { no: inv.no } }))}>✉ Raise a Query</button>
+          <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'raiseTicket', ctx: { no: inv.no, poItem: inv.poItem } }))}>✉ Raise a Query</button>
         </div>
       )}
     >

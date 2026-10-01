@@ -1,5 +1,6 @@
 import { api } from '../../api/client';
 import { runtime } from '../../data/runtime';
+import { findInvoice } from '../../utils/businessLogic';
 import { bumpData } from '../ui/uiSlice';
 
 /** The forward path an invoice takes; Failed is an outcome, not a step. */
@@ -13,15 +14,15 @@ export function nextStatusFor(inv) {
 /** Move an invoice to `status` (optionally recording a UTR). Updates the shared
  *  runtime record straight away, persists via PATCH /invoices/:no, and rolls back
  *  if the server refuses. Throws on failure so the caller can toast. */
-export const moveInvoice = ({ no, status, utr }) => async (dispatch) => {
-  const inv = runtime.invoices.find((i) => i.no === no);
+export const moveInvoice = ({ no, poItem, status, utr }) => async (dispatch) => {
+  const inv = findInvoice(no, poItem);
   if (!inv) throw new Error('Invoice not found.');
   const prev = { status: inv.status, utr: inv.utr, stageIndex: inv.stageIndex };
 
   Object.assign(inv, { status }, utr ? { utr } : {});
   dispatch(bumpData());
   try {
-    const updated = await api.patch(`/invoices/${encodeURIComponent(no)}`, { status, ...(utr ? { utr } : {}) });
+    const updated = await api.patch(`/invoices/${encodeURIComponent(no)}`, { po_item: poItem, status, ...(utr ? { utr } : {}) });
     if (updated && updated.no) Object.assign(inv, updated);
     dispatch(bumpData());
     return inv;

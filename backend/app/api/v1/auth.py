@@ -1,13 +1,16 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 import random
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 
+from app.core.audit import write_audit
 from app.core.database import get_db
-from app.core.security import verify_password, create_access_token
-from app.models.user import User, OTPCode
+from app.core.password_reset import issue_password_reset
+from app.core.security import verify_password, create_access_token, get_password_hash
+from app.models.user import User, OTPCode, PasswordResetToken
+from app.repositories.gcp_invoice import get_all_cached_invoices
 import jwt
 from jwt.exceptions import InvalidTokenError as JWTError
 
@@ -19,17 +22,31 @@ class SupplierLoginRequest(BaseModel):
 
 @router.post("/supplier/login")
 def supplier_login(request: SupplierLoginRequest, db: Session = Depends(get_db)):
-    # Bypassing real vendor check for now as requested
-    supplier_info = {"company": request.company, "pan": "-", "vcode": request.vcode}
-    token = create_access_token(subject=request.vcode, auth_type="supplier", scope=supplier_info)
-    
+    vcode = request.vcode.strip()
+    # A supplier can only log in with a vendor code that actually has invoices on
+    # file — any other string used to be accepted unconditionally (no check at
+    # all), letting literally anyone in by typing anything into the field.
+    match = next(
+        (row for row in get_all_cached_invoices() if str(row.get("SUPPLIER", "")).strip().lower() == vcode.lower()),
+        None,
+    )
+    if match is None:
+        raise HTTPException(status_code=401, detail="Invalid vendor code. Please check and try again.")
+
+    # Trust the real supplier name/PAN off record, not whatever the client sent.
+    company = str(match.get("SUPPLIER_NAME") or request.company or "Vendor").strip()
+    pan = str(match.get("PAN_NO") or "-").strip() or "-"
+
+    supplier_info = {"company": company, "pan": pan, "vcode": vcode}
+    token = create_access_token(subject=vcode, auth_type="supplier", scope=supplier_info)
+
     return {
         "token": token,
         "auth": {
             "authType": "supplier",
-            "vcode": request.vcode,
-            "company": request.company,
-            "pan": "-"
+            "vcode": vcode,
+            "company": company,
+            "pan": pan,
         }
     }
 
@@ -54,15 +71,20 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
         raise HTTPException(status_code=401, detail="Invalid username or password.")
         
     print(f"[DEBUG LOGIN] Found user: ID={user.id}, Role={user.role}")
-    
-    is_valid = verify_password(request.password, user.password_hash)
-    print(f"[DEBUG LOGIN] Password valid? {is_valid}")
-    
-    if not is_valid:
-        raise HTTPException(status_code=401, detail="Invalid username or password.")
 
+    # Checked before the password: an invited account's password_hash is an unguessable
+    # placeholder no one was ever given, so verifying it first would always say "invalid
+    # username or password" instead of the actually useful "check your email" message.
+    if user.status == "Invited":
+        raise HTTPException(status_code=403, detail="This account hasn't been activated yet. Check your email for the invite link, or ask an admin to resend it.")
     if user.status != "Active":
         raise HTTPException(status_code=403, detail="This account has been deactivated. Contact an administrator.")
+
+    is_valid = verify_password(request.password, user.password_hash)
+    print(f"[DEBUG LOGIN] Password valid? {is_valid}")
+
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
 
     # An account locked to one portal (Settings > Users) can never sign in anywhere else,
     # no matter what the login form sends. An "all"-access (Admin) account may still narrow
@@ -141,6 +163,52 @@ def get_me(payload: dict = Depends(get_current_user_token), db: Session = Depend
                 "channelScope": scope_data.get("channelScope", "all")
             }
         }
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+@router.post("/forgot-password")
+def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    email = request.email.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+
+    # Always the same response whether or not the email is registered, active, or a
+    # supplier's — this endpoint must never let someone probe which emails have accounts.
+    generic_response = {"msg": "If that email has an account, a reset link has been sent to it."}
+    if not user or user.status != "Active":
+        return generic_response
+
+    issue_password_reset(db, user, admin_initiated=False)
+    return generic_response
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+@router.post("/reset-password")
+def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+
+    record = db.query(PasswordResetToken).filter(PasswordResetToken.token == request.token).first()
+    if not record or record.used or record.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired. Request a new one.")
+
+    user = db.query(User).filter(User.id == record.user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired. Request a new one.")
+
+    was_invited = user.status == "Invited"
+    user.password_hash = get_password_hash(request.password)
+    if was_invited:
+        user.status = "Active"  # completing the invite is what activates the account
+    record.used = True
+    db.commit()
+    write_audit(db, user, "Activated invite" if was_invited else "Reset own password",
+                f"({user.username}) via emailed link")
+    return {"msg": "Password updated. You can now sign in with your new password."}
+
 
 @router.post("/logout")
 def logout():

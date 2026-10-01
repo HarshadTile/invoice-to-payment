@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey
 from app.core.database import Base
 from datetime import datetime
 
@@ -23,3 +23,19 @@ class OTPCode(Base):
     mobile = Column(String(20), nullable=False)
     code = Column(String(6), nullable=False)
     expires_at = Column(DateTime, nullable=False)
+
+
+class PasswordResetToken(Base):
+    """A single-use, time-limited token emailed to a user who requested a password reset.
+    Never reused: consumed (marked used) the moment it successfully sets a new password.
+
+    `id` (not `created_at`) is the reliable "which token is newest" ordering: MySQL's
+    DATETIME truncates to whole seconds by default, so two tokens issued in the same
+    second — e.g. an admin resetting someone right after their own invite — would tie."""
+    __tablename__ = "password_reset_tokens"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

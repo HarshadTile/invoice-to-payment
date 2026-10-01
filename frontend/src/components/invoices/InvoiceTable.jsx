@@ -1,11 +1,12 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
-import { currentHandlerFor, currentStageName } from '../../utils/businessLogic';
+import { currentHandlerFor, currentStageName, downloadCSV } from '../../utils/businessLogic';
+import { matchesInvoiceQuery } from '../../utils/invoiceQuery';
 import { setSearch, setTablePage, toggleSelectRow, setSelectAll, clearSelection, openModal, pushToast } from '../../features/ui/uiSlice';
 import Badge from '../common/Badge.jsx';
 import PagerFoot from '../common/PagerFoot.jsx';
-import { Mail, Flag, Eye, Download, Inbox } from '../common/icons.jsx';
+import { Mail, Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
 
 const PAGE_SIZE = 10;
 const EMPTY_SELECTION = Object.freeze([]);
@@ -34,10 +35,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const selected  = useSelector((s) => s.ui.tableSelected[tableKey] || EMPTY_SELECTION);
   const isSupplierUser = useSelector((s) => s.auth.authType === 'supplier');
 
-  const q        = search.toLowerCase();
-  const filtered = q
-    ? invoices.filter((inv) => [inv.no, inv.vcode, inv.vendor, CHANNEL_LABEL[inv.channel], inv.po, inv.status, inv.utr].join(' ').toLowerCase().includes(q))
-    : invoices;
+  const filtered = search ? invoices.filter((inv) => matchesInvoiceQuery(inv, search)) : invoices;
 
   const totalPages   = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage  = Math.min(page, totalPages);
@@ -56,11 +54,11 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
       navigate({ pathname: '/supplier/home', search: next.toString() });
       return;
     }
-    dispatch(openModal({ kind: action, ctx: { no } }));
+    dispatch(openModal({ kind: action, ctx: { no, poItem } }));
   };
   const openVendorCode = (code) => dispatch(openModal({ kind: 'vendorCodePreview', ctx: { code } }));
-  const openNotify     = (no)   => dispatch(openModal({ kind: 'notifyPreview',  ctx: { no } }));
-  const openRaiseTicket= (no)   => dispatch(openModal({ kind: 'raiseTicket',    ctx: { no } }));
+  const openNotify     = (no, poItem) => dispatch(openModal({ kind: 'notifyPreview',  ctx: { no, poItem } }));
+  const openRaiseTicket= (no, poItem) => dispatch(openModal({ kind: 'raiseTicket',    ctx: { no, poItem } }));
 
   // Suppliers see one vendor code, so vendor columns are noise; owner and "notify" are internal-only.
   const supplierView = mode === 'supplierSafe' && isSupplierUser;
@@ -68,19 +66,47 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const exportCount = filteredCount ?? filtered.length;
   const exportLabel = `Export to Excel (${exportCount})`;
 
+  const exportCols = supplierView
+    ? ['Invoice No', 'Channel', 'PO No', 'Amount', 'Status', 'Current Stage', 'UTR No', 'Date']
+    : ['Invoice No', 'Vendor', 'Vendor Code', 'Channel', 'PO No', 'Amount', 'Status', 'Current Stage', 'Owner', 'UTR No', 'Date'];
+  const toExportRow = (inv) => {
+    if (supplierView) return [inv.no, CHANNEL_LABEL[inv.channel], inv.po, inv.amount, inv.status, currentStageName(inv), inv.utr, inv.date];
+    const owner = currentHandlerFor(inv);
+    return [inv.no, inv.vendor, inv.vcode, CHANNEL_LABEL[inv.channel], inv.po, inv.amount, inv.status, currentStageName(inv), owner.name, inv.utr, inv.date];
+  };
+  const exportInvoices = (list, filenameLabel) => {
+    downloadCSV(filenameLabel, exportCols, list.map(toExportRow));
+    dispatch(pushToast(`Exported ${list.length} invoice${list.length === 1 ? '' : 's'} to Excel.`));
+  };
+
   return (
     <div>
       <div className="toolbar">
         <div className="toolbar-left">
           {!hideSearch && (
-            <input
-              className="search-box"
-              style={{ width: 'clamp(200px, 26vw, 300px)' }}
-              placeholder="Search invoice no, vendor, PO…"
-              aria-label="Search invoices in this table"
-              value={search}
-              onChange={(e) => dispatch(setSearch({ key: tableKey, value: e.target.value }))}
-            />
+            <div style={{ position: 'relative', width: 'clamp(260px, 34vw, 420px)' }}>
+              <Search
+                size={14}
+                style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }}
+              />
+              <input
+                className="search-box"
+                style={{ width: '100%', paddingLeft: 32, paddingRight: search ? 30 : 12, fontSize: 13 }}
+                placeholder="Invoice no, PO no, PO item… (comma-separated)"
+                title="Comma-separated: invoice no, PO no, PO item"
+                aria-label="Search - comma-separated: invoice, PO, item"
+                value={search}
+                onChange={(e) => dispatch(setSearch({ key: tableKey, value: e.target.value }))}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => dispatch(setSearch({ key: tableKey, value: '' }))}
+                  aria-label="Clear search"
+                  style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 17, lineHeight: 1, padding: '0 4px' }}
+                >&times;</button>
+              )}
+            </div>
           )}
           {selected.length > 0 && <span className="chip blue">{selected.length} selected</span>}
         </div>
@@ -95,14 +121,17 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               </button>
               <button type="button" className="btn"
                 title={`Export ${selected.length} selected invoice(s) to Excel`}
-                onClick={() => dispatch(pushToast(`Exporting ${selected.length} invoice${selected.length === 1 ? '' : 's'} to Excel…`))}>
+                onClick={() => {
+                  exportInvoices(invoices.filter((inv) => selected.includes(inv.no)), `${tableKey}_selected`);
+                  dispatch(clearSelection(tableKey));
+                }}>
                 <Download />Export Selected to Excel
               </button>
             </>
           ) : (
             <button type="button" className="btn"
               title={`Export the ${exportCount} currently filtered invoice(s) to Excel`}
-              onClick={() => dispatch(pushToast(`Exporting ${exportCount} filtered invoice${exportCount === 1 ? '' : 's'} to Excel…`))}>
+              onClick={() => exportInvoices(filtered, tableKey)}>
               <Download />{exportLabel}
             </button>
           )}
@@ -208,14 +237,14 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
                           type="button" className="kebab"
                           title="Notify supplier — preview email recipients (To / CC)"
                           aria-label={`Notify supplier for invoice ${inv.no}`}
-                          onClick={() => openNotify(inv.no)}
+                          onClick={() => openNotify(inv.no, inv.poItem)}
                         ><Mail /></button>
                       )}
                       <button
                         type="button" className="kebab"
                         title="Raise a query on this invoice"
                         aria-label={`Raise query for invoice ${inv.no}`}
-                        onClick={() => openRaiseTicket(inv.no)}
+                        onClick={() => openRaiseTicket(inv.no, inv.poItem)}
                       ><Flag /></button>
                       <button
                         type="button" className="kebab"

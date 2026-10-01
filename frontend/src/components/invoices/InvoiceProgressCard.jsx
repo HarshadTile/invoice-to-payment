@@ -44,7 +44,7 @@ export default function InvoiceProgressCard({ inv }) {
     <div className="card" style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
         <div>
-          <button type="button" className="link-hero" style={{ fontSize: 15 }} onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no } }))}>{inv.no}</button>
+          <button type="button" className="link-hero" style={{ fontSize: 15 }} onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no, poItem: inv.poItem } }))}>{inv.no}</button>
           <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>{CHANNEL_LABEL[inv.channel]} : PO {inv.po} : {inv.amount}</div>
         </div>
         <span className={`chip ${cs.tone}`}>{cs.label}</span>
@@ -75,8 +75,8 @@ export default function InvoiceProgressCard({ inv }) {
       <div className="validation-row" style={{ marginTop: 10 }}><span>UTR No.</span><span>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</span></div>
       {inv.shortPayReason && !failed && <div className="validation-row"><span>Reason for Less Paid</span><span style={{ textAlign: 'right', maxWidth: 280 }}>{inv.shortPayReason}</span></div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'raiseTicket', ctx: { no: inv.no } }))}>Raise a Query</button>
-        <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no } }))}>View Full Detail</button>
+        <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'raiseTicket', ctx: { no: inv.no, poItem: inv.poItem } }))}>Raise a Query</button>
+        <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no, poItem: inv.poItem } }))}>View Full Detail</button>
       </div>
     </div>
   );

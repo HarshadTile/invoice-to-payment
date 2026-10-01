@@ -19,6 +19,12 @@ const initialState = {
   supplierVisibilityQuery: 'Tata Communications Ltd',
   globalLogsChannel: null,
   globalLogsStatus: null,
+  // Filter-bar state (search text, status, date range) for pages that also mirror
+  // it into the URL — keyed the same way as `search`/`tablePage` above, so a
+  // filter set on Search Invoice(s) or a channel's Invoice Log survives
+  // navigating away and back, instead of resetting because the sidebar always
+  // links to the bare path with no query string.
+  pageFilters: {}, // filterKey -> arbitrary filter object
 };
 
 const uiSlice = createSlice({
@@ -115,6 +121,10 @@ const uiSlice = createSlice({
     resetFiltersOnIdentitySwitch(state) {
       state.search = {};
     },
+    setPageFilters(state, action) {
+      const { key, filters } = action.payload;
+      state.pageFilters[key] = filters;
+    },
   },
 });
 
@@ -124,6 +134,6 @@ export const {
   setInvoicesTopTab, setTicketFilterStatus,
   setChannelViewTab, setVcodeViewTab, setInquiryViewMode, setInquiryChannelTab,
   setChannelQueryViewMode, setSupplierVisibilityQuery,
-  setGlobalLogsChannel, setGlobalLogsStatus, resetFiltersOnIdentitySwitch,
+  setGlobalLogsChannel, setGlobalLogsStatus, resetFiltersOnIdentitySwitch, setPageFilters,
 } = uiSlice.actions;
 export default uiSlice.reducer;

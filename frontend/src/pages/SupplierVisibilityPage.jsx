@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { suppliersFromRuntime } from '../data/runtime';
-import { vendorCodesFor, panFor, ticketInvoice } from '../utils/businessLogic';
+import { vendorCodesFor, panFor, supplierDirectory, ticketInvoice } from '../utils/businessLogic';
 import { selectScopedInvoices } from '../features/invoices/selectors';
 import { setSupplierVisibilityQuery } from '../features/ui/uiSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
@@ -12,20 +11,22 @@ export default function SupplierVisibilityPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [activeKpi, setActiveKpi] = useState('total');
-  const supplier = useSelector((s) => s.ui.supplierVisibilityQuery);
+  const directory = supplierDirectory(); // one row per real supplier identity (grouped by PAN)
+  const savedQuery = useSelector((s) => s.ui.supplierVisibilityQuery);
+  const supplier = directory.some((g) => g.name === savedQuery) ? savedQuery : (directory[0]?.name || savedQuery);
   const pan = panFor(supplier);
   const codes = vendorCodesFor(supplier);
   const scoped = useSelector(selectScopedInvoices);
-  const invoices = scoped.filter((i) => i.vendor === supplier);
+  // Match by PAN (the real identity) when known, so every name spelling / vendor
+  // code that belongs to this supplier is included, not just the exact string picked.
+  const isSameSupplier = (i) => (pan !== '-' ? i.pan === pan : i.vendor === supplier);
+  const invoices = scoped.filter(isSameSupplier);
   const ticketItems = useSelector((s) => s.tickets.items);
-  const openIssues = ticketItems.filter((t) => ticketInvoice(t)?.vendor === supplier).filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
+  const openIssues = ticketItems.filter((t) => { const inv = ticketInvoice(t); return inv && isSameSupplier(inv); }).filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
   const paid = invoices.filter((i) => i.status === 'Paid').length;
   const due = invoices.filter((i) => i.status === 'Payment Due').length;
   const inProgress = invoices.filter((i) => !['Paid', 'Rejected', 'Deleted'].includes(i.status));
-  const withOpenIssues = invoices.filter((i) => ticketItems.some((t) => {
-    const inv = ticketInvoice(t);
-    return inv?.no === i.no && (t.status === 'Open' || t.status === 'In Progress');
-  }));
+  const withOpenIssues = invoices.filter((i) => ticketItems.some((t) => t.no === i.no && (t.status === 'Open' || t.status === 'In Progress')));
   const kpiFilters = {
     total: invoices,
     paid: invoices.filter((i) => i.status === 'Paid'),
@@ -43,7 +44,7 @@ export default function SupplierVisibilityPage() {
         <div className="form-field" style={{ maxWidth: 340 }}>
           <label>Supplier</label>
           <select value={supplier} onChange={(e) => dispatch(setSupplierVisibilityQuery(e.target.value))}>
-            {suppliersFromRuntime().map((s) => <option key={s}>{s}</option>)}
+            {directory.map((g) => <option key={g.key} value={g.name}>{g.name}</option>)}
           </select>
         </div>
         <div className="row" style={{ marginTop: 10 }}>

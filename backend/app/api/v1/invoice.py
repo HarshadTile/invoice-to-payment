@@ -137,8 +137,12 @@ def get_recent_invoices(
     return [_redact_for_supplier(i) for i in invoices] if supplier_code else invoices
 
 @router.get("/{invoice_number:path}", response_model=InvoiceResponse)
-def get_invoice_by_number(invoice_number: str, user: dict = Depends(get_current_user_token)):
-    invoice = get_gcp_invoice_response(invoice_number)
+def get_invoice_by_number(
+    invoice_number: str,
+    po_item: int | None = None,
+    user: dict = Depends(get_current_user_token),
+):
+    invoice = get_gcp_invoice_response(invoice_number, po_item=po_item)
     supplier_code = _supplier_vendor_code(user)
 
     # 404 (not 403) for other suppliers' invoices so their existence isn't revealed

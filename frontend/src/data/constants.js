@@ -59,6 +59,20 @@ export const VIEW_COLUMNS = {
   'Service Entry & Payment': ['Invoice No', 'Service Entry No', 'Currency', 'Payment Due Date', 'Payment Status', 'UTR No'],
 };
 
+// What each of the above tables' "+ Add" button actually adds — every table used to share
+// one generic "Add Row" label with no indication of what it created.
+export const VIEW_ADD_LABEL = {
+  'Invoice Log': 'Invoice',
+  'Approver Assignment': 'Approver Assignment',
+  'SAP Booking (MIRO)': 'MIRO Booking',
+  'Payment & UTR (FBL1N)': 'Payment Record',
+  'Service Entry (ML81N)': 'Service Entry',
+  'Payment Status': 'Payment Status Entry',
+  'Email Approval Trail': 'Approval Email',
+  'Corp Finance Routing': 'Routing Entry',
+  'Service Entry & Payment': 'Service Entry',
+};
+
 // Real vendor-code list: every one of these maps to Tata Communications Ltd -- the
 // "multiple vendor codes, one supplier" pain point. Internal data only, powers Supplier Visibility.
 export const VENDOR_CODE_MAP = {

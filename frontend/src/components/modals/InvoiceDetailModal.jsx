@@ -1,8 +1,7 @@
 ﻿import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { runtime } from '../../data/runtime';
 import { CHANNEL_STAGES, CHANNEL_LABEL, CHANNEL_ROUTING_RULE, STATUS_CHIP } from '../../data/constants';
-import { stageProgress, handlerFor } from '../../utils/businessLogic';
+import { stageProgress, handlerFor, findInvoice } from '../../utils/businessLogic';
 import { closeModal, openModal, pushToast } from '../../features/ui/uiSlice';
 import { selectPerm } from '../../features/auth/authSlice';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
@@ -23,7 +22,7 @@ export default function InvoiceDetailModal({ ctx }) {
   const invoices = useSelector(selectScopedInvoices);
   const [utrInput, setUtrInput] = useState('');
   const [moving, setMoving] = useState(false);
-  const inv = invoices.find((i) => i.no === ctx.no);
+  const inv = findInvoice(ctx.no, ctx.poItem, invoices);
   if (!inv) return null;
 
   const next = authType === 'internal' && perm.editRows ? nextStatusFor(inv) : null;
@@ -32,7 +31,7 @@ export default function InvoiceDetailModal({ ctx }) {
     if (needsUtr && !utrInput.trim()) { dispatch(pushToast('Enter the UTR number to mark this invoice Paid.')); return; }
     setMoving(true);
     try {
-      await dispatch(moveInvoice({ no: inv.no, status: next, utr: needsUtr ? utrInput.trim() : undefined }));
+      await dispatch(moveInvoice({ no: inv.no, poItem: inv.poItem, status: next, utr: needsUtr ? utrInput.trim() : undefined }));
       dispatch(pushToast(`${inv.no} moved to ${next}.`));
       setUtrInput('');
     } catch (err) {
@@ -74,7 +73,7 @@ export default function InvoiceDetailModal({ ctx }) {
       foot={(
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'notifyPreview', ctx: { no: inv.no } }))}>✉ Notify Supplier</button>
+            <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'notifyPreview', ctx: { no: inv.no, poItem: inv.poItem } }))}>✉ Notify Supplier</button>
           </div>
           <button type="button" className="btn" onClick={() => dispatch(closeModal())}>Close</button>
         </div>

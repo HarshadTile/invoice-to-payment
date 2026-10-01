@@ -92,7 +92,7 @@ function queryString(filters = {}) {
 
 export const invoiceApi = {
   list: (filters = {}) => request(queryString(filters)),
-  get: (invoiceNumber) => request(`/${encodeURIComponent(invoiceNumber)}`),
+  get: (invoiceNumber, poItem) => request(`/${encodeURIComponent(invoiceNumber)}${queryString({ po_item: poItem })}`),
   summary: (filters = {}) => request(`/summary${queryString(filters)}`),
   recent: (filters = {}) => request(`/recent${queryString(filters)}`),
   async listAll(filters = {}) {

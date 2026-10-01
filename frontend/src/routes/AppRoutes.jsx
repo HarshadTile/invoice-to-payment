@@ -10,6 +10,8 @@ import {
 } from './ProtectedRoute.jsx';
 import AppLayout from '../components/layout/AppLayout.jsx';
 import LoginPage from '../pages/LoginPage.jsx';
+import ForgotPasswordPage from '../pages/ForgotPasswordPage.jsx';
+import ResetPasswordPage from '../pages/ResetPasswordPage.jsx';
 import InvoicesPage from '../pages/InvoicesPage.jsx';
 import SearchInvoicePage from '../pages/SearchInvoicePage.jsx';
 import ChannelPage from '../pages/ChannelPage.jsx';
@@ -30,6 +32,9 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to={AUTH_BYPASS ? '/app/invoices' : '/login'} replace />} />
       <Route path="/login" element={AUTH_BYPASS ? <Navigate to="/app/invoices" replace /> : <RedirectIfLoggedIn><LoginPage /></RedirectIfLoggedIn>} />
+      {/* Always reachable, even mid-session — an emailed reset link shouldn't get bounced by a stale login. */}
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* Internal / HQ side */}
       <Route element={<RequireInternal />}>

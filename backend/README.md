@@ -42,15 +42,34 @@ DATABASE_URL=sqlite:///./data/app.db
 `data/app.db` is created automatically on first use and is not (and should
 not be) committed to git.
 
-To use MySQL, create the database first (`CREATE DATABASE mahindra_i2p;`)
-and put your real connection string in `.env`, URL-encoding any special
-characters in the password (`@` → `%40`, `:` → `%3A`, etc).
+To use MySQL, create the database first:
+
+```powershell
+mysql -u root -p < sql/create_database.sql
+```
+
+(see [sql/create_database.sql](sql/create_database.sql) — it also has an
+optional, commented-out section for creating a dedicated app user instead of
+using root). Then put your real connection string in `.env`, URL-encoding any
+special characters in the password (`@` → `%40`, `:` → `%3A`, etc).
 
 If you'd rather not keep it in a file (e.g. a one-off terminal session), you
 can still set `$env:DATABASE_URL = "..."` before running a command instead —
 that overrides `.env` for that terminal only.
 
-### 2. Create your first login account
+### 2. Build the schema
+
+```powershell
+alembic upgrade head
+```
+
+Creates every table (`users`, `tickets`, `settings`, ...) via the migration
+in `alembic/versions/`. The app itself no longer creates tables on startup —
+this is the one required step on a fresh database. See
+[Database migrations](#database-migrations-alembic) below for how this works
+and how to add a migration when a model changes.
+
+### 3. Create your first login account
 
 ```powershell
 python seed_admin.py
@@ -61,7 +80,7 @@ run again — it does nothing if the username already exists. Pass your own
 values to create a different account: `python seed_admin.py <username>
 <password> <name> <email> [role]`.
 
-### 3. Run it
+### 4. Run it
 
 ```powershell
 uvicorn app.main:app --reload --port 8000
@@ -93,6 +112,51 @@ you want to keep your local dev data clean:
 $env:DATABASE_URL = "sqlite:///./data/test.db"
 pytest
 ```
+
+## Database migrations (Alembic)
+
+Schema is owned entirely by Alembic (`alembic/`) — the app never creates or
+alters tables itself. `DATABASE_URL` is read the same way as the app's own
+(`.env`, or an explicit `$env:DATABASE_URL` for that terminal); there's
+nothing to configure separately in `alembic.ini`.
+
+```powershell
+alembic upgrade head        # bring the current database up to date
+alembic current             # what revision is this database on?
+alembic history             # list all migrations
+```
+
+**When you change a model** (add a column, a table, etc.), generate a
+migration and commit it alongside the model change:
+
+```powershell
+alembic revision --autogenerate -m "add foo to users"
+```
+
+Read the generated file in `alembic/versions/` before applying it —
+autogenerate is usually right but doesn't always guess renames or data
+migrations correctly. Then `alembic upgrade head` to apply it, on every
+database (yours, a teammate's, production).
+
+**If a database already had these tables before Alembic was introduced**
+(this repo's own dev databases did, created by the old `create_all()`), don't
+run the initial migration against it — that would try to create tables that
+already exist. Mark it as already up to date instead, without touching its
+schema:
+
+```powershell
+alembic stamp head
+```
+
+**Known drift:** this project's MySQL database (`mahindra_i2p`) predates
+Alembic and still has a few tables from an earlier, unrelated Express-based
+version of this app (`sessions`, `invoices`, `integrations`,
+`ticket_activity`) that no current model defines, plus a couple of
+nullable/type mismatches on older columns. `alembic check` will flag these.
+They don't affect the app (nothing here reads or writes them), but if you
+want a migration that cleans them up, generate one deliberately rather than
+blindly applying whatever `--autogenerate` proposes, since it will also
+suggest dropping those tables.
 
 ## User management and roles
 

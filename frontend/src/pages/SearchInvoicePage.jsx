@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { selectScopedInvoices } from '../features/invoices/selectors';
+import { setPageFilters } from '../features/ui/uiSlice';
 import { CHANNELS, STATUS_CHIP, APP_NOW } from '../data/constants';
 import { getFiscalYear } from '../utils/businessLogic';
+import { parseInvoiceQuery } from '../utils/invoiceQuery';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import Dropdown from '../components/common/Dropdown.jsx';
 import { Search, X } from '../components/common/icons.jsx';
@@ -49,12 +51,6 @@ function fmtDate(ymd) {
   return `${d} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]} ${y}`;
 }
 
-/* ── Smart query parser: invoice, PO, item (NO vendor) ─────────────── */
-function parseQuery(raw) {
-  const parts = raw.split(',').map((s) => s.trim());
-  return { invoice: parts[0] || '', po: parts[1] || '', item: parts[2] || '' };
-}
-
 function getParam(params, key, fallback = '') {
   const v = params.get(key);
   return v !== null ? v : fallback;
@@ -91,31 +87,49 @@ function FilterChip({ label, value, onRemove, tone = 'brand' }) {
 }
 
 /* ── Page ────────────────────────────────────────────────────────────── */
+const PAGE_FILTER_KEY = 'searchInvoice';
+
 export default function SearchInvoicePage() {
+  const dispatch = useDispatch();
   const invoices = useSelector(selectScopedInvoices);
+  const savedFilters = useSelector((s) => s.ui.pageFilters[PAGE_FILTER_KEY]);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Initialise from URL; default date range = last 90 days
-  const [query,    setQuery]    = useState(() => getParam(searchParams, 'q'));
+  // The sidebar always links here with a bare URL, so a fresh visit (no filter
+  // params at all) restores the last filters this session set, instead of
+  // silently resetting them. A URL that already carries params (e.g. a KPI
+  // drill-through passing ?status=...) takes priority over the saved ones.
+  const cameInFresh = !['q', 'status', 'date_from', 'date_to'].some((k) => searchParams.has(k));
+  const restored = cameInFresh ? savedFilters : null;
+
+  // Initialise from URL (or the restored filters); default date range = last 90 days
+  const [query,    setQuery]    = useState(() => restored?.q      ?? getParam(searchParams, 'q'));
   const [vendor,   setVendor]   = useState(() => getParam(searchParams, 'vcode'));
   const [channel,  setChannel]  = useState(() => getParam(searchParams, 'channel'));
-  const [status,   setStatus]   = useState(() => getParam(searchParams, 'status'));
+  const [status,   setStatus]   = useState(() => restored?.status ?? getParam(searchParams, 'status'));
   // Same default as the top bar's dropdown: the current financial year until the user picks one, or 'all'
   const fy = getParam(searchParams, 'fy', getFiscalYear(new Date().toISOString()));
-  const [dateFrom, setDateFrom] = useState(() => getParam(searchParams, 'date_from', defaultDateFrom()));
-  const [dateTo,   setDateTo]   = useState(() => getParam(searchParams, 'date_to',   defaultDateTo()));
+  const [dateFrom, setDateFrom] = useState(() => restored?.dateFrom ?? getParam(searchParams, 'date_from', defaultDateFrom()));
+  const [dateTo,   setDateTo]   = useState(() => restored?.dateTo   ?? getParam(searchParams, 'date_to',   defaultDateTo()));
 
   const inputRef = useRef(null);
 
-  // Write defaults into URL on first load if they weren't already there
+  // Write defaults (or restored filters) into URL on first load if they weren't already there
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
     let changed = false;
+    if (restored?.q && !next.has('q')) { next.set('q', restored.q); changed = true; }
+    if (restored?.status && !next.has('status')) { next.set('status', restored.status); changed = true; }
     if (!next.has('date_from')) { next.set('date_from', dateFrom); changed = true; }
     if (!next.has('date_to'))   { next.set('date_to',   dateTo);   changed = true; }
     if (changed) setSearchParams(next, { replace: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep the last-used filters in Redux so they survive navigating away and back.
+  useEffect(() => {
+    dispatch(setPageFilters({ key: PAGE_FILTER_KEY, filters: { q: query, status, dateFrom, dateTo } }));
+  }, [dispatch, query, status, dateFrom, dateTo]);
 
   // Sync topbar vendor/channel URL changes → local state
   useEffect(() => {
@@ -158,7 +172,7 @@ export default function SearchInvoicePage() {
   };
 
   // ── Filter logic ──
-  const parsed = parseQuery(query);
+  const parsed = parseInvoiceQuery(query);
 
   const matches = (inv, skipStatus) => {
     if (parsed.invoice && !inv.no.toLowerCase().includes(parsed.invoice.toLowerCase())) return false;
@@ -232,7 +246,7 @@ export default function SearchInvoicePage() {
         </div>
 
         {/* ── Active scope chips (search tokens, vendor, channel, financial year) ── */}
-        {(parsed.invoice || parsed.po || parsed.item || vendorLabel || channelLabel || fy !== 'all' || nextHint) && (
+        {(parsed.invoice || parsed.po || parsed.item || vendorLabel || channelLabel || nextHint) && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
             {parsed.invoice && <FilterChip label="Invoice" value={parsed.invoice} tone="brand"
               onRemove={() => { const parts = query.split(','); parts[0] = ''; handleQuery(parts.join(',').replace(/^,+/, '')); }} />}
@@ -245,9 +259,6 @@ export default function SearchInvoicePage() {
               onRemove={() => { setVendor('');  sync({ vcode: '' }); }} />}
             {channelLabel && <FilterChip label="Channel" value={channelLabel} tone="blue"
               onRemove={() => { setChannel(''); sync({ channel: '' }); }} />}
-            {fy !== 'all' && <FilterChip label="Financial Year" value={fy} tone="blue"
-              onRemove={() => sync({ fy: '' })} />}
-
             {nextHint && !parsed.item && (
               <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', alignSelf: 'center' }}>
                 {nextHint}

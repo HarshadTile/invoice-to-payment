@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { CHANNELS, VIEW_COLUMNS, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
+import { CHANNELS, VIEW_COLUMNS, VIEW_ADD_LABEL, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
 import { selectScopedInvoices } from '../features/invoices/selectors';
 import { channelViewRows, ticketBreached, ticketInvoice } from '../utils/businessLogic';
-import { setChannelViewTab, setChannelQueryViewMode, openModal } from '../features/ui/uiSlice';
+import { setChannelViewTab, setChannelQueryViewMode, openModal, setPageFilters } from '../features/ui/uiSlice';
 import { setRows, selectTable } from '../features/tables/tablesSlice';
 import { selectPerm } from '../features/auth/authSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
@@ -16,13 +16,38 @@ import Badge from '../components/common/Badge.jsx';
 import TicketTable from '../components/tickets/TicketTable.jsx';
 import TicketBoard from '../components/tickets/TicketBoard.jsx';
 
-/** Status + date-range filter (same one used on My Invoices / Search Invoice(s)), scoped to this channel's invoices. */
-function useChannelInvoiceFilter(channelInvoices) {
+/** Status + date-range filter (same one used on My Invoices / Search Invoice(s)), scoped to this channel's invoices.
+ *  Persisted per channel in Redux so it survives navigating away and back — the
+ *  sidebar always links to the bare channel URL, which would otherwise reset it. */
+function useChannelInvoiceFilter(channelInvoices, channelKey) {
+  const dispatch = useDispatch();
+  const filterKey = `channel-${channelKey}`;
+  const saved = useSelector((s) => s.ui.pageFilters[filterKey]);
   const [searchParams, setSearchParams] = useSearchParams();
   const range = defaultInvoiceRange();
-  const status = searchParams.get('status') || '';
-  const dateFrom = searchParams.has('date_from') ? searchParams.get('date_from') : range.from;
-  const dateTo = searchParams.has('date_to') ? searchParams.get('date_to') : range.to;
+
+  const cameInFresh = !['status', 'date_from', 'date_to'].some((k) => searchParams.has(k));
+  const restored = cameInFresh ? saved : null;
+
+  const status = restored?.status ?? (searchParams.get('status') || '');
+  const dateFrom = restored?.dateFrom ?? (searchParams.has('date_from') ? searchParams.get('date_from') : range.from);
+  const dateTo = restored?.dateTo ?? (searchParams.has('date_to') ? searchParams.get('date_to') : range.to);
+
+  // Write restored filters into the URL once, and keep Redux's copy current on every change.
+  useEffect(() => {
+    if (!restored) return;
+    const next = new URLSearchParams(searchParams);
+    let changed = false;
+    if (restored.status && !next.has('status')) { next.set('status', restored.status); changed = true; }
+    if (restored.dateFrom !== undefined && !next.has('date_from')) { next.set('date_from', restored.dateFrom); changed = true; }
+    if (restored.dateTo !== undefined && !next.has('date_to')) { next.set('date_to', restored.dateTo); changed = true; }
+    if (changed) setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey]);
+
+  useEffect(() => {
+    dispatch(setPageFilters({ key: filterKey, filters: { status, dateFrom, dateTo } }));
+  }, [dispatch, filterKey, status, dateFrom, dateTo]);
 
   const update = (changes) => {
     const next = new URLSearchParams(searchParams);
@@ -59,7 +84,7 @@ export default function ChannelPage() {
   const savedViewTab = useSelector((s) => s.ui.channelViewTab[key]);
   const perm = useSelector(selectPerm);
   const channelInvoices = scopedInvoices.filter((i) => i.channel === key);
-  const { shown: filteredChannelInvoices, bar: channelFilterBar } = useChannelInvoiceFilter(channelInvoices);
+  const { shown: filteredChannelInvoices, bar: channelFilterBar } = useChannelInvoiceFilter(channelInvoices, key);
 
   if (!channel) return <p>Unknown channel.</p>;
 
@@ -219,6 +244,7 @@ function ChannelSubView({ channelKey, view, channelInvoices, canEdit, canImportE
         cols={cols}
         rows={rows}
         statusCol
+        entityLabel={VIEW_ADD_LABEL[view] || 'Row'}
         canEdit={canEdit}
         canImportExport={canImportExport}
         onViewInvoice={(no) => dispatch(openModal({ kind: 'invoiceDetail', ctx: { no } }))}

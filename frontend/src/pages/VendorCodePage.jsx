@@ -1,8 +1,8 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { VENDOR_CODE_MAP, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
+import { CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
-import { supplierForVendorCode, panFor, posForVendorCode, getInvoiceHistory, ticketInvoice } from '../utils/businessLogic';
+import { supplierForVendorCode, panFor, vendorCodesFor, posForVendorCode, getInvoiceHistory, ticketInvoice } from '../utils/businessLogic';
 import { selectScopedInvoices } from '../features/invoices/selectors';
 import { setVcodeViewTab, openModal } from '../features/ui/uiSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
@@ -57,7 +57,7 @@ export default function VendorCodePage() {
   const openIssues = ticketItems.filter((t) => ticketInvoice(t)?.vcode === code).filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
 
   const supplier = supplierForVendorCode(code);
-  const siblingCodes = VENDOR_CODE_MAP.rows.filter((r) => r[1] === supplier).map((r) => r[0]).filter((c) => c !== code);
+  const siblingCodes = vendorCodesFor(supplier).filter((c) => c !== code);
   const invoices = scoped.filter((i) => i.vcode === code);
   // The header stats above always cover every invoice on this code; the filter bar below only narrows the Invoice Log table.
   const { shown: filteredInvoices, bar: invoiceFilterBar } = useVendorInvoiceFilter(invoices);
@@ -172,7 +172,7 @@ function VendorCodeHistory({ code, invoices }) {
       {invoices.length ? invoices.map((inv, rowIndex) => (
         <div className="card" style={{ marginBottom: 12 }} key={`${inv.no}-${rowIndex}`}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <button type="button" className="link-hero" style={{ fontWeight: 700 }} onClick={() => dispatch(openModal({ kind: 'invoiceDetail', ctx: { no: inv.no } }))}>{inv.no}</button>
+            <button type="button" className="link-hero" style={{ fontWeight: 700 }} onClick={() => dispatch(openModal({ kind: 'invoiceDetail', ctx: { no: inv.no, poItem: inv.poItem } }))}>{inv.no}</button>
             <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{CHANNEL_LABEL[inv.channel]} · PO {inv.po}</span>
           </div>
           <Timeline events={getInvoiceHistory(inv, tickets)} />

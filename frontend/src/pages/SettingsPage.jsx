@@ -17,7 +17,7 @@ import { Plus, Edit, Trash, Key, Inbox } from '../components/common/icons.jsx';
 
 const TITLES = { integrations: 'Integration Settings', notifications: 'Notifications', auditLogs: 'Audit Logs', users: 'Users', roles: 'Roles & Permissions' };
 const CAPS = [
-  ['importExport', 'Import / Export Data'],
+  ['importExport', 'Export Data'],
   ['editRows', 'Add / Edit / Delete Rows'],
   ['createTrace', 'Search Invoice(s)'],
   ['manageConfig', 'Manage Integration & Notification Config'],
@@ -133,7 +133,7 @@ function UsersTab() {
     } else {
       const created = await usersApi.create(values);
       setUsers((prev) => [...(prev || []), created]);
-      dispatch(pushToast(`${created.name} added.`));
+      dispatch(pushToast(`Invite sent to ${created.email}.`));
     }
     setFormUser(undefined);
   }
@@ -152,9 +152,11 @@ function UsersTab() {
     }
   }
 
-  async function handleResetPassword(password) {
-    await usersApi.resetPassword(resetUser.id, password);
-    dispatch(pushToast(`Password reset for ${resetUser.name}.`));
+  async function handleResetPassword() {
+    await usersApi.resetPassword(resetUser.id);
+    dispatch(pushToast(resetUser.status === 'Invited'
+      ? `Invite resent to ${resetUser.email}.`
+      : `Reset link sent to ${resetUser.email}.`));
     setResetUser(null);
   }
 
@@ -209,14 +211,18 @@ function UsersTab() {
                     <td className="cell-muted">{u.email}</td>
                     <td><span className="role-chip">{u.role}</span></td>
                     <td>{u.channelScope === 'all' ? 'All Channels — HQ' : (CHANNEL_LABEL[u.channelScope] || u.channelScope)}</td>
-                    <td><Badge tone={u.status === 'Active' ? 'green' : 'gray'}>{u.status}</Badge></td>
+                    <td><Badge tone={u.status === 'Active' ? 'green' : u.status === 'Invited' ? 'amber' : 'gray'}>{u.status}</Badge></td>
                     {perm.manageUsers && (
                       <td className="col-actions">
                         <div className="row-actions">
                           <button type="button" className="kebab" title="Edit user" aria-label={`Edit ${u.name}`}
                             onClick={() => setFormUser(u)}><Edit /></button>
-                          <button type="button" className="kebab" title="Reset password" aria-label={`Reset password for ${u.name}`}
-                            onClick={() => setResetUser(u)}><Key /></button>
+                          <button
+                            type="button" className="kebab"
+                            title={u.status === 'Invited' ? 'Resend invite' : 'Reset password'}
+                            aria-label={`${u.status === 'Invited' ? 'Resend invite to' : 'Reset password for'} ${u.name}`}
+                            onClick={() => setResetUser(u)}
+                          ><Key /></button>
                           <button
                             type="button" className="kebab" aria-label={`Remove ${u.name}`}
                             title={isSelf ? "You can't remove your own account" : 'Remove user'}

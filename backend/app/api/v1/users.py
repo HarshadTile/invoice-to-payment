@@ -1,4 +1,4 @@
-from datetime import datetime
+import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -6,10 +6,12 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 
 from app.api.v1.auth import get_current_user_token
+from app.core.audit import write_audit
 from app.core.database import get_db
+from app.core.password_reset import issue_invite, issue_password_reset
 from app.core.security import get_password_hash
-from app.models.user import User
-from app.models.settings import AppSettings, TableRow
+from app.models.user import PasswordResetToken, User
+from app.models.settings import AppSettings
 
 router = APIRouter()
 
@@ -17,7 +19,9 @@ router = APIRouter()
 # permissions for. Kept in sync manually since the capability matrix itself lives in
 # per-tenant settings, not in the database.
 VALID_ROLES = ["Admin", "MDE Invoice Team", "Approver", "Accounts", "Viewer"]
-VALID_STATUSES = ["Active", "Inactive"]
+# "Invited" is system-assigned only (set at creation, cleared when the invite is accepted) —
+# never something an admin picks directly via PATCH; kept here so it round-trips cleanly.
+VALID_STATUSES = ["Active", "Inactive", "Invited"]
 
 # Mirrors the frontend's channel keys (data/constants.js CHANNELS). "all" — every channel,
 # the HQ view — may only ever be assigned to an Admin; everyone else is locked to exactly
@@ -55,18 +59,6 @@ def require_manage_users(current: User = Depends(require_internal_user), db: Ses
     return current
 
 
-def _write_audit(db: Session, actor: User, action: str, detail: str):
-    """Append a row to the Settings > Audit Logs table. That table is read-only in the UI
-    and never rewritten wholesale by the frontend, so appending directly here is safe."""
-    next_index = db.query(TableRow).filter(TableRow.table_key == "settings-audit").count()
-    timestamp = datetime.utcnow().strftime("%d %b %Y, %I:%M %p")
-    db.add(TableRow(
-        table_key="settings-audit", row_index=next_index,
-        cells_json=[timestamp, actor.name, action, detail],
-    ))
-    db.commit()
-
-
 def _serialize(u: User) -> dict:
     return {
         "id": u.id, "username": u.username, "name": u.name, "email": u.email,
@@ -76,8 +68,9 @@ def _serialize(u: User) -> dict:
 
 
 class UserCreate(BaseModel):
+    """No password field on purpose: whoever creates the account never sets or sees its
+    password. The new account is emailed an invite link and sets its own on first use."""
     username: str
-    password: str
     name: str
     email: EmailStr
     role: str
@@ -124,10 +117,6 @@ def get_users(db: Session = Depends(get_db), _: User = Depends(require_internal_
     return [_serialize(u) for u in db.query(User).order_by(User.name).all()]
 
 
-class PasswordReset(BaseModel):
-    password: str
-
-
 @router.post("/")
 def create_user(user_in: UserCreate, db: Session = Depends(get_db), actor: User = Depends(require_manage_users)):
     _validate_role(user_in.role)
@@ -136,25 +125,27 @@ def create_user(user_in: UserCreate, db: Session = Depends(get_db), actor: User 
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="Username or email already exists.")
-    if len(user_in.password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
     channel_scope = _resolve_channel_scope(user_in.role, user_in.channelScope)
 
     new_user = User(
         username=user_in.username,
-        password_hash=get_password_hash(user_in.password),
+        # An unguessable placeholder no one is ever given — login is blocked by
+        # status="Invited" anyway, but this also means the hash itself is never a real,
+        # usable password even if that check were ever bypassed.
+        password_hash=get_password_hash(secrets.token_urlsafe(32)),
         name=user_in.name,
         email=user_in.email,
         role=user_in.role,
         channel_scope=channel_scope,
         dept=user_in.dept or "",
         title=user_in.title or "",
-        status="Active",
+        status="Invited",
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    _write_audit(db, actor, "Created user", f"{new_user.name} ({new_user.username}), role {new_user.role}, portal {channel_scope}")
+    issue_invite(db, new_user)
+    write_audit(db, actor, "Invited user", f"{new_user.name} ({new_user.username}), role {new_user.role}, portal {channel_scope}")
     return _serialize(new_user)
 
 
@@ -193,22 +184,26 @@ def update_user(user_id: int, patch: UserUpdate, db: Session = Depends(get_db), 
     db.commit()
     db.refresh(user)
     if changes:
-        _write_audit(db, actor, "Updated user", f"{user.name} ({user.username}): {', '.join(changes)}")
+        write_audit(db, actor, "Updated user", f"{user.name} ({user.username}): {', '.join(changes)}")
     return _serialize(user)
 
 
 @router.post("/{user_id}/reset-password")
-def reset_password(user_id: int, payload: PasswordReset, db: Session = Depends(get_db), actor: User = Depends(require_manage_users)):
+def reset_password(user_id: int, db: Session = Depends(get_db), actor: User = Depends(require_manage_users)):
+    """Emails the account holder a reset link — the admin triggering this never sets or
+    sees the new password; only the account holder does, by following the link. For an
+    account that never accepted its invite, this resends that invite instead."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
-    if len(payload.password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
 
-    user.password_hash = get_password_hash(payload.password)
-    db.commit()
-    _write_audit(db, actor, "Reset password", f"{user.name} ({user.username})")
-    return {"msg": "Password reset."}
+    if user.status == "Invited":
+        issue_invite(db, user)
+        write_audit(db, actor, "Resent invite", f"{user.name} ({user.username})")
+    else:
+        issue_password_reset(db, user, admin_initiated=True)
+        write_audit(db, actor, "Requested password reset", f"{user.name} ({user.username}) — reset link emailed")
+    return {"msg": f"A link has been emailed to {user.email}."}
 
 
 @router.delete("/{user_id}")
@@ -219,7 +214,10 @@ def delete_user(user_id: int, db: Session = Depends(get_db), actor: User = Depen
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
     name, username = user.name, user.username
+    # Any invite/reset tokens for this account would otherwise block the delete outright
+    # (foreign key on user_id) — there's nothing left to protect once the account is gone.
+    db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user_id).delete()
     db.delete(user)
     db.commit()
-    _write_audit(db, actor, "Removed user", f"{name} ({username})")
+    write_audit(db, actor, "Removed user", f"{name} ({username})")
     return {"msg": "User removed."}

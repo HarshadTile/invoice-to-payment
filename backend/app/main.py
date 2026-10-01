@@ -8,19 +8,9 @@ from app.api.v1.workspace import router as workspace_router
 from app.api.v1.tickets import router as tickets_router
 from app.api.v1.settings import router as settings_router
 from app.api.v1.sync_log import router as sync_log_router
-from app.core.database import Base, engine
-from sqlalchemy import inspect, text
-
-# Create tables
-Base.metadata.create_all(bind=engine)
-
-# Lightweight in-place migration: this project has no Alembic, so add columns that were
-# introduced after a database already existed. Safe to run every startup — it only acts
-# when the column is actually missing.
-_existing_user_columns = {c["name"] for c in inspect(engine).get_columns("users")}
-if "channel_scope" not in _existing_user_columns:
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE users ADD COLUMN channel_scope VARCHAR(32) DEFAULT 'all'"))
+# Schema is owned by Alembic now (see alembic/), not created here. Run
+# `alembic upgrade head` before starting the app for the first time on a
+# fresh database, and after pulling any change that adds a migration.
 
 app = FastAPI(title="M&M Invoice-to-Payment Tracker")
 

@@ -2,7 +2,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { setSearch, setTablePage, openModal } from '../../features/ui/uiSlice';
 import PagerFoot from '../common/PagerFoot.jsx';
 import Badge from './Badge.jsx';
-import { Upload, Download, Plus, Inbox, Mail, Edit, Trash } from './icons.jsx';
+import { Download, Plus, Inbox, Mail, Edit, Trash } from './icons.jsx';
 
 const PAGE_SIZE = 20;
 
@@ -17,11 +17,11 @@ function renderCell(v) {
 /**
  * A generic, permission-aware CRUD table over an array-of-arrays row store (tablesSlice).
  * Mirrors the reference app's renderTableBlock: search, pagination, add/edit/delete,
- * optional import/export, optional statusCol (invoice/vendor-code quick links + notify).
+ * optional export, optional statusCol (invoice/vendor-code quick links + notify).
  */
 export default function EditableTable({
   tableKey, cols, rows, canEdit = true, canImportExport = true,
-  allowAdd = true, addLabel = '+ Add Row', statusCol = false,
+  allowAdd = true, entityLabel = 'Row', statusCol = false,
   onViewInvoice, onViewVendorCode, onNotify,
 }) {
   const dispatch = useDispatch();
@@ -43,13 +43,10 @@ export default function EditableTable({
         </div>
         <div className="toolbar-right">
           {canImportExport && (
-            <>
-              <button type="button" className="btn" disabled={!canEdit} title={!canEdit ? 'Not permitted for your role' : undefined} onClick={() => dispatch(openModal({ kind: 'import', ctx: { tableKey } }))}><Upload />Import</button>
-              <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'export', ctx: { tableKey, cols, rows, label: tableKey } }))}><Download />Export</button>
-            </>
+            <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'export', ctx: { tableKey, cols, rows, label: tableKey } }))}><Download />Export to Excel ({rows.length})</button>
           )}
           {allowAdd && (
-            <button type="button" className="btn primary" disabled={!canEdit} title={!canEdit ? 'Not permitted for your role' : undefined} onClick={() => dispatch(openModal({ kind: 'row', ctx: { tableKey, cols, rows, idx: null } }))}><Plus />{addLabel.replace(/^\+\s*/, '')}</button>
+            <button type="button" className="btn primary" disabled={!canEdit} title={!canEdit ? 'Not permitted for your role' : undefined} onClick={() => dispatch(openModal({ kind: 'row', ctx: { tableKey, cols, rows, idx: null, entityLabel } }))}><Plus />Add {entityLabel}</button>
           )}
         </div>
       </div>
@@ -83,7 +80,7 @@ export default function EditableTable({
                   })}
                   {statusCol && <td><button type="button" className="kebab" title="Notify Supplier: preview To / CC" aria-label="Notify supplier" onClick={() => onNotify && onNotify(r[0])}><Mail /></button></td>}
                   <td style={{ display: 'flex', gap: 4 }}>
-                    <button type="button" className="kebab" disabled={!canEdit} title="Edit" aria-label="Edit row" onClick={() => dispatch(openModal({ kind: 'row', ctx: { tableKey, cols, rows, idx: rowIdx } }))}><Edit /></button>
+                    <button type="button" className="kebab" disabled={!canEdit} title={`Edit ${entityLabel}`} aria-label={`Edit ${entityLabel}`} onClick={() => dispatch(openModal({ kind: 'row', ctx: { tableKey, cols, rows, idx: rowIdx, entityLabel } }))}><Edit /></button>
                     <button
                       type="button"
                       className="kebab"

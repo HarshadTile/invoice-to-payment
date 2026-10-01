@@ -8,6 +8,9 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * Create or edit a real login account (app/models/user.py), via the usersApi passed in.
  * `user`: null to create, an existing user object to edit.
  *
+ * No password field, ever: creating an account emails the person an invite link to set
+ * their own first password — nobody who creates or edits an account sets it for them.
+ *
  * Portal / channel access is a property of the account (assigned here), never something the
  * person logging in gets to pick. An Admin always has every channel; any other role must be
  * locked to exactly one portal, matching the login screen's own "Portal / Team" list.
@@ -16,7 +19,7 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
   const editing = !!user;
   const [values, setValues] = useState(() => (editing
     ? { name: user.name, email: user.email, role: user.role, status: user.status, channelScope: user.channelScope }
-    : { username: '', password: '', name: '', email: '', role: roles[0] || 'Viewer', channelScope: LOGIN_CHANNELS[0]?.key || '' }));
+    : { username: '', name: '', email: '', role: roles[0] || 'Viewer', channelScope: LOGIN_CHANNELS[0]?.key || '' }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,10 +30,7 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
     if (!values.name.trim()) return 'Full name is required.';
     if (!emailPattern.test(values.email)) return 'Enter a valid email address.';
     if (!isAdmin && !values.channelScope) return 'Assign a portal for this role.';
-    if (!editing) {
-      if (!values.username.trim()) return 'Username is required.';
-      if (values.password.length < 8) return 'Password must be at least 8 characters.';
-    }
+    if (!editing && !values.username.trim()) return 'Username is required.';
     return '';
   }
 
@@ -56,7 +56,7 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
         <>
           <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
           <button type="button" className="btn primary" onClick={save} disabled={busy}>
-            {busy ? 'Saving…' : editing ? 'Save Changes' : 'Add User'}
+            {busy ? 'Sending…' : editing ? 'Save Changes' : 'Send Invite'}
           </button>
         </>
       )}
@@ -64,15 +64,12 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
       {error && <div className="form-error" role="alert">{error}</div>}
 
       {!editing && (
-        <div className="row">
-          <div className="form-field" style={{ flex: 1 }}>
-            <label>Username</label>
-            <input value={values.username} onChange={set('username')} autoFocus autoComplete="off" />
-          </div>
-          <div className="form-field" style={{ flex: 1 }}>
-            <label>Password</label>
-            <input type="password" value={values.password} onChange={set('password')} autoComplete="new-password" placeholder="At least 8 characters" />
-          </div>
+        <div className="form-field">
+          <label>Username</label>
+          <input value={values.username} onChange={set('username')} autoFocus autoComplete="off" />
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 0' }}>
+            They'll get an email to set their own password — no password is set here.
+          </p>
         </div>
       )}
 
@@ -121,10 +118,19 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
         <div className="row">
           <div className="form-field" style={{ flex: 1 }}>
             <label>Status</label>
-            <select value={values.status} onChange={set('status')}>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
+            {user.status === 'Invited' ? (
+              <>
+                <input value="Invited — hasn't set a password yet" readOnly />
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 0' }}>
+                  Use the key icon on their row to resend the invite.
+                </p>
+              </>
+            ) : (
+              <select value={values.status} onChange={set('status')}>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            )}
           </div>
         </div>
       )}
