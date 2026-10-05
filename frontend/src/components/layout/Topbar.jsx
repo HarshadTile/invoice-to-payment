@@ -1,6 +1,6 @@
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
 import { runtime } from '../../data/runtime';
 import { getFiscalYear } from '../../utils/businessLogic';
@@ -8,11 +8,33 @@ import { selectScopedInvoices } from '../../features/invoices/selectors';
 import { pushToast, toggleSidebar } from '../../features/ui/uiSlice';
 import { Bell, HelpCircle, ChevronDown, Menu } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
+import { api } from '../../api/client.js';
 
 const SETTINGS_LABEL = {
   integrations: 'Integration Settings', notifications: 'Notifications', auditLogs: 'Audit Logs',
   users: 'Users', roles: 'Roles & Permissions',
 };
+
+const NOTIFICATION_LABEL = {
+  TICKET_CREATED: 'New query received',
+  TICKET_ASSIGNED: 'Query assigned',
+  SUPPLIER_REPLIED: 'Supplier replied',
+  STAFF_REPLIED: 'Internal team replied',
+  TICKET_RESOLVED: 'Query resolved',
+  TICKET_REOPENED: 'Query reopened',
+  TICKET_CLOSED: 'Query closed',
+  TICKET_AUTO_CLOSED: 'Query automatically closed',
+  SLA_BREACHED: 'Response SLA breached',
+};
+
+function notificationLabel(item) {
+  return NOTIFICATION_LABEL[item.type] || item.type.toLowerCase().replaceAll('_', ' ');
+}
+
+function notificationDate(value) {
+  if (!value) return '';
+  return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+}
 
 function crumbFor(pathname, params) {
   if (pathname.startsWith('/app/invoices')) return 'Invoice Tracking';
@@ -133,7 +155,7 @@ function TopbarVendorDropdown({ searchParams, onUpdate }) {
 }
 
 /* ── Compact channel dropdown for topbar (tier-scoped) ─────────── */
-function TopbarChannelDropdown({ searchParams, onUpdate, channelScope }) {
+function TopbarChannelDropdown({ searchParams, onUpdate }) {
   const [open, setOpen]   = useState(false);
   const [typeQ, setTypeQ] = useState('');
   const wrapRef           = useRef(null);
@@ -291,15 +313,79 @@ function TopbarFiscalYearDropdown({ searchParams, onUpdate, defaultFY }) {
 
 export default function Topbar() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const location = useLocation();
   const params   = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { authType, channelScope } = useSelector((s) => s.auth);
+  const { authType, channelScope, id: userId, supplierLoginVcode } = useSelector((s) => s.auth);
+  const [notifications, setNotifications] = useState(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationRef = useRef(null);
+  const notificationItems = notifications || [];
+  const notificationCount = notificationItems.filter((item) => !item.read_at).length;
+  const notificationIdentity = authType === 'supplier' ? `supplier:${supplierLoginVcode}` : `user:${userId}`;
 
   const crumb = crumbFor(location.pathname, params);
   const isHQ = channelScope === 'all';
   const isChannelLocked = !isHQ;
   const channelLabel = CHANNEL_LABEL[channelScope] || channelScope;
+
+  const loadNotifications = useCallback(async () => {
+    if (document.visibilityState !== 'visible') return;
+    try {
+      const items = await api.get('/v1/notifications');
+      setNotifications(Array.isArray(items) ? items : []);
+    } catch {
+      setNotifications([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!notificationIdentity) return undefined;
+    const initialTimer = window.setTimeout(loadNotifications, 0);
+    const timer = window.setInterval(loadNotifications, 60000);
+    document.addEventListener('visibilitychange', loadNotifications);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', loadNotifications);
+    };
+  }, [loadNotifications, notificationIdentity]);
+
+  useEffect(() => {
+    if (!notificationsOpen) return undefined;
+    const close = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) setNotificationsOpen(false);
+    };
+    const escape = (event) => { if (event.key === 'Escape') setNotificationsOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [notificationsOpen]);
+
+  async function openNotification(item) {
+    try {
+      if (!item.read_at) await api.post(`/v1/notifications/${item.id}/read`);
+      setNotifications((current) => current.map((entry) => entry.id === item.id ? { ...entry, read_at: entry.read_at || new Date().toISOString() } : entry));
+      setNotificationsOpen(false);
+      if (item.ticket_id) navigate(authType === 'supplier' ? `/supplier/tickets/${item.ticket_id}` : `/app/inquiry-desk/${item.ticket_id}`);
+    } catch {
+      await loadNotifications();
+    }
+  }
+
+  async function markAllNotificationsRead() {
+    try {
+      await api.post('/v1/notifications/read-all');
+      const readAt = new Date().toISOString();
+      setNotifications((current) => current.map((item) => ({ ...item, read_at: item.read_at || readAt })));
+    } catch {
+      await loadNotifications();
+    }
+  }
 
   /** Update a URL param in place (keeps user on current page, e.g. Dashboard or Search) */
   function updateSearchParam(key, value) {
@@ -326,7 +412,7 @@ export default function Topbar() {
         )}
         {/* Channel + Vendor search dropdowns — shown for all internal users on all pages */}
         {authType === 'internal' && (
-          <>
+          <div className="topbar-context-filters">
             {isChannelLocked ? (
               <div
                 style={{
@@ -342,17 +428,39 @@ export default function Topbar() {
                 {channelLabel}
               </div>
             ) : (
-              <TopbarChannelDropdown searchParams={searchParams} onUpdate={updateSearchParam} channelScope={channelScope} />
+              <TopbarChannelDropdown searchParams={searchParams} onUpdate={updateSearchParam} />
             )}
             <TopbarVendorDropdown searchParams={searchParams} onUpdate={updateSearchParam} />
-          </>
+          </div>
         )}
 
-        <button type="button" className="icon-btn" aria-label="Notifications"
-          onClick={() => dispatch(pushToast('No new notifications.'))}>
-          <Bell size={18} />
-        </button>
-        <button type="button" className="icon-btn" aria-label="Help"
+        <div className="notification-menu-wrap" ref={notificationRef}>
+          <button type="button" className="icon-btn notification-button" aria-label={`Notifications${notificationCount ? `, ${notificationCount} unread` : ''}`}
+            aria-haspopup="dialog" aria-expanded={notificationsOpen}
+            onClick={() => { setNotificationsOpen((open) => !open); if (!notificationsOpen) loadNotifications(); }}>
+            <Bell size={18} />
+            {notificationCount > 0 && <span className="notification-count">{notificationCount > 99 ? '99+' : notificationCount}</span>}
+          </button>
+          {notificationsOpen && (
+            <div className="notification-menu" role="dialog" aria-label="Notifications">
+              <div className="notification-menu-head">
+                <b>Notifications</b>
+                {notificationCount > 0 && <button type="button" onClick={markAllNotificationsRead}>Mark all read</button>}
+              </div>
+              <div className="notification-menu-list">
+                {notifications === null && <p className="notification-empty">Loading...</p>}
+                {notifications !== null && !notificationItems.length && <p className="notification-empty">No notifications.</p>}
+                {notificationItems.map((item) => (
+                  <button type="button" className={`notification-item${item.read_at ? '' : ' unread'}`} key={item.id} onClick={() => openNotification(item)}>
+                    <span className="notification-item-dot" />
+                    <span><b>{notificationLabel(item)}</b><small>{item.ticket_no || 'Query'}{item.subject ? ` - ${item.subject}` : ''}</small><time>{notificationDate(item.created_at)}</time></span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <button type="button" className="icon-btn help-button" aria-label="Help"
           onClick={() => dispatch(pushToast('Help & documentation coming soon.'))}>
           <HelpCircle size={18} />
         </button>

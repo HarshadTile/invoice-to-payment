@@ -18,8 +18,8 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function UserFormModal({ user, roles, onClose, onSave }) {
   const editing = !!user;
   const [values, setValues] = useState(() => (editing
-    ? { name: user.name, email: user.email, role: user.role, status: user.status, channelScope: user.channelScope }
-    : { username: '', name: '', email: '', role: roles[0] || 'Viewer', channelScope: LOGIN_CHANNELS[0]?.key || '' }));
+    ? { name: user.name, email: user.email, role: user.role, status: user.status, channelScope: user.channelScope, ticketRole: user.ticketRole || 'NO_ACCESS' }
+    : { username: '', name: '', email: '', role: roles[0] || 'Viewer', channelScope: LOGIN_CHANNELS[0]?.key || '', ticketRole: 'NO_ACCESS' }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -92,8 +92,10 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
             onChange={(e) => setValues((prev) => ({
               ...prev,
               role: e.target.value,
-              // Leaving Admin needs a real portal picked; nothing else changes.
               channelScope: prev.channelScope || LOGIN_CHANNELS[0]?.key || '',
+              ticketRole: e.target.value === 'Admin'
+                ? 'ADMIN'
+                : (prev.role === 'Admin' ? (e.target.value === 'MDE Invoice Team' ? 'ASSIGNEE' : 'NO_ACCESS') : prev.ticketRole),
             }))}
           >
             {roles.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -113,6 +115,17 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
           </div>
         )}
       </div>
+
+      {!isAdmin && (
+        <div className="form-field">
+          <label>Inquiry Desk Access</label>
+          <select value={values.ticketRole} onChange={set('ticketRole')}>
+            <option value="NO_ACCESS">No Ticket Access</option>
+            <option value="ASSIGNEE">Assignee</option>
+            <option value="CHANNEL_LEAD">Channel Lead</option>
+          </select>
+        </div>
+      )}
 
       {editing && (
         <div className="row">

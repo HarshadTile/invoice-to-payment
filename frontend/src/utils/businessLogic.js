@@ -181,10 +181,12 @@ export function getInvoiceHistory(inv, tickets) {
       remarks: evStatus === 'Failed' ? (inv.shortPayReason || 'Process halted at this stage.') : '',
     });
   }
-  (tickets || []).filter((t) => t.no === inv.no).forEach((t) => {
-    events.push({ date: t.raisedDate, event: 'Query Raised', stage: `Category: ${t.category}`, status: t.status, person: t.raisedBy, role: t.raisedBy === 'Supplier' ? 'Supplier' : 'Internal', email: '', remarks: t.desc });
-    if (t.resolvedDate) {
-      events.push({ date: t.resolvedDate, event: 'Query Resolved', stage: `Category: ${t.category}`, status: 'Resolved', person: '-', role: '-', email: '', remarks: '' });
+  (tickets || []).filter((t) => (t.invoice_no || t.no) === inv.no).forEach((t) => {
+    const createdAt = t.created_at || t.raisedDate;
+    const source = t.source === 'SUPPLIER' || t.raisedBy === 'Supplier' ? 'Supplier' : 'Internal';
+    events.push({ date: createdAt, event: 'Query Raised', stage: `Category: ${t.category}`, status: t.status, person: source, role: source, email: '', remarks: t.description || t.desc });
+    if (t.resolved_at || t.resolvedDate) {
+      events.push({ date: t.resolved_at || t.resolvedDate, event: 'Query Resolved', stage: `Category: ${t.category}`, status: 'Resolved', person: '-', role: '-', email: '', remarks: '' });
     }
   });
   return events.sort((a, b) => new Date(b.date) - new Date(a.date));

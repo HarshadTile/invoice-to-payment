@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { CHANNELS, VIEW_COLUMNS, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
 import { selectScopedInvoices } from '../features/invoices/selectors';
-import { channelViewRows, ticketBreached, ticketInvoice } from '../utils/businessLogic';
+import { channelViewRows } from '../utils/businessLogic';
 import { setChannelViewTab, setChannelQueryViewMode, openModal, setPageFilters } from '../features/ui/uiSlice';
 import { setRows, selectTable } from '../features/tables/tablesSlice';
 import { selectPerm } from '../features/auth/authSlice';
@@ -15,6 +15,7 @@ import StatCard from '../components/common/StatCard.jsx';
 import Badge from '../components/common/Badge.jsx';
 import TicketTable from '../components/tickets/TicketTable.jsx';
 import TicketBoard from '../components/tickets/TicketBoard.jsx';
+import { useGetTicketBoardQuery, useGetTicketsQuery } from '../features/tickets/ticketsApi';
 
 /** Status + date-range filter (same one used on My Invoices / Search Invoice(s)), scoped to this channel's invoices.
  *  Persisted per channel in Redux so it survives navigating away and back — the
@@ -196,13 +197,14 @@ function ChannelHistory({ channelKey, channelInvoices }) {
 
 function ChannelQueries({ channelKey }) {
   const dispatch = useDispatch();
-  const allTickets = useSelector((s) => s.tickets.items);
+  const { data: page, isLoading } = useGetTicketsQuery({ channel: channelKey, include_closed: true, page_size: 100 });
+  const { data: board = {}, isLoading: boardLoading } = useGetTicketBoardQuery({ channel: channelKey });
   const viewMode = useSelector((s) => s.ui.channelQueryViewMode);
-  const tickets = allTickets.filter((t) => { const inv = ticketInvoice(t); return inv && inv.channel === channelKey; });
-  const open = tickets.filter((t) => t.status === 'Open').length;
-  const inProgress = tickets.filter((t) => t.status === 'In Progress').length;
-  const breached = tickets.filter(ticketBreached).length;
-  const resolved = tickets.filter((t) => t.status === 'Resolved' || t.status === 'Closed').length;
+  const tickets = page?.items || [];
+  const open = tickets.filter((t) => t.status === 'OPEN').length;
+  const inProgress = tickets.filter((t) => t.status === 'IN_PROGRESS').length;
+  const breached = tickets.filter((t) => t.sla?.breached).length;
+  const resolved = tickets.filter((t) => t.status === 'RESOLVED' || t.status === 'CLOSED').length;
   const view = viewMode === 'board' ? 'board' : 'list';
 
   return (
@@ -221,7 +223,7 @@ function ChannelQueries({ channelKey }) {
         <StatCard tone="bad" icon="⚠" label="SLA Breached" value={breached} />
         <StatCard icon="✓" label="Resolved / Closed" value={resolved} />
       </div>
-      {view === 'list' ? <div className="card"><TicketTable tickets={tickets} /></div> : <TicketBoard tickets={tickets} />}
+      {view === 'list' ? <TicketTable tickets={tickets} loading={isLoading} /> : <TicketBoard groups={board} loading={boardLoading} />}
     </>
   );
 }

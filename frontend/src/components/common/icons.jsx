@@ -39,3 +39,11 @@ export const Inbox = (p) => <Ic {...p} d={<><path d="M4 13h4l2 3h4l2-3h4" /><pat
 export const Edit = (p) => <Ic {...p} d={<><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>} />;
 export const Trash = (p) => <Ic {...p} d={<><path d="M4 7h16M10 11v6M14 11v6" /><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3" /></>} />;
 export const Key = (p) => <Ic {...p} d={<><circle cx="8" cy="15" r="4" /><path d="m10.5 12.5 8-8M16 6l2 2M19 3l2 2" /></>} />;
+export const ArrowLeft = (p) => <Ic {...p} d={<path d="m15 18-6-6 6-6M9 12h12" />} />;
+export const Send = (p) => <Ic {...p} d={<><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></>} />;
+export const Paperclip = (p) => <Ic {...p} d={<path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.6-9.6a4 4 0 0 1 5.7 5.7l-9.6 9.6a2 2 0 0 1-2.8-2.8l8.9-8.9" />} />;
+export const List = (p) => <Ic {...p} d={<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />} />;
+export const Columns = (p) => <Ic {...p} d={<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M15 4v16" /></>} />;
+export const Clock = (p) => <Ic {...p} d={<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>} />;
+export const CheckCircle = (p) => <Ic {...p} d={<><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" /></>} />;
+export const RotateCcw = (p) => <Ic {...p} d={<><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></>} />;
