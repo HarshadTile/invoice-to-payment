@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.v1.auth import get_current_user
+from app.core.audit import write_audit
 from app.core.database import get_db
 from app.repositories import ticket_repository
 from app.schemas.ticket import (
@@ -28,6 +29,12 @@ from app.services import attachment_service, ticket_service
 
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
+
+
+def _audit_actor(user: dict) -> str:
+    if user["auth_type"] == "supplier":
+        return f"Supplier {user['vendor_code']}"
+    return user.get("name") or user.get("email") or f"User #{user.get('id')}"
 
 
 def _filters(
@@ -73,7 +80,14 @@ def create_ticket(
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return ticket_service.create_ticket(db, user, ticket_in, idempotency_key)
+    ticket = ticket_service.create_ticket(db, user, ticket_in, idempotency_key)
+    write_audit(
+        db,
+        _audit_actor(user),
+        "Raised query",
+        f"{ticket['ticket_no']} on invoice {ticket['invoice']['invoice_no']}",
+    )
+    return ticket
 
 
 @router.get("/summary", response_model=TicketSummaryResponse)
@@ -123,7 +137,6 @@ def get_comments(
 ):
     return ticket_service.get_comments(db, user, ticket_id, after_id)
 
-
 @router.post("/{ticket_id}/comments", response_model=TicketResponse)
 def add_comment(
     ticket_id: str,
@@ -131,7 +144,14 @@ def add_comment(
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return ticket_service.add_comment(db, user, ticket_id, comment_in)
+    ticket = ticket_service.add_comment(db, user, ticket_id, comment_in)
+    write_audit(
+        db,
+        _audit_actor(user),
+        "Commented on query",
+        f"{ticket['ticket_no']} on invoice {ticket['invoice']['invoice_no']}",
+    )
+    return ticket
 
 
 @router.post("/{ticket_id}/assign", response_model=TicketResponse)

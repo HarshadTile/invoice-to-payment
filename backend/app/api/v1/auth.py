@@ -40,7 +40,7 @@ class SupplierLoginRequest(BaseModel):
 
 
 @router.post("/supplier/login")
-def supplier_login(request: SupplierLoginRequest):
+def supplier_login(request: SupplierLoginRequest, db: Session = Depends(get_db)):
     vcode = request.vcode.strip()
     match = next(
         (
@@ -51,12 +51,14 @@ def supplier_login(request: SupplierLoginRequest):
         None,
     )
     if match is None:
+        write_audit(db, f"Supplier {vcode}", "Failed login", "unknown vendor code")
         raise HTTPException(status_code=401, detail="Invalid vendor code. Please check and try again.")
 
     company = str(match.get("SUPPLIER_NAME") or request.company or "Vendor").strip()
     pan = str(match.get("PAN_NO") or "-").strip() or "-"
     supplier_info = {"company": company, "pan": pan, "vcode": vcode}
     token = create_access_token(subject=vcode, auth_type="supplier", scope=supplier_info)
+    write_audit(db, f"Supplier {vcode}", "Logged in", f"{company}, supplier portal")
     return {
         "token": token,
         "auth": {
@@ -81,22 +83,27 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
         (User.username == login_id) | (User.email == login_id)
     ).first()
     if not user:
+        write_audit(db, login_id, "Failed login", "no account with that username/email")
         raise HTTPException(status_code=401, detail="Invalid username or password.")
     if user.status == "Invited":
+        write_audit(db, user, "Failed login", "account not activated yet (invite pending)")
         raise HTTPException(
             status_code=403,
             detail="This account hasn't been activated yet. Check your email for the invite link, or ask an admin to resend it.",
         )
     if user.status != "Active":
+        write_audit(db, user, "Failed login", "account is deactivated")
         raise HTTPException(
             status_code=403,
             detail="This account has been deactivated. Contact an administrator.",
         )
     if not verify_password(request.password, user.password_hash):
+        write_audit(db, user, "Failed login", "wrong password")
         raise HTTPException(status_code=401, detail="Invalid username or password.")
 
     requested_scope = request.channelScope
     if requested_scope and requested_scope not in VALID_CHANNEL_SCOPES:
+        write_audit(db, user, "Failed login", f"requested unknown workspace '{requested_scope}'")
         raise HTTPException(status_code=403, detail="Unknown workspace.")
 
     ticket_role = _ticket_role(user)
@@ -108,6 +115,12 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
         assigned_scope = user.channel_scope
         final_scope = requested_scope or assigned_scope
         if final_scope == "all" or final_scope not in allowed_channels:
+            write_audit(
+                db,
+                user,
+                "Failed login",
+                f"tried workspace '{final_scope}' outside assigned ticket channels",
+            )
             raise HTTPException(
                 status_code=403,
                 detail="This account can only sign in to its assigned portal.",
@@ -120,6 +133,7 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
         "loginId": login_id,
     }
     token = create_access_token(subject=user.id, auth_type="internal", scope=scope_data)
+    write_audit(db, user, "Logged in", f"{user.role}, portal {final_scope}")
     return {
         "token": token,
         "auth": {
@@ -250,6 +264,7 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
     if not user or user.status != "Active":
         return response
     issue_password_reset(db, user, admin_initiated=False)
+    write_audit(db, user, "Requested password reset", f"({user.username}) via Forgot password")
     return response
 
 
@@ -292,6 +307,22 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     return {"msg": "Password updated. You can now sign in with your new password."}
 
 
+optional_security = HTTPBearer(auto_error=False)
+
 @router.post("/logout")
-def logout():
+def logout(credentials: HTTPAuthorizationCredentials | None = Depends(optional_security), db: Session = Depends(get_db)):
+    # Logging out must never fail (the client clears its token regardless), so a missing
+    # or already-expired token just means there's nothing to attribute the event to.
+    if credentials:
+        from app.core.security import SECRET_KEY, ALGORITHM
+        try:
+            payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+            if payload.get("auth_type") == "supplier":
+                write_audit(db, f"Supplier {payload.get('sub')}", "Logged out", "supplier portal")
+            else:
+                user = db.query(User).filter(User.id == int(payload.get("sub"))).first()
+                if user:
+                    write_audit(db, user, "Logged out", "")
+        except (JWTError, ValueError, TypeError):
+            pass
     return {"msg": "Logged out successfully"}

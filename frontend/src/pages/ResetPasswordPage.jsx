@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { api } from '../api/client';
 import { authApi } from '../api/authApi';
+import { logoutThunk } from '../features/bootstrap/hydrateThunks';
 import AppHeader from '../components/login/AppHeader.jsx';
 import BrandPanel from '../components/login/BrandPanel.jsx';
 import PasswordField from '../components/login/PasswordField.jsx';
@@ -9,6 +12,7 @@ import './login.css';
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
 
@@ -26,6 +30,10 @@ export default function ResetPasswordPage() {
     setStatus('busy');
     try {
       await authApi.resetPassword(token, password);
+      // The browser may still hold someone else's session (e.g. the admin who sent this
+      // invite). Drop it so "Go to sign in" shows the login form instead of bouncing
+      // straight into that other account's app.
+      if (api.hasToken()) await dispatch(logoutThunk());
       setStatus('done');
     } catch (err) {
       setStatus('idle');

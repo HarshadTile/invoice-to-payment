@@ -11,7 +11,10 @@ export const ROLE_MATRIX = {
   Viewer: { importExport: false, editRows: false, createTrace: true, manageUsers: false, manageConfig: false },
 };
 
-export const CHANNELS = [
+// Every channel the data model knows about. The Manual (e-mail) channel is kept here so
+// labels/stages for any invoice already on it still resolve, but it's hidden from the UI
+// (see CHANNELS below).
+const ALL_CHANNELS = [
   {
     key: 'msetuSrm', label: 'Msetu / SRM',
     desc: 'Supplier-facing portal. Supplier uploads invoices against each visible purchase order; ASN/IBD gets auto-created.',
@@ -34,7 +37,10 @@ export const CHANNELS = [
   },
 ];
 
-export const CHANNEL_LABEL = Object.fromEntries(CHANNELS.map((c) => [c.key, c.label]));
+// Channels offered in the UI: sidebar, filters, tabs, dashboards. Manual isn't one of them.
+export const CHANNELS = ALL_CHANNELS.filter((c) => c.key !== 'manual');
+
+export const CHANNEL_LABEL = Object.fromEntries(ALL_CHANNELS.map((c) => [c.key, c.label]));
 
 export const CHANNEL_ROUTING_RULE = {
   msetuSrm: 'Standard PO, Indian supplier registered on SRM.',
@@ -43,8 +49,7 @@ export const CHANNEL_ROUTING_RULE = {
   mfoxPortal: 'Currency is not INR (USD, EUR, GBP): routed via MFOX Portal, with funds arranged by Corp Finance.',
 };
 
-// Manual/e-mail stays a real processing channel; it just isn't offered as its own team login.
-export const LOGIN_CHANNELS = CHANNELS.filter((c) => c.key !== 'manual');
+export const LOGIN_CHANNELS = CHANNELS;
 export const INTERNAL_TEAM_CHANNELS = LOGIN_CHANNELS.map((c) => c.key);
 
 export const VIEW_COLUMNS = {
@@ -57,20 +62,6 @@ export const VIEW_COLUMNS = {
   'Email Approval Trail': ['Invoice No', 'Approval Email Date', 'Subject', 'Status'],
   'Corp Finance Routing': ['Invoice No', 'Routed Date', 'Fund Arrangement Status', 'Corp Finance Approver'],
   'Service Entry & Payment': ['Invoice No', 'Service Entry No', 'Currency', 'Payment Due Date', 'Payment Status', 'UTR No'],
-};
-
-// What each of the above tables' "+ Add" button actually adds — every table used to share
-// one generic "Add Row" label with no indication of what it created.
-export const VIEW_ADD_LABEL = {
-  'Invoice Log': 'Invoice',
-  'Approver Assignment': 'Approver Assignment',
-  'SAP Booking (MIRO)': 'MIRO Booking',
-  'Payment & UTR (FBL1N)': 'Payment Record',
-  'Service Entry (ML81N)': 'Service Entry',
-  'Payment Status': 'Payment Status Entry',
-  'Email Approval Trail': 'Approval Email',
-  'Corp Finance Routing': 'Routing Entry',
-  'Service Entry & Payment': 'Service Entry',
 };
 
 // Real vendor-code list: every one of these maps to Tata Communications Ltd -- the

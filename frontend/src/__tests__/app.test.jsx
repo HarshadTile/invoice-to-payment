@@ -118,7 +118,7 @@ describe('Internal admin - full navigation', () => {
   it('expands Processing Channels and opens each channel', async () => {
     const { user } = await loginAdmin();
     // "Processing Channels" is expanded by default; sidebar channel links are already visible.
-    for (const label of ['Msetu / SRM', 'PO Portal', 'Manual', 'MFOX Portal']) {
+    for (const label of ['Msetu / SRM', 'PO Portal', 'MFOX Portal']) {
       const navLink = screen.getAllByText(label)[0];
       await user.click(navLink);
       expect(await screen.findByRole('heading', { name: label })).toBeInTheDocument();
@@ -162,29 +162,25 @@ describe('Internal admin - full navigation', () => {
     expect(screen.queryByText(/Invoice Progress/)).not.toBeInTheDocument();
   });
 
-  it('moves an invoice to its next stage and persists it via PATCH', async () => {
+  it('shows invoice progress without manual stage controls', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Search Invoice(s)')[0]);
     await user.type(await screen.findByPlaceholderText(/invoice no, po no/i), 'INV-MS-1003');
     await user.click(await screen.findByRole('button', { name: 'INV-MS-1003' }));
-    await user.click(await screen.findByRole('button', { name: 'Mark Approved' }));
-    expect(await screen.findByText(/INV-MS-1003 moved to Approved/)).toBeInTheDocument();
-    expect(api.patch).toHaveBeenCalledWith('/invoices/INV-MS-1003', { status: 'Approved' });
-    // the modal re-renders from the updated record: next step is now Booked
-    expect(await screen.findByRole('button', { name: 'Mark Miro Booked' })).toBeInTheDocument();
+    expect(await screen.findByText('Invoice Progress')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mark Approved' })).not.toBeInTheDocument();
+    expect(api.patch).not.toHaveBeenCalled();
   });
 
-  it('requires a UTR before marking an invoice Paid', async () => {
+  it('shows payment status and UTR without manual payment controls', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Search Invoice(s)')[0]);
     await user.type(await screen.findByPlaceholderText(/invoice no, po no/i), 'INV-MS-1002'); // Payment Due
     await user.click(await screen.findByRole('button', { name: 'INV-MS-1002' }));
-    await user.click(await screen.findByRole('button', { name: 'Mark Paid' }));
-    expect(await screen.findByText(/Enter the UTR number/)).toBeInTheDocument();
-    await user.type(screen.getByLabelText('UTR number'), 'UTR999');
-    await user.click(screen.getByRole('button', { name: 'Mark Paid' }));
-    expect(await screen.findByText(/INV-MS-1002 moved to Paid/)).toBeInTheDocument();
-    expect(api.patch).toHaveBeenCalledWith('/invoices/INV-MS-1002', { status: 'Paid', utr: 'UTR999' });
+    expect(await screen.findByText('Current Status')).toBeInTheDocument();
+    expect(screen.getByText('UTR No.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mark Paid' })).not.toBeInTheDocument();
+    expect(api.patch).not.toHaveBeenCalled();
   });
 
   it('previews a vendor code and opens its full view', async () => {
@@ -300,8 +296,8 @@ describe('Internal admin - full navigation', () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Settings')[0]);
     await user.click(screen.getAllByText('Audit Logs')[0]);
-    screen.queryAllByTitle('Edit').forEach((button) => expect(button).toBeDisabled());
-    screen.getAllByTitle('Delete').forEach((button) => expect(button).toBeDisabled());
+    expect(screen.queryAllByTitle('Edit')).toHaveLength(0);
+    expect(screen.queryAllByTitle('Delete')).toHaveLength(0);
   });
 
   it('Outputs page: bulk export triggers a toast, no crash', async () => {

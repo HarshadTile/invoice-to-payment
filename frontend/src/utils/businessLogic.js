@@ -134,12 +134,15 @@ export function stageProgress(channel, status) {
   return Math.max(1, Math.round(total * pct));
 }
 
+// The real data only ever tells us one of these 6 status values — there's no
+// granular SAP/ASN sub-step behind it. "Current Stage" used to invent one by
+// mapping status onto a percentage of CHANNEL_STAGES' 9-step breakdown (e.g.
+// showing "ASN/IBD created" for an invoice that's really just "Invoice
+// Uploaded"); now it shows the real status, same as the progress stepper does.
 export function currentStageName(inv) {
-  const stages = CHANNEL_STAGES[inv.channel];
-  const done = stageProgress(inv.channel, inv.status);
-  if (inv.status === 'Rejected' || inv.status === 'Deleted') return 'Failed at: ' + stages[Math.max(0, done - 1)];
-  if (done >= stages.length) return stages[stages.length - 1];
-  return stages[done - 1];
+  if (inv.status === 'Rejected') return 'Rejected';
+  if (inv.status === 'Deleted') return 'Deleted';
+  return inv.status || 'Invoice Uploaded';
 }
 
 

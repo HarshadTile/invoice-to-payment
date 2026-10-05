@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation } from 'react-router-dom';
 import { useParams } from 'react-router-dom';
-import { selectTable, toggleNotifRule } from '../features/tables/tablesSlice';
+import { selectTable, toggleNotifRule, setRowsLocal } from '../features/tables/tablesSlice';
+import { api } from '../api/client';
 import { CHANNEL_LABEL } from '../data/constants';
 import { togglePermission } from '../features/settings/settingsSlice';
 import { selectPerm } from '../features/auth/authSlice';
@@ -94,12 +95,43 @@ function NotificationsTab() {
   );
 }
 
+const AUDIT_POLL_MS = 5000;
+
 function AuditLogsTab() {
+  const dispatch = useDispatch();
   const tableKey = 'settings-audit';
-  const rows = useSelector((s) => selectTable(s, tableKey));
+  const stored = useSelector((s) => selectTable(s, tableKey));
+  // The server appends oldest-first; show the newest entry at the top.
+  const rows = useMemo(() => [...stored].reverse(), [stored]);
+
+  // Keep the log live: re-fetch every few seconds while this tab is open and visible,
+  // and once immediately on mount/refocus. Skip the store update when nothing changed
+  // so an idle log doesn't re-render (or reset the search box) on every tick.
+  useEffect(() => {
+    let cancelled = false;
+    let latest = JSON.stringify(stored);
+    const refresh = async () => {
+      if (document.hidden) return;
+      try {
+        const { rows: fresh } = await api.get(`/v1/tables/${tableKey}`);
+        const next = JSON.stringify(fresh);
+        if (!cancelled && next !== latest) {
+          latest = next;
+          dispatch(setRowsLocal({ key: tableKey, rows: fresh }));
+        }
+      } catch { /* transient failure — the next tick retries */ }
+    };
+    refresh();
+    const timer = setInterval(refresh, AUDIT_POLL_MS);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch]);
+
   return (
     <div className="card">
-      <EditableTable tableKey={tableKey} cols={['Timestamp', 'User', 'Action', 'Detail']} rows={rows} canEdit={false} allowAdd={false} canImportExport={false} />
+      <p className="card-hint" style={{ margin: '0 0 10px' }}>Live: updates automatically every few seconds. Newest first.</p>
+      <EditableTable tableKey={tableKey} cols={['Timestamp', 'User', 'Action', 'Detail']} rows={rows} canImportExport={false} />
     </div>
   );
 }

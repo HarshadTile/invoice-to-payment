@@ -75,10 +75,12 @@ and how to add a migration when a model changes.
 python seed_admin.py
 ```
 
-Creates `admin` / `admin123` with the Admin role (HQ / all channels). Safe to
-run again — it does nothing if the username already exists. Pass your own
-values to create a different account: `python seed_admin.py <username>
-<password> <name> <email> [role]`.
+Creates the `admin` user with the Admin role (HQ / all channels) and a
+randomly generated password, printed once to the console — save it before
+you lose it. Safe to run again — it does nothing if the username already
+exists. Pass your own values (including a password of your choosing) to
+create a different account: `python seed_admin.py <username> <password>
+<name> <email> [role]`.
 
 ### 4. Run it
 

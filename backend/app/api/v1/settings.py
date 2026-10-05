@@ -1,7 +1,8 @@
-﻿from fastapi import APIRouter, Depends
+﻿from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.v1.auth import get_current_user_token
+from app.core.audit import AUDIT_TABLE_KEY
 from app.core.database import get_db
 from app.models.settings import TableRow, AppSettings
 from app.schemas.settings import TableUpdate, SettingsUpdate
@@ -10,6 +11,18 @@ router = APIRouter(
     tags=["Settings"],
 )
 
+@router.get("/tables/{table_key}")
+def get_table(
+    table_key: str,
+    user: dict = Depends(get_current_user_token),
+    db: Session = Depends(get_db)
+):
+    """Current rows of one table — the Audit Logs screen polls this to stay live."""
+    if user.get("auth_type") != "internal":
+        raise HTTPException(status_code=403, detail="Not permitted.")
+    rows = db.query(TableRow).filter(TableRow.table_key == table_key).order_by(TableRow.row_index).all()
+    return {"rows": [r.cells_json for r in rows]}
+
 @router.put("/tables/{table_key}")
 def update_table(
     table_key: str,
@@ -17,6 +30,11 @@ def update_table(
     user: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db)
 ):
+    # The audit trail is append-only, written server-side by write_audit(); letting any
+    # client replace it wholesale would let a user erase their own tracks.
+    if table_key == AUDIT_TABLE_KEY:
+        raise HTTPException(status_code=403, detail="The audit log is read-only.")
+
     # Delete existing rows for this table_key
     db.query(TableRow).filter(TableRow.table_key == table_key).delete()
     

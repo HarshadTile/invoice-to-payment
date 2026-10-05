@@ -81,9 +81,9 @@ are the source of truth.
   and history.
 - **Supplier Visibility**: browse any supplier's vendor codes and see every
   invoice against each one, individually or consolidated.
-- **Stage moves**: open any invoice (Invoice Tracking → click the invoice number)
-  and use *Move to next stage* to step it Uploaded → Pending Approval → Approved →
-  Booked → Payment Due → Paid (Paid asks for the UTR). Saved to MySQL immediately.
+- **Invoice progress**: open any invoice (Invoice Tracking → click the invoice number)
+  to see where it is on Uploaded → Pending Approval → Approved → Booked → Payment Due →
+  Paid. Status is read-only here; it comes from the source system and isn't changed by hand.
 - **Inquiry Desk**: a full ticketing system with SLA tracking, list and Kanban
   board views (drag a card to change its status), threaded replies, and a
   complete activity audit log.
