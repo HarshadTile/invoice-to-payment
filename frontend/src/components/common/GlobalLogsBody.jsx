@@ -11,13 +11,13 @@ const TONE = { Failed: 'red', Completed: 'green', 'In Progress': 'blue' };
 
 export default function GlobalLogsBody({ invoiceList, tableKey }) {
   const dispatch = useDispatch();
-  const { data: tickets = [] } = useGetTicketsQuery();
+  const { data: ticketPage } = useGetTicketsQuery({ include_closed: true, page_size: 100 });
   const search = useSelector((s) => s.ui.search[tableKey] || '');
   const page = useSelector((s) => s.ui.tablePage[tableKey] || 1);
   const chFilter = useSelector((s) => s.ui.globalLogsChannel) || '';
   const stFilter = useSelector((s) => s.ui.globalLogsStatus) || '';
 
-  const allRows = getGlobalHistory(invoiceList, tickets);
+  const allRows = getGlobalHistory(invoiceList, ticketPage?.items || []);
   let rows = allRows;
   if (chFilter) rows = rows.filter((r) => r.channel === chFilter);
   if (stFilter) rows = rows.filter((r) => r.status === stFilter);

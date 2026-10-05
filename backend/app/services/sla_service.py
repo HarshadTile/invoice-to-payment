@@ -1,75 +1,83 @@
 from datetime import datetime, timedelta
+
 from sqlalchemy.orm import Session
-from app.models.ticket import Ticket
+
 from app.models.ticket_activity import SlaPolicy
 
+
+DEFAULT_MINUTES = {"HIGH": 240, "MEDIUM": 1440, "LOW": 2880}
+
+
 def compute_due_at(start: datetime, minutes: int, business_hours: bool = False) -> datetime:
-    """
-    Computes the due date based on minutes.
-    In v1, business_hours is ignored (runs 24x7).
-    """
+    # Business-hours calendars are intentionally deferred; the interface is stable for later.
     return start + timedelta(minutes=minutes)
 
-def get_policy_minutes(db: Session, channel: str, priority: str) -> int:
-    # First try channel-specific, then default (channel=None)
-    policy = db.query(SlaPolicy).filter(
-        SlaPolicy.priority == priority,
-        SlaPolicy.channel == channel,
-        SlaPolicy.active == True
-    ).first()
-    
+
+def get_policy(db: Session, channel: str | None, priority: str) -> tuple[int, bool]:
+    policy = None
+    if channel:
+        policy = db.query(SlaPolicy).filter_by(channel=channel, priority=priority, active=True).first()
     if not policy:
         policy = db.query(SlaPolicy).filter(
-            SlaPolicy.priority == priority,
             SlaPolicy.channel.is_(None),
-            SlaPolicy.active == True
+            SlaPolicy.priority == priority,
+            SlaPolicy.active.is_(True),
         ).first()
-        
-    # fallback default if somehow no policy exists
-    return policy.response_minutes if policy else 1440
+    if policy:
+        return policy.response_minutes, policy.business_hours
+    return DEFAULT_MINUTES.get(priority, 1440), False
 
-def handle_sla_event(db: Session, ticket: Ticket, event: str):
-    """
-    Adjusts SLA fields based on events.
-    Events: 'CREATED', 'REPLY_STAFF', 'REPLY_SUPPLIER', 'RESOLVED', 'REOPENED', 'CLOSED', 'PRIORITY_CHANGED'
-    """
-    now = datetime.utcnow()
-    
-    if event == 'CREATED':
-        minutes = get_policy_minutes(db, ticket.channel, ticket.priority)
-        ticket.awaiting = 'STAFF'
-        ticket.response_due_at = compute_due_at(now, minutes)
-        
-    elif event == 'REPLY_STAFF':
-        ticket.awaiting = 'SUPPLIER'
-        ticket.response_due_at = None
-        if not ticket.first_response_at:
-            ticket.first_response_at = now
-            
-    elif event == 'REPLY_SUPPLIER':
-        if ticket.status in ('OPEN', 'IN_PROGRESS'):
-            minutes = get_policy_minutes(db, ticket.channel, ticket.priority)
-            ticket.awaiting = 'STAFF'
-            ticket.response_due_at = compute_due_at(now, minutes)
-            
-    elif event == 'INTERNAL_NOTE':
-        pass # does not stop the clock
-        
-    elif event == 'RESOLVED':
-        ticket.awaiting = 'SUPPLIER'
-        ticket.response_due_at = None
-        
-    elif event == 'REOPENED':
-        minutes = get_policy_minutes(db, ticket.channel, ticket.priority)
-        ticket.awaiting = 'STAFF'
-        ticket.response_due_at = compute_due_at(now, minutes)
-        
-    elif event == 'CLOSED':
-        ticket.awaiting = 'NONE'
-        ticket.response_due_at = None
-        
-    elif event == 'PRIORITY_CHANGED':
-        if ticket.awaiting == 'STAFF' and ticket.response_due_at:
-            # Recompute from current time
-            minutes = get_policy_minutes(db, ticket.channel, ticket.priority)
-            ticket.response_due_at = compute_due_at(now, minutes)
+
+def start_clock(db: Session, channel: str | None, priority: str, now: datetime | None = None) -> dict:
+    now = now or datetime.utcnow()
+    minutes, business_hours = get_policy(db, channel, priority)
+    return {
+        "awaiting": "STAFF",
+        "sla_started_at": now,
+        "response_due_at": compute_due_at(now, minutes, business_hours),
+    }
+
+
+def staff_replied(ticket, now: datetime | None = None) -> dict:
+    now = now or datetime.utcnow()
+    values = {"awaiting": "SUPPLIER", "sla_started_at": None, "response_due_at": None}
+    if not ticket.first_response_at:
+        values["first_response_at"] = now
+    return values
+
+
+def supplier_replied(db: Session, ticket, now: datetime | None = None) -> dict:
+    return start_clock(db, ticket.channel, ticket.priority, now)
+
+
+def resolved(now: datetime | None = None) -> dict:
+    now = now or datetime.utcnow()
+    return {
+        "status": "RESOLVED",
+        "awaiting": "SUPPLIER",
+        "sla_started_at": None,
+        "response_due_at": None,
+        "resolved_at": now,
+        "resolved_date": now.strftime("%Y-%m-%d"),
+    }
+
+
+def closed(now: datetime | None = None) -> dict:
+    now = now or datetime.utcnow()
+    return {
+        "status": "CLOSED",
+        "awaiting": "NONE",
+        "sla_started_at": None,
+        "response_due_at": None,
+        "closed_at": now,
+    }
+
+
+def priority_changed(db: Session, ticket, priority: str) -> dict:
+    if ticket.awaiting != "STAFF" or not ticket.sla_started_at:
+        return {"priority": priority}
+    minutes, business_hours = get_policy(db, ticket.channel, priority)
+    return {
+        "priority": priority,
+        "response_due_at": compute_due_at(ticket.sla_started_at, minutes, business_hours),
+    }

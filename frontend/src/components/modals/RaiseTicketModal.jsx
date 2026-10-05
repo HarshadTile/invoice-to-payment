@@ -1,82 +1,130 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { runtime } from '../../data/runtime';
-import { CHANNEL_LABEL, CHANNEL_ROUTING_RULE, TICKET_CATEGORIES, TICKET_PRIORITIES } from '../../data/constants';
-import { combinedStatusFor, currentHandlerFor, currentStageName } from '../../utils/businessLogic';
-import { useCreateTicketMutation } from '../../features/tickets/ticketsApi';
+import { CHANNEL_LABEL, TICKET_CATEGORIES, TICKET_PRIORITIES } from '../../data/constants';
+import { selectScopedInvoices } from '../../features/invoices/selectors';
+import { useCreateTicketMutation, useUploadAttachmentMutation } from '../../features/tickets/ticketsApi';
 import { closeModal, pushToast } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
 
 export default function RaiseTicketModal({ ctx }) {
   const dispatch = useDispatch();
-  const authType = useSelector((s) => s.auth.authType);
-  const inv = runtime.invoices.find((i) => i.no === ctx.no);
+  const invoices = useSelector(selectScopedInvoices);
+  const authType = useSelector((state) => state.auth.authType);
+  const supplierCode = useSelector((state) => state.auth.supplierLoginVcode);
+  const availableInvoices = authType === 'supplier'
+    ? invoices.filter((item) => item.vcode === supplierCode)
+    : invoices;
+  const [invoiceNo, setInvoiceNo] = useState(ctx.no || availableInvoices[0]?.no || '');
   const [category, setCategory] = useState(TICKET_CATEGORIES[0]);
   const [priority, setPriority] = useState('Medium');
+  const [subject, setSubject] = useState('');
   const [desc, setDesc] = useState('');
-  
-  const [createTicket] = useCreateTicketMutation();
-  
+  const [attachment, setAttachment] = useState(null);
+  const [error, setError] = useState('');
+  const idempotencyKey = useRef(crypto.randomUUID());
+  const [createTicket, { isLoading: isCreating }] = useCreateTicketMutation();
+  const [uploadAttachment, { isLoading: isUploading }] = useUploadAttachmentMutation();
+  const inv = availableInvoices.find((item) => item.no === invoiceNo);
+
   if (!inv) return null;
-  const cs = combinedStatusFor(inv);
-  const contact = currentHandlerFor(inv);
 
   async function submit() {
-    await createTicket({
-      invoice_id: inv.id || inv.no, // Assuming backend uses invoice_id
-      category,
-      priority: priority.toUpperCase(),
-      subject: `Query regarding ${inv.no}`,
-      description: desc.trim(),
-      vendor_code: inv.vcode,
-      idempotencyKey: crypto.randomUUID()
-    });
-    dispatch(closeModal());
-    dispatch(pushToast('Query submitted and routed.'));
+    if (!subject.trim() || !desc.trim()) {
+      setError('Enter a subject and description.');
+      return;
+    }
+    if (attachment && attachment.size > 5 * 1024 * 1024) {
+      setError('Attachment must be 5 MB or smaller.');
+      return;
+    }
+    setError('');
+    let created;
+    try {
+      created = await createTicket({
+        invoice_no: inv.no,
+        category,
+        priority: priority.toUpperCase(),
+        subject: subject.trim(),
+        description: desc.trim(),
+        idempotencyKey: idempotencyKey.current,
+      }).unwrap();
+      if (attachment) {
+        await uploadAttachment({
+          id: created.id,
+          file: attachment,
+          visibility: 'PUBLIC',
+          expected_version: created.row_version,
+        }).unwrap();
+      }
+      dispatch(closeModal());
+      dispatch(pushToast('Query submitted and routed.'));
+    } catch (requestError) {
+      if (created) {
+        dispatch(closeModal());
+        dispatch(pushToast('Query submitted, but the attachment could not be uploaded.'));
+        return;
+      }
+      setError(requestError?.data?.message || 'Could not submit this query.');
+    }
   }
 
   return (
     <ModalShell
-      title={`Raise a Query : ${inv.no}`}
-      width={480}
+      title="Raise a Query"
+      width={680}
       foot={(
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
           <button type="button" className="btn" onClick={() => dispatch(closeModal())}>Cancel</button>
-          <button type="button" className="btn primary" onClick={submit}>Submit Query</button>
+          <button type="button" className="btn primary" disabled={isCreating || isUploading} onClick={submit}>
+            {isCreating || isUploading ? 'Submitting...' : 'Submit Query'}
+          </button>
         </div>
       )}
     >
-      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Whom to Contact</label>
-      <div style={{ margin: '8px 0 14px' }}>
-        <div className="validation-row"><span>Channel</span><span>{CHANNEL_LABEL[inv.channel]}</span></div>
-        <div className="validation-row"><span>Current Stage</span><span style={{ textAlign: 'right', maxWidth: 260 }}>{currentStageName(inv)}</span></div>
-        <div className="validation-row"><span>Handled By</span><span>{contact.name}</span></div>
-        <div className="validation-row"><span>Role</span><span>{contact.role}</span></div>
-        <div className="validation-row"><span>Contact</span><span>{contact.email || '-'}</span></div>
-      </div>
-      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '-6px 0 14px' }}>Why this channel: {CHANNEL_ROUTING_RULE[inv.channel]}</p>
-      <div className="validation-row" style={{ alignItems: 'flex-start', background: 'var(--bg)' }}>
-        <span>AI Assist</span>
-        <span style={{ textAlign: 'right', maxWidth: 300 }}>Current status is <b>{cs.label}</b>. {cs.reason}</span>
-      </div>
-      <div className="form-field" style={{ marginTop: 14 }}>
-        <label>Category</label>
-        <select value={category} onChange={(e) => setCategory(e.target.value)}>
-          {TICKET_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+      <div className="form-field">
+        <label htmlFor="ticket-invoice">Invoice</label>
+        <select id="ticket-invoice" value={invoiceNo} onChange={(event) => setInvoiceNo(event.target.value)}>
+          {availableInvoices.map((item, index) => (
+            <option key={`${item.no}-${item.poItem}-${index}`} value={item.no}>
+              {item.no} | PO {item.po} | {item.amount}
+            </option>
+          ))}
         </select>
       </div>
-      <div className="form-field">
-        <label>Priority</label>
-        <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-          {TICKET_PRIORITIES.map((p) => <option key={p}>{p}</option>)}
-        </select>
+      <div className="ticket-form-grid">
+        <div className="form-field">
+          <label>Topic</label>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            {TICKET_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Priority</label>
+          <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+            {TICKET_PRIORITIES.filter((p) => p !== 'Urgent').map((p) => <option key={p}>{p}</option>)}
+          </select>
+        </div>
       </div>
       <div className="form-field">
-        <label>Describe the issue</label>
-        <textarea rows={4} placeholder="What's the query..." value={desc} onChange={(e) => setDesc(e.target.value)} />
+        <label>Subject</label>
+        <input maxLength={150} placeholder="Briefly describe the query" value={subject} onChange={(e) => setSubject(e.target.value)} />
       </div>
-      <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: 0 }}>
-        This ticket will be linked to Invoice {inv.no}, PO {inv.po}, Vendor Code {inv.vcode} and your PAN, and routed to {contact.name} with an SLA clock.
+      <div className="form-field">
+        <label>Details</label>
+        <textarea rows={5} placeholder="What's the query..." value={desc} onChange={(e) => setDesc(e.target.value)} />
+      </div>
+      <div className="form-field">
+        <label htmlFor="ticket-attachment">Attachment <span className="field-optional">(optional)</span></label>
+        <input
+          id="ticket-attachment"
+          type="file"
+          accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv,.docx"
+          onChange={(event) => setAttachment(event.target.files?.[0] || null)}
+        />
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <p className="ticket-route-note">
+        Sent to: <b>{CHANNEL_LABEL[inv.channel] || inv.channel}</b> channel
       </p>
     </ModalShell>
   );

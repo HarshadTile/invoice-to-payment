@@ -12,8 +12,8 @@ export default function ProfilePage() {
   const dispatch = useDispatch();
   const twoFactorOn = useSelector((s) => s.settings.twoFactorOn);
   const scopedInvoices = useSelector(selectScopedInvoices);
-  const { data: ticketItems = [] } = useGetTicketsQuery();
-  const openQueries = ticketItems.filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
+  const { data: ticketPage } = useGetTicketsQuery({ page_size: 100 });
+  const openQueries = (ticketPage?.items || []).filter((t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length;
 
   if (authType === 'supplier') {
     const pan = runtime.invoices.find((invoice) => invoice.vcode === supplierLoginVcode)?.pan || supplierPAN || '-';

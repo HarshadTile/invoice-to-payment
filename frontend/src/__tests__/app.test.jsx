@@ -201,33 +201,48 @@ describe('Internal admin - full navigation', () => {
     await user.click(raiseButtons[0]);
     const modalHeading = await screen.findByRole('heading', { name: /Raise a Query/ });
     expect(modalHeading).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('Briefly describe the query'), 'Payment status query');
     await user.type(screen.getByPlaceholderText("What's the query..."), 'Automated test ticket');
     await user.click(screen.getByRole('button', { name: 'Submit Query' }));
-    expect(screen.queryByRole('heading', { name: /Raise a Query/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('heading', { name: /Raise a Query/ })).not.toBeInTheDocument());
     await user.click(screen.getAllByText('Inquiry Desk')[0]);
     expect(await screen.findByText('TCK-1006')).toBeInTheDocument();
   });
 
-  it('opens a ticket, replies, and marks it resolved', async () => {
+  it('assigns, converses, adds an internal note, and resolves from the routed detail page', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Inquiry Desk')[0]);
-    // default channel tab is Msetu/SRM; TCK-1002 (Open) and TCK-1004->wait check which land here
     const ticketLink = (await screen.findAllByRole('button', { name: /TCK-/ }))[0];
     await user.click(ticketLink);
-    expect(await screen.findByText('Traceability')).toBeInTheDocument();
-    const replyBox = screen.queryByPlaceholderText(/Reply to/);
-    if (replyBox) {
-      await user.type(replyBox, 'Automated reply');
-      await user.click(screen.getByRole('button', { name: 'Reply' }));
-      expect(await screen.findByText(/Reply sent/)).toBeInTheDocument();
-    }
+    expect(await screen.findByText('Original query')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Invoice' })).toBeInTheDocument();
+
+    const facts = document.querySelector('.ticket-facts');
+    await within(facts).findByRole('option', { name: 'Priya Deshmukh' });
+    await user.selectOptions(facts.querySelector('select'), '1');
+    await user.click(within(facts).getByRole('button', { name: 'Assign' }));
+
+    const replyBox = await screen.findByPlaceholderText('Write a reply');
+    await user.type(replyBox, 'Automated public reply');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Automated public reply')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Internal note' }));
+    await user.type(screen.getByPlaceholderText('Add a note for the internal team'), 'Internal follow-up');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Internal follow-up')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Resolve' }));
+    await user.type(screen.getByPlaceholderText('Resolution note'), 'Payment status confirmed');
+    await user.click(screen.getAllByRole('button', { name: 'Resolve' }).at(-1));
+    expect((await screen.findAllByText('Resolved')).length).toBeGreaterThan(0);
   });
 
   it('toggles Kanban board view on Inquiry Desk', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Inquiry Desk')[0]);
-    await user.click(screen.getAllByText('▦ Board')[0]);
-    expect(document.querySelectorAll('.kanban-col').length).toBe(4);
+    await user.click(screen.getByRole('button', { name: 'Board' }));
+    await waitFor(() => expect(document.querySelectorAll('.kanban-col').length).toBe(4));
   });
 
   it.skip('switches identity to Internal Team via topbar and back to All Channels', async () => {

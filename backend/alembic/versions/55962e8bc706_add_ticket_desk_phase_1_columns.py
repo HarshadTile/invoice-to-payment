@@ -13,14 +13,13 @@ from sqlalchemy.dialects import mysql
 
 # revision identifiers, used by Alembic.
 revision: str = '55962e8bc706'
-down_revision: Union[str, Sequence[str], None] = None
+down_revision: Union[str, Sequence[str], None] = '000000000001'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
     # 1. New Tables
-    op.execute('DROP TABLE IF EXISTS sla_policies')
     op.create_table('sla_policies',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
         sa.Column('channel', sa.String(length=20), nullable=True),
@@ -30,7 +29,6 @@ def upgrade() -> None:
         sa.Column('active', sa.Boolean(), nullable=False),
         sa.PrimaryKeyConstraint('id')
     )
-    op.execute('DROP TABLE IF EXISTS notifications')
     op.create_table('notifications',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
@@ -45,7 +43,6 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_notifications_user_id'), 'notifications', ['user_id'], unique=False)
     
-    op.execute('DROP TABLE IF EXISTS ticket_reads')
     op.create_table('ticket_reads',
         sa.Column('ticket_id', sa.String(length=16), nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
@@ -54,7 +51,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('ticket_id', 'user_id')
     )
     
-    op.execute('DROP TABLE IF EXISTS ticket_attachments')
     op.create_table('ticket_attachments',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
         sa.Column('ticket_id', sa.String(length=16), nullable=False),
@@ -71,8 +67,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_ticket_attachments_ticket_id'), 'ticket_attachments', ['ticket_id'], unique=False)
-    
-    op.execute('DROP TABLE IF EXISTS ticket_activity')
     
     op.create_table('ticket_activity',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),

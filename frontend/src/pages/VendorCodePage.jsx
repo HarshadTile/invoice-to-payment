@@ -2,7 +2,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { VENDOR_CODE_MAP, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
-import { supplierForVendorCode, panFor, posForVendorCode, getInvoiceHistory, ticketInvoice } from '../utils/businessLogic';
+import { supplierForVendorCode, panFor, posForVendorCode, getInvoiceHistory } from '../utils/businessLogic';
 import { selectScopedInvoices } from '../features/invoices/selectors';
 import { setVcodeViewTab, openModal } from '../features/ui/uiSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
@@ -54,8 +54,8 @@ export default function VendorCodePage() {
   const { authType, channelScope } = useSelector((s) => s.auth);
   const scoped = useSelector(selectScopedInvoices);
   const savedTab = useSelector((s) => s.ui.vcodeViewTab[code]);
-  const { data: ticketItems = [] } = useGetTicketsQuery();
-  const openIssues = ticketItems.filter((t) => ticketInvoice(t)?.vcode === code).filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
+  const { data: ticketPage } = useGetTicketsQuery({ vendor_code: code, page_size: 100 });
+  const openIssues = (ticketPage?.items || []).filter((t) => ['OPEN', 'IN_PROGRESS'].includes(t.status)).length;
 
   const supplier = supplierForVendorCode(code);
   const siblingCodes = VENDOR_CODE_MAP.rows.filter((r) => r[1] === supplier).map((r) => r[0]).filter((c) => c !== code);
@@ -140,7 +140,7 @@ export default function VendorCodePage() {
 
 function VendorCodeHistory({ code, invoices }) {
   const dispatch = useDispatch();
-  const { data: tickets = [] } = useGetTicketsQuery();
+  const { data: ticketPage } = useGetTicketsQuery({ vendor_code: code, include_closed: true, page_size: 100 });
   const done = invoices.filter((i) => i.status === 'Paid').length;
   const failed = invoices.filter((i) => i.status === 'Rejected' || i.status === 'Deleted').length;
   const ongoing = invoices.length - done - failed;
@@ -176,7 +176,7 @@ function VendorCodeHistory({ code, invoices }) {
             <button type="button" className="link-hero" style={{ fontWeight: 700 }} onClick={() => dispatch(openModal({ kind: 'invoiceDetail', ctx: { no: inv.no } }))}>{inv.no}</button>
             <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{CHANNEL_LABEL[inv.channel]} · PO {inv.po}</span>
           </div>
-          <Timeline events={getInvoiceHistory(inv, tickets)} />
+        <Timeline events={getInvoiceHistory(inv, ticketPage?.items || [])} />
         </div>
       )) : <p style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>No invoices on this code yet.</p>}
     </>

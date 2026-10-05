@@ -10,8 +10,8 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from app.core.database import Base, DATABASE_URL
 from app.models.ticket import Ticket, TicketComment
-from app.models.ticket_activity import TicketActivity, TicketAttachment, SlaPolicy, TicketRead, Notification
-from app.models.user import User, OTPCode
+from app.models.ticket_activity import TicketActivity, TicketAttachment, SlaPolicy, TicketRead, Notification, TicketIdempotency, TicketJobRun
+from app.models.user import User, OTPCode, UserChannelAccess
 from app.models.settings import AppSettings, TableRow
 from app.models.sync_log import SyncLog
 

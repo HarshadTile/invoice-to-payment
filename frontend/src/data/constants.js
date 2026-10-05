@@ -119,7 +119,17 @@ export const VIEW_MILESTONE = {
 };
 
 
-export const TICKET_CATEGORIES = ['Payment Not Received', 'Short Payment', 'Invoice Not Visible', 'Debit Note Query', 'PO / Rate Mismatch'];
+export const TICKET_CATEGORIES = [
+  'Invoice Status Stuck',
+  'Payment Date Enquiry',
+  'Payment Not Received',
+  'Amount Mismatch',
+  'PO / GRN Issue',
+  'Invoice Rejected',
+  'Bank / GST Detail Change',
+  'Invoice Missing or Duplicate',
+  'Other',
+];
 export const TICKET_PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 export const PRIORITY_CHIP = { Low: 'gray', Medium: 'blue', High: 'amber', Urgent: 'red' };
 export const TICKET_STATUS_CHIP = { Open: 'red', 'In Progress': 'amber', Resolved: 'green', Closed: 'gray' };

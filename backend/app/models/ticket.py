@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Text, ForeignKey, DateTime
+from sqlalchemy import BigInteger, Boolean, Column, String, Integer, Text, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.database import Base
@@ -7,6 +7,9 @@ class Ticket(Base):
     __tablename__ = "tickets"
 
     id = Column(String(16), primary_key=True)
+    ticket_sequence = Column(BigInteger, nullable=False, unique=True, autoincrement=True)
+    ticket_no = Column(String(20), nullable=True, unique=True)
+    invoice_no = Column(String(64), nullable=True, index=True)
     no = Column(String(32))
     category = Column(String(64))
     description = Column(Text)
@@ -29,14 +32,18 @@ class Ticket(Base):
     assignee_id = Column(Integer, nullable=True)
     response_due_at = Column(DateTime, nullable=True)
     first_response_at = Column(DateTime, nullable=True)
+    sla_started_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
     closed_at = Column(DateTime, nullable=True)
     reopen_count = Column(Integer, default=0, nullable=False)
     row_version = Column(Integer, default=1, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    legacy_unlinked = Column(Boolean, default=False, nullable=False)
 
-    comments = relationship("TicketComment", back_populates="ticket", cascade="all, delete")
-    activities = relationship("TicketActivity", back_populates="ticket", cascade="all, delete")
+    comments = relationship("TicketComment", back_populates="ticket", cascade="all, delete-orphan")
+    activities = relationship("TicketActivity", back_populates="ticket", cascade="all, delete-orphan")
+    attachments = relationship("TicketAttachment", back_populates="ticket", cascade="all, delete-orphan")
 
 
 class TicketComment(Base):

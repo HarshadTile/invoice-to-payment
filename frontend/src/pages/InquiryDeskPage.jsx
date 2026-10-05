@@ -1,73 +1,69 @@
+import { useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { CHANNELS, INTERNAL_TEAM_CHANNELS } from '../data/constants';
-import { ticketInvoice, ticketBreached } from '../utils/businessLogic';
-import { setInquiryViewMode, setInquiryChannelTab, setTicketFilterStatus } from '../features/ui/uiSlice';
-import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
+import { useSearchParams } from 'react-router-dom';
+import { setInquiryViewMode, setTicketFilterStatus } from '../features/ui/uiSlice';
+import { useGetTicketBoardQuery, useGetTicketsQuery, useGetTicketSummaryQuery } from '../features/tickets/ticketsApi';
 import StatCard from '../components/common/StatCard.jsx';
 import TicketTable from '../components/tickets/TicketTable.jsx';
 import TicketBoard from '../components/tickets/TicketBoard.jsx';
+import { CheckCircle, Clock, Columns, Inbox, List } from '../components/common/icons.jsx';
+import { getFiscalYear } from '../utils/businessLogic.js';
+
+const FILTER_STATUS = {
+  Open: ['OPEN'],
+  'In Progress': ['IN_PROGRESS'],
+  Resolved: ['RESOLVED', 'CLOSED'],
+};
 
 export default function InquiryDeskPage() {
   const dispatch = useDispatch();
-  const { data: allTickets = [], isLoading } = useGetTicketsQuery();
-  const inquiryChannelTab = useSelector((s) => s.ui.inquiryChannelTab);
-  const inquiryViewMode = useSelector((s) => s.ui.inquiryViewMode);
-  const ticketFilterStatus = useSelector((s) => s.ui.ticketFilterStatus);
+  const [searchParams] = useSearchParams();
+  const view = useSelector((state) => state.ui.inquiryViewMode === 'board' ? 'board' : 'list');
+  const statusFilter = useSelector((state) => state.ui.ticketFilterStatus);
+  const filters = useMemo(() => ({
+    channel: searchParams.get('channel') || undefined,
+    fy: searchParams.get('fy') || getFiscalYear(new Date().toISOString()),
+    vendor_code: searchParams.get('vcode') || undefined,
+  }), [searchParams]);
 
-  const chTab = inquiryChannelTab && CHANNELS.some((c) => c.key === inquiryChannelTab) ? inquiryChannelTab : CHANNELS[0].key;
-  
-  // The backend already handles authorization and filtering out tickets we shouldn't see
-  const byChannel = allTickets.filter((t) => { 
-    const inv = ticketInvoice(t); 
-    // Fallback to checking t.channel if invoice not locally cached
-    const channel = inv ? inv.channel : t.channel;
-    return channel === chTab; 
-  });
-
-  const open = byChannel.filter((t) => t.status === 'Open').length;
-  const inProgress = byChannel.filter((t) => t.status === 'In Progress').length;
-  const breached = byChannel.filter(ticketBreached).length;
-  const resolved = byChannel.filter((t) => t.status === 'Resolved' || t.status === 'Closed').length;
-
-  let tickets;
-  if (ticketFilterStatus === 'Open' || ticketFilterStatus === 'In Progress') tickets = byChannel.filter((t) => t.status === ticketFilterStatus);
-  else if (ticketFilterStatus === 'Resolved') tickets = byChannel.filter((t) => t.status === 'Resolved' || t.status === 'Closed');
-  else tickets = byChannel.filter((t) => t.status === 'Open' || t.status === 'In Progress');
-
-  const view = inquiryViewMode === 'board' ? 'board' : 'list';
+  const liveQueryOptions = { pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnMountOrArgChange: true };
+  const { data: page, isLoading } = useGetTicketsQuery(
+    { ...filters, include_closed: true, page_size: 100 },
+    { ...liveQueryOptions, skip: view !== 'list' },
+  );
+  const { data: board = {}, isLoading: boardLoading } = useGetTicketBoardQuery(
+    filters,
+    { ...liveQueryOptions, skip: view !== 'board' },
+  );
+  const { data: summary = {} } = useGetTicketSummaryQuery(filters, liveQueryOptions);
+  const allowedStatuses = FILTER_STATUS[statusFilter];
+  const tickets = allowedStatuses
+    ? (page?.items || []).filter((ticket) => allowedStatuses.includes(ticket.status))
+    : (page?.items || []).filter((ticket) => ['OPEN', 'IN_PROGRESS'].includes(ticket.status));
 
   return (
-    <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
+    <section className="ticket-desk">
+      <div className="ticket-page-head">
         <div>
           <h1 className="page-title">Inquiry Desk</h1>
-          <p className="page-sub">Every query raised by a supplier or logged internally against an invoice, PO, vendor code or PAN, in one queue. Resolved and closed queries drop out of the default view below.</p>
+          <p className="page-sub">Invoice-linked supplier queries across your authorized workspace.</p>
         </div>
-        <div className="sheet-carousel">
-          <div className="car-track">
-            <button type="button" className={`car-chip${view === 'list' ? ' active' : ''}`} onClick={() => dispatch(setInquiryViewMode('list'))}>☰ List</button>
-            <button type="button" className={`car-chip${view === 'board' ? ' active' : ''}`} onClick={() => dispatch(setInquiryViewMode('board'))}>▦ Board</button>
-          </div>
+        <div className="view-switch" role="group" aria-label="Query view">
+          <button type="button" className={view === 'list' ? 'active' : ''} onClick={() => dispatch(setInquiryViewMode('list'))} title="List view"><List /> <span>List</span></button>
+          <button type="button" className={view === 'board' ? 'active' : ''} onClick={() => dispatch(setInquiryViewMode('board'))} title="Board view"><Columns /> <span>Board</span></button>
         </div>
       </div>
 
-      <div className="sheet-carousel" style={{ marginBottom: 14 }}>
-        <div className="car-track">
-          {CHANNELS.map((c) => {
-            const n = allTickets.filter((t) => { const inv = ticketInvoice(t); return inv && inv.channel === c.key; }).length;
-            return <button type="button" key={c.key} className={`car-chip${chTab === c.key ? ' active' : ''}`} onClick={() => dispatch(setInquiryChannelTab(c.key))}>{c.label} ({n})</button>;
-          })}
-        </div>
+      <div className="row ticket-stats">
+        <StatCard tone="bad" icon={<Inbox />} label="Open" value={summary.open || 0} sub="Waiting for assignment" onClick={() => dispatch(setTicketFilterStatus('Open'))} active={statusFilter === 'Open'} />
+        <StatCard tone="warn" icon={<Clock />} label="In Progress" value={summary.in_progress || 0} sub="Owned and active" onClick={() => dispatch(setTicketFilterStatus('In Progress'))} active={statusFilter === 'In Progress'} />
+        <StatCard tone="bad" icon={<Clock />} label="SLA Breached" value={summary.sla_breached || 0} sub="Response overdue" />
+        <StatCard icon={<CheckCircle />} label="Resolved / Closed" value={summary.resolved_closed || 0} onClick={() => dispatch(setTicketFilterStatus('Resolved'))} active={statusFilter === 'Resolved'} />
       </div>
 
-      <div className="row" style={{ marginBottom: 20 }}>
-        <StatCard tone="bad" icon="✉" label="Open" value={open} sub="Not yet picked up" onClick={() => dispatch(setTicketFilterStatus('Open'))} active={ticketFilterStatus === 'Open'} />
-        <StatCard tone="warn" icon="◑" label="In Progress" value={inProgress} sub="Being worked" onClick={() => dispatch(setTicketFilterStatus('In Progress'))} active={ticketFilterStatus === 'In Progress'} />
-        <StatCard tone="bad" icon="⚠" label="SLA Breached" value={breached} sub="Past their response window" />
-        <StatCard icon="✓" label="Resolved / Closed" value={resolved} sub="Click to view: hidden by default" onClick={() => dispatch(setTicketFilterStatus('Resolved'))} active={ticketFilterStatus === 'Resolved'} />
-      </div>
-
-      {view === 'list' ? <div className="card"><TicketTable tickets={tickets} /></div> : <TicketBoard tickets={tickets} />}
-    </>
+      {view === 'list'
+        ? <TicketTable tickets={tickets} loading={isLoading} />
+        : <TicketBoard groups={board} loading={boardLoading} />}
+    </section>
   );
 }
