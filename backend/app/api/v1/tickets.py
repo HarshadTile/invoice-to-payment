@@ -4,6 +4,7 @@ from typing import List
 from datetime import datetime
 
 from app.api.v1.auth import get_current_user_token
+from app.core.audit import actor_from_token, write_audit
 from app.core.database import get_db
 from app.models.ticket import Ticket, TicketComment
 from app.schemas.ticket import TicketResponse, TicketCreate, TicketCommentCreate
@@ -33,6 +34,8 @@ def create_ticket(
     db.add(new_ticket)
     db.commit()
     db.refresh(new_ticket)
+    write_audit(db, actor_from_token(db, payload), "Raised query",
+                f"{new_ticket.id} on invoice {new_ticket.no} ({new_ticket.category}, {new_ticket.priority})")
     return new_ticket
 
 @router.post("/{ticket_id}/comments", response_model=TicketResponse)
@@ -54,6 +57,7 @@ def add_comment(
         ticket.status = "In Progress"
         
     db.commit()
+    write_audit(db, actor_from_token(db, payload), "Commented on query", f"{ticket_id} on invoice {ticket.no}")
     
     # Reload ticket with comments
     ticket = db.query(Ticket).options(joinedload(Ticket.comments)).filter(Ticket.id == ticket_id).first()

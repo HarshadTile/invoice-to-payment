@@ -31,6 +31,7 @@ def supplier_login(request: SupplierLoginRequest, db: Session = Depends(get_db))
         None,
     )
     if match is None:
+        write_audit(db, f"Supplier {vcode}", "Failed login", "unknown vendor code")
         raise HTTPException(status_code=401, detail="Invalid vendor code. Please check and try again.")
 
     # Trust the real supplier name/PAN off record, not whatever the client sent.
@@ -39,6 +40,7 @@ def supplier_login(request: SupplierLoginRequest, db: Session = Depends(get_db))
 
     supplier_info = {"company": company, "pan": pan, "vcode": vcode}
     token = create_access_token(subject=vcode, auth_type="supplier", scope=supplier_info)
+    write_audit(db, f"Supplier {vcode}", "Logged in", f"{company}, supplier portal")
 
     return {
         "token": token,
@@ -68,6 +70,7 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
     
     if not user:
         print("[DEBUG LOGIN] User not found.")
+        write_audit(db, login_id, "Failed login", "no account with that username/email")
         raise HTTPException(status_code=401, detail="Invalid username or password.")
         
     print(f"[DEBUG LOGIN] Found user: ID={user.id}, Role={user.role}")
@@ -76,14 +79,17 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
     # placeholder no one was ever given, so verifying it first would always say "invalid
     # username or password" instead of the actually useful "check your email" message.
     if user.status == "Invited":
+        write_audit(db, user, "Failed login", "account not activated yet (invite pending)")
         raise HTTPException(status_code=403, detail="This account hasn't been activated yet. Check your email for the invite link, or ask an admin to resend it.")
     if user.status != "Active":
+        write_audit(db, user, "Failed login", "account is deactivated")
         raise HTTPException(status_code=403, detail="This account has been deactivated. Contact an administrator.")
 
     is_valid = verify_password(request.password, user.password_hash)
     print(f"[DEBUG LOGIN] Password valid? {is_valid}")
 
     if not is_valid:
+        write_audit(db, user, "Failed login", "wrong password")
         raise HTTPException(status_code=401, detail="Invalid username or password.")
 
     # An account locked to one portal (Settings > Users) can never sign in anywhere else,
@@ -93,6 +99,7 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
     requested = request.channelScope
     if user.channel_scope != "all":
         if requested and requested != user.channel_scope:
+            write_audit(db, user, "Failed login", f"tried portal '{requested}' but is locked to '{user.channel_scope}'")
             raise HTTPException(status_code=403, detail="This account can only sign in to its assigned portal.")
         final_scope = user.channel_scope
     else:
@@ -102,6 +109,7 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
     scope_data = {"channelScope": final_scope, "loginBy": login_by, "loginId": login_id}
     
     token = create_access_token(subject=user.id, auth_type="internal", scope=scope_data)
+    write_audit(db, user, "Logged in", f"{user.role}, portal {final_scope}")
     
     return {
         "token": token,
@@ -179,6 +187,7 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
         return generic_response
 
     issue_password_reset(db, user, admin_initiated=False)
+    write_audit(db, user, "Requested password reset", f"({user.username}) via Forgot password")
     return generic_response
 
 
@@ -210,6 +219,22 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     return {"msg": "Password updated. You can now sign in with your new password."}
 
 
+optional_security = HTTPBearer(auto_error=False)
+
 @router.post("/logout")
-def logout():
+def logout(credentials: HTTPAuthorizationCredentials | None = Depends(optional_security), db: Session = Depends(get_db)):
+    # Logging out must never fail (the client clears its token regardless), so a missing
+    # or already-expired token just means there's nothing to attribute the event to.
+    if credentials:
+        from app.core.security import SECRET_KEY, ALGORITHM
+        try:
+            payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+            if payload.get("auth_type") == "supplier":
+                write_audit(db, f"Supplier {payload.get('sub')}", "Logged out", "supplier portal")
+            else:
+                user = db.query(User).filter(User.id == int(payload.get("sub"))).first()
+                if user:
+                    write_audit(db, user, "Logged out", "")
+        except (JWTError, ValueError, TypeError):
+            pass
     return {"msg": "Logged out successfully"}
