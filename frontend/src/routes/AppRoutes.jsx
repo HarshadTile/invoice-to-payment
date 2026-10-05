@@ -26,6 +26,7 @@ import ProfilePage from '../pages/ProfilePage.jsx';
 import SupplierHomePage from '../pages/supplier/SupplierHomePage.jsx';
 import SupplierLogsPage from '../pages/supplier/SupplierLogsPage.jsx';
 import SupplierTicketsPage from '../pages/supplier/SupplierTicketsPage.jsx';
+import TicketDetailPage from '../pages/TicketDetailPage.jsx';
 
 export default function AppRoutes() {
   return (
@@ -45,6 +46,7 @@ export default function AppRoutes() {
           <Route path="/app/channel/:key" element={<ChannelPage />} />
           <Route path="/app/vendor-code/:code" element={<VendorCodePage />} />
           <Route path="/app/inquiry-desk" element={<InquiryDeskPage />} />
+          <Route path="/app/inquiry-desk/:id" element={<TicketDetailPage />} />
           <Route path="/app/profile" element={<ProfilePage />} />
 
           <Route element={<RequireHQ />}>
@@ -74,6 +76,7 @@ export default function AppRoutes() {
           <Route path="/supplier/vendor-code/:code" element={<Navigate to="/supplier/home" replace />} />
           <Route path="/supplier/logs" element={<SupplierLogsPage />} />
           <Route path="/supplier/tickets" element={<SupplierTicketsPage />} />
+          <Route path="/supplier/tickets/:id" element={<TicketDetailPage />} />
           <Route path="/supplier/profile" element={<ProfilePage />} />
         </Route>
       </Route>

@@ -4,7 +4,6 @@ import SupplierInvoiceDetailModal from './SupplierInvoiceDetailModal.jsx';
 import StageSimpleModal from './StageSimpleModal.jsx';
 import VendorCodePreviewModal from './VendorCodePreviewModal.jsx';
 import RaiseTicketModal from './RaiseTicketModal.jsx';
-import TicketDetailModal from './TicketDetailModal.jsx';
 import NotifyPreviewModal from './NotifyPreviewModal.jsx';
 import ExportModal from './ExportModal.jsx';
 import RowFormModal from './RowFormModal.jsx';
@@ -16,7 +15,6 @@ const REGISTRY = {
   stageSimple: StageSimpleModal,
   vendorCodePreview: VendorCodePreviewModal,
   raiseTicket: RaiseTicketModal,
-  ticketDetail: TicketDetailModal,
   notifyPreview: NotifyPreviewModal,
   export: ExportModal,
   row: RowFormModal,

@@ -123,7 +123,7 @@ function UsersTab() {
 
   const q = search.trim().toLowerCase();
   const filtered = (users || []).filter((u) => !q
-    || [u.name, u.email, u.role, u.channelScope].join(' ').toLowerCase().includes(q));
+    || [u.name, u.email, u.role, u.channelScope, u.ticketRole].join(' ').toLowerCase().includes(q));
 
   async function handleSave(values) {
     if (formUser) {
@@ -188,6 +188,7 @@ function UsersTab() {
                 <th scope="col">Name</th>
                 <th scope="col">Email</th>
                 <th scope="col">Role</th>
+                <th scope="col">Inquiry Desk</th>
                 <th scope="col">Portal</th>
                 <th scope="col">Status</th>
                 {perm.manageUsers && <th scope="col" className="col-actions">Actions</th>}
@@ -195,7 +196,7 @@ function UsersTab() {
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={perm.manageUsers ? 6 : 5}>
+                <tr><td colSpan={perm.manageUsers ? 7 : 6}>
                   <div className="empty-state">
                     <Inbox />
                     <b>No users match</b>
@@ -210,6 +211,7 @@ function UsersTab() {
                     <td>{u.name}</td>
                     <td className="cell-muted">{u.email}</td>
                     <td><span className="role-chip">{u.role}</span></td>
+                    <td>{u.ticketRole === 'ADMIN' ? 'Admin' : u.ticketRole === 'CHANNEL_LEAD' ? 'Channel Lead' : u.ticketRole === 'ASSIGNEE' ? 'Assignee' : 'No Access'}</td>
                     <td>{u.channelScope === 'all' ? 'All Channels — HQ' : (CHANNEL_LABEL[u.channelScope] || u.channelScope)}</td>
                     <td><Badge tone={u.status === 'Active' ? 'green' : u.status === 'Invited' ? 'amber' : 'gray'}>{u.status}</Badge></td>
                     {perm.manageUsers && (

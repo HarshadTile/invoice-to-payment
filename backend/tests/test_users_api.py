@@ -105,7 +105,7 @@ def test_new_account_is_invited_not_active_until_the_link_is_used(no_real_email)
     # An invited account cannot log in — with a clear reason, not a generic error
     blocked = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_1", "password": "anything"})
     assert blocked.status_code == 403
-    assert "activated" in blocked.json()["detail"].lower()
+    assert "activated" in blocked.json()["error"]["message"].lower()
 
     _activate(user_id, "Passw0rd!")
     activated = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_1", "password": "Passw0rd!"})
@@ -276,7 +276,7 @@ def test_deactivated_user_cannot_log_in_or_use_an_existing_token():
     })
     user_id = created.json()["id"]
     _activate(user_id, "Passw0rd!")
-    token_headers = _auth("internal", user_id, {"channelScope": "all"})
+    token_headers = _auth("internal", user_id, {"channelScope": "msetuSrm"})
     as_temp = TestClient(app, headers=token_headers)
 
     # Works while active
