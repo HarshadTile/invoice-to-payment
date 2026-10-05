@@ -152,8 +152,8 @@ export default function InvoicesPage() {
       <div className="dash">
         <div className="kpi-grid">
           <StatCard tone="warn" icon={<ClockIcon />} label="Pending Approval" value={agg.kpi.pendingApproval} sub="Awaiting approver action" onClick={() => openSearchByStatus('Pending Approval')} />
-          <StatCard tone="brand" icon={<CheckCircleIcon />} label="Approved" value={agg.kpi.approved} sub="Approved by business" onClick={() => openSearchByStatus('Approved')} />
-          <StatCard tone="brand" icon={<CardIcon />} label="Payment Due" value={agg.kpi.paymentDue} sub="Booked, due this cycle" onClick={() => openSearchByStatus('Payment Due')} />
+          <StatCard icon={<CheckCircleIcon />} label="Approved" value={agg.kpi.approved} sub="Approved by business" onClick={() => openSearchByStatus('Approved')} />
+          <StatCard icon={<CardIcon />} label="Payment Due" value={agg.kpi.paymentDue} sub="Booked, due this cycle" onClick={() => openSearchByStatus('Payment Due')} />
           <StatCard tone="good" icon={<CheckCircleIcon />} label="Paid" value={agg.kpi.paid} sub="Payment cleared" onClick={() => openSearchByStatus('Paid')} />
         </div>
 

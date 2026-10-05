@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { CHANNELS, VIEW_COLUMNS, VIEW_ADD_LABEL, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
+import { CHANNELS, VIEW_COLUMNS, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
 import { selectScopedInvoices } from '../features/invoices/selectors';
 import { channelViewRows, ticketBreached, ticketInvoice } from '../utils/businessLogic';
@@ -110,7 +110,7 @@ export default function ChannelPage() {
       {activeView === 'History' && <ChannelHistory channelKey={key} channelInvoices={channelInvoices} />}
       {activeView === 'Queries' && <ChannelQueries channelKey={key} />}
       {!['Invoice Log', 'History', 'Queries'].includes(activeView) && (
-        <ChannelSubView channelKey={key} view={activeView} channelInvoices={channelInvoices} canEdit={perm.editRows} canImportExport={perm.importExport} />
+        <ChannelSubView channelKey={key} view={activeView} channelInvoices={channelInvoices} canImportExport={perm.importExport} />
       )}
     </>
   );
@@ -226,7 +226,7 @@ function ChannelQueries({ channelKey }) {
   );
 }
 
-function ChannelSubView({ channelKey, view, channelInvoices, canEdit, canImportExport }) {
+function ChannelSubView({ channelKey, view, channelInvoices, canImportExport }) {
   const dispatch = useDispatch();
   const tableKey = `channel-${channelKey}-${view.replace(/\s+/g, '_')}`;
   const rows = useSelector((s) => selectTable(s, tableKey));
@@ -244,8 +244,6 @@ function ChannelSubView({ channelKey, view, channelInvoices, canEdit, canImportE
         cols={cols}
         rows={rows}
         statusCol
-        entityLabel={VIEW_ADD_LABEL[view] || 'Row'}
-        canEdit={canEdit}
         canImportExport={canImportExport}
         onViewInvoice={(no) => dispatch(openModal({ kind: 'invoiceDetail', ctx: { no } }))}
         onViewVendorCode={(code) => dispatch(openModal({ kind: 'vendorCodePreview', ctx: { code } }))}

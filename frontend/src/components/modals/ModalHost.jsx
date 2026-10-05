@@ -7,7 +7,6 @@ import RaiseTicketModal from './RaiseTicketModal.jsx';
 import TicketDetailModal from './TicketDetailModal.jsx';
 import NotifyPreviewModal from './NotifyPreviewModal.jsx';
 import ExportModal from './ExportModal.jsx';
-import RowFormModal from './RowFormModal.jsx';
 import ConfirmModal from './ConfirmModal.jsx';
 
 const REGISTRY = {
@@ -19,7 +18,6 @@ const REGISTRY = {
   ticketDetail: TicketDetailModal,
   notifyPreview: NotifyPreviewModal,
   export: ExportModal,
-  row: RowFormModal,
   confirm: ConfirmModal,
 };
 
