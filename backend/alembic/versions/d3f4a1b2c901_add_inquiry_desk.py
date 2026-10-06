@@ -1,7 +1,7 @@
 """Add the production Inquiry Desk schema.
 
 Revision ID: d3f4a1b2c901
-Revises: bafc0b1c405c
+Revises: 8f31c2d4a901
 """
 
 from typing import Sequence, Union
@@ -12,12 +12,25 @@ from sqlalchemy.dialects import mysql
 
 
 revision: str = "d3f4a1b2c901"
-down_revision: Union[str, Sequence[str], None] = "bafc0b1c405c"
+down_revision: Union[str, Sequence[str], None] = "8f31c2d4a901"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    user_columns = {column["name"] for column in inspector.get_columns("users")}
+    ticket_columns = {column["name"] for column in inspector.get_columns("tickets")}
+    legacy_schema_complete = (
+        "ticket_role" in user_columns
+        and "ticket_no" in ticket_columns
+        and inspector.has_table("user_channel_access")
+        and inspector.has_table("ticket_idempotency")
+        and inspector.has_table("ticket_job_runs")
+    )
+    if legacy_schema_complete:
+        return
+
     op.add_column("users", sa.Column("ticket_role", sa.String(24), nullable=True))
     op.execute("UPDATE users SET ticket_role = 'ADMIN' WHERE UPPER(role) = 'ADMIN'")
     op.execute("UPDATE users SET ticket_role = 'ASSIGNEE' WHERE role = 'MDE Invoice Team'")
@@ -114,7 +127,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_notifications_user_id", "notifications", ["user_id"])
-    op.create_index("ix_notifications_recipient_key", "notifications", ["recipient_key"])
     op.create_index("ix_notifications_recipient_read_created", "notifications", ["recipient_key", "read_at", "created_at"])
     op.create_index("ix_notifications_user_read_created", "notifications", ["user_id", "read_at", "created_at"])
     op.create_table(
@@ -187,7 +199,6 @@ def downgrade() -> None:
     op.drop_table("ticket_reads")
     op.drop_index("ix_notifications_user_read_created", table_name="notifications")
     op.drop_index("ix_notifications_recipient_read_created", table_name="notifications")
-    op.drop_index("ix_notifications_recipient_key", table_name="notifications")
     op.drop_index("ix_notifications_user_id", table_name="notifications")
     op.drop_table("notifications")
     op.drop_table("sla_policies")

@@ -47,8 +47,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(op.f('ix_password_reset_tokens_user_id'), table_name='password_reset_tokens')
-    op.drop_index(op.f('ix_password_reset_tokens_token'), table_name='password_reset_tokens')
+    # MySQL uses the user_id index to enforce the foreign key, so dropping that
+    # index before the table fails with error 1553. Dropping the table removes
+    # both indexes together with the constraint.
     op.drop_table('password_reset_tokens')
     op.create_table(
         'password_reset_tokens',
