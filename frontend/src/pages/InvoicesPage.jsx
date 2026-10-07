@@ -1,9 +1,9 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { CHANNELS, LOGIN_CHANNELS, CHANNEL_LABEL } from '../data/constants';
-import { getFiscalYear } from '../utils/businessLogic';
-import { selectScopedInvoices, selectInternalScopeLabel } from '../features/invoices/selectors';
+import { useScope } from '../features/ui/scope';
+import { selectFilteredInvoices } from '../features/invoices/selectors';
 import { selectIsChannelLocked } from '../features/auth/authSlice';
 import { api } from '../api/client';
 import StatCard from '../components/common/StatCard.jsx';
@@ -61,33 +61,18 @@ function recentFrom(invoices) {
 }
 
 export default function InvoicesPage() {
-  const invoices = useSelector(selectScopedInvoices);
-  const scopeLabel = useSelector(selectInternalScopeLabel);
+  // already narrowed to the top-bar scope (fiscal year / channel / vendor)
+  const filteredInvoices = useSelector(selectFilteredInvoices);
+  const topScope = useScope();
   const isChannelLocked = useSelector(selectIsChannelLocked);
   const { channelScope } = useSelector((s) => s.auth);
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   /** Open Search Invoice(s) showing only this status, across all dates so the list matches the number clicked. */
   const openSearchByStatus = (status) => {
     const next = new URLSearchParams({ status, date_from: '', date_to: '' });
-    ['channel', 'vcode', 'fy'].forEach((k) => { if (searchParams.get(k)) next.set(k, searchParams.get(k)); }); // keep top-bar scope
     navigate(`/app/search?${next.toString()}`);
   };
-
-  const topbarChannel = searchParams.get('channel');
-  const topbarVcode = searchParams.get('vcode');
-  // Absent means "current financial year", same default as the top-bar dropdown shows; 'all' is explicit "every year"
-  const topbarFY = searchParams.get('fy') || getFiscalYear(new Date().toISOString());
-
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((i) => {
-      if (topbarChannel && i.channel !== topbarChannel) return false;
-      if (topbarVcode && i.vcode !== topbarVcode) return false;
-      if (topbarFY !== 'all' && getFiscalYear(i.date) !== topbarFY) return false;
-      return true;
-    });
-  }, [invoices, topbarChannel, topbarVcode, topbarFY]);
 
   // Server-side aggregation; falls back to the loaded list if the call fails.
   const [summary, setSummary] = useState(null);
@@ -126,7 +111,7 @@ export default function InvoicesPage() {
   }, [fetchKey, channelScope]);
 
   // If local topbar filters are active, bypass the server summary and compute locally.
-  const isFiltering = topbarChannel || topbarVcode || topbarFY !== 'all';
+  const isFiltering = topScope.channel || topScope.vcode || topScope.fy !== 'all';
   const useServerSummary = !isFiltering && summary?.key === fetchKey;
   
   const scopedChannels = isChannelLocked ? CHANNELS.filter((c) => c.key === channelScope) : CHANNELS;
@@ -145,10 +130,6 @@ export default function InvoicesPage() {
 
   return (
     <>
-      <header className="page-head page-head--tight">
-        <h1 className="page-title">{isChannelLocked ? `${scopeLabel} Invoice Tracking` : 'Invoice Tracking'}</h1>
-      </header>
-
       <div className="dash">
         <div className="kpi-grid">
           <StatCard tone="warn" icon={<ClockIcon />} label="Pending Approval" value={agg.kpi.pendingApproval} sub="Awaiting approver action" onClick={() => openSearchByStatus('Pending Approval')} />

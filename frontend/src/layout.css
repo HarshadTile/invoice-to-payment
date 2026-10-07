@@ -104,6 +104,7 @@
   gap:16px;padding:0 clamp(16px,2.5vw,28px);
 }
 .crumb{font-size:13px;color:var(--text-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.crumb-title{margin:0;font:inherit;color:inherit;display:inline;}
 .crumb b{
   color:var(--ink);font-weight:700;font-size:15px;
   font-family:var(--font-display);letter-spacing:-.005em;
@@ -208,8 +209,38 @@
   .topbar{gap:10px;padding:0 14px;}
   .topbar-right{gap:8px;}
 }
+/* Collapsed sidebar: an icon-only rail on wide screens. Names show as tooltips, a group's
+   children are hidden (opening a group widens the sidebar first). Phones keep the off-canvas
+   menu and ignore this. */
+@media (min-width:861px){
+  .sidebar{position:relative;z-index:40;transition:width .2s ease,min-width .2s ease;}
+  /* round handle straddling the sidebar's right edge, level with the logo */
+  .sidebar-edge-toggle{
+    position:absolute;top:25px;right:-13px;z-index:5;
+    width:26px;height:26px;padding:0;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:#fff;border:1px solid var(--border);color:#6B7280;cursor:pointer;
+    box-shadow:0 1px 4px rgba(23,24,26,.14);
+    transition:color .15s ease,border-color .15s ease,background .15s ease;
+  }
+  .sidebar-edge-toggle:hover{color:var(--brand);border-color:var(--brand);}
+  .sidebar-edge-toggle:focus-visible{outline:2px solid var(--brand);outline-offset:2px;}
+  .sidebar-collapsed .sidebar{width:72px;min-width:72px;}
+  .sidebar-collapsed .brand{padding:16px 10px;}
+  .sidebar-collapsed .brand img{width:46px;height:auto;}
+  .sidebar-collapsed .sidebar-scroll{padding:10px 8px 12px;}
+  .sidebar-collapsed .nav-label,
+  .sidebar-collapsed .nav-item .chev,
+  .sidebar-collapsed .nav-children{display:none;}
+  .sidebar-collapsed .nav-item{justify-content:center;padding:10px 0;}
+  .sidebar-collapsed .nav-item.active{box-shadow:none;}
+  .sidebar-collapsed .nav-section{
+    height:1px;margin:10px 12px;padding:0;overflow:hidden;font-size:0;color:transparent;background:var(--border);
+  }
+}
 /* menu button + backdrop only exist on narrow screens */
-.menu-btn,.nav-backdrop{display:none;}
+.menu-btn,.nav-backdrop,.sidebar-edge-toggle{display:none;}
+@media (min-width:861px){.sidebar-edge-toggle{display:flex;}}
 
 /* phones & small tablets: the sidebar becomes an off-canvas menu opened from the
    top bar, so every nav item (incl. channel / settings children) stays reachable */
@@ -239,7 +270,6 @@
 }
 @media (max-width:560px){
   .topbar-context-filters{display:none;}
-  .crumb{display:none;}
   .topbar-right .help-button{display:none;}
   .role-select{max-width:150px;}
   .crumb b{font-size:14px;}

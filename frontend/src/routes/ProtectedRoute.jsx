@@ -39,7 +39,11 @@ export function SettingsIndexRedirect() {
     ? '/app/settings/integrations'
     : perm.manageUsers
       ? '/app/settings/users'
-      : '/app/invoices';
+      : perm.manageRoles
+        ? '/app/settings/roles'
+        : perm.viewAuditLog
+          ? '/app/settings/auditLogs'
+          : '/app/invoices';
   return <Navigate to={target} replace />;
 }
 

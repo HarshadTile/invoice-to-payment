@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { selectScopedInvoices } from '../features/invoices/selectors';
-import { setPageFilters } from '../features/ui/uiSlice';
+import { selectFilteredInvoices } from '../features/invoices/selectors';
+import { useScope } from '../features/ui/scope';
+import { clearScopeFilters, setPageFilters, setScopeFilter } from '../features/ui/uiSlice';
 import { CHANNELS, STATUS_CHIP, APP_NOW } from '../data/constants';
-import { getFiscalYear } from '../utils/businessLogic';
 import { parseInvoiceQuery } from '../utils/invoiceQuery';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import Dropdown from '../components/common/Dropdown.jsx';
@@ -91,7 +91,8 @@ const PAGE_FILTER_KEY = 'searchInvoice';
 
 export default function SearchInvoicePage() {
   const dispatch = useDispatch();
-  const invoices = useSelector(selectScopedInvoices);
+  const invoices = useSelector(selectFilteredInvoices); // already narrowed to the top-bar scope
+  const { fy, channel, vcode: vendor } = useScope();
   const savedFilters = useSelector((s) => s.ui.pageFilters[PAGE_FILTER_KEY]);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -104,11 +105,7 @@ export default function SearchInvoicePage() {
 
   // Initialise from URL (or the restored filters); default date range = last 90 days
   const [query,    setQuery]    = useState(() => restored?.q      ?? getParam(searchParams, 'q'));
-  const [vendor,   setVendor]   = useState(() => getParam(searchParams, 'vcode'));
-  const [channel,  setChannel]  = useState(() => getParam(searchParams, 'channel'));
   const [status,   setStatus]   = useState(() => restored?.status ?? getParam(searchParams, 'status'));
-  // Same default as the top bar's dropdown: the current financial year until the user picks one, or 'all'
-  const fy = getParam(searchParams, 'fy', getFiscalYear(new Date().toISOString()));
   const [dateFrom, setDateFrom] = useState(() => restored?.dateFrom ?? getParam(searchParams, 'date_from', defaultDateFrom()));
   const [dateTo,   setDateTo]   = useState(() => restored?.dateTo   ?? getParam(searchParams, 'date_to',   defaultDateTo()));
 
@@ -131,14 +128,6 @@ export default function SearchInvoicePage() {
     dispatch(setPageFilters({ key: PAGE_FILTER_KEY, filters: { q: query, status, dateFrom, dateTo } }));
   }, [dispatch, query, status, dateFrom, dateTo]);
 
-  // Sync topbar vendor/channel URL changes → local state
-  useEffect(() => {
-    const v = searchParams.get('vcode')   || '';
-    const c = searchParams.get('channel') || '';
-    setVendor(v);
-    setChannel(c);
-  }, [searchParams]);
-
   const sync = useCallback((updates) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -158,16 +147,18 @@ export default function SearchInvoicePage() {
   const showLast90Days = () => {
     const df = defaultDateFrom(), dt = defaultDateTo();
     setDateFrom(df); setDateTo(dt);
-    sync({ date_from: df, date_to: dt, fy: '' });
+    dispatch(setScopeFilter({ key: 'fy', value: null })); // back to the current fiscal year
+    sync({ date_from: df, date_to: dt });
   };
   const showAllDates = () => {
     setDateFrom(''); setDateTo('');
-    sync({ date_from: '', date_to: '', fy: 'all' });
+    dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+    sync({ date_from: '', date_to: '' });
   };
   const clearAll = () => {
     setQuery(''); setStatus(''); setDateFrom(''); setDateTo('');
-    setVendor(''); setChannel(''); // vendor/channel also live in the top bar -> URL
-    sync({ q: '', status: '', date_from: '', date_to: '', vcode: '', channel: '', fy: 'all' });
+    dispatch(clearScopeFilters()); // vendor / channel / fiscal year are the shared top-bar scope
+    sync({ q: '', status: '', date_from: '', date_to: '' });
     inputRef.current?.focus();
   };
 
@@ -256,9 +247,9 @@ export default function SearchInvoicePage() {
               onRemove={() => { const parts = query.split(','); parts[2] = ''; handleQuery(parts.join(',')); }} />}
 
             {vendorLabel  && <FilterChip label="Vendor"  value={vendorLabel}  tone="blue"
-              onRemove={() => { setVendor('');  sync({ vcode: '' }); }} />}
+              onRemove={() => dispatch(setScopeFilter({ key: 'vcode', value: '' }))} />}
             {channelLabel && <FilterChip label="Channel" value={channelLabel} tone="blue"
-              onRemove={() => { setChannel(''); sync({ channel: '' }); }} />}
+              onRemove={() => dispatch(setScopeFilter({ key: 'channel', value: '' }))} />}
             {nextHint && !parsed.item && (
               <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', alignSelf: 'center' }}>
                 {nextHint}

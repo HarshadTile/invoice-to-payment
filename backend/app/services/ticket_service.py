@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.ticket import Ticket, TicketComment
-from app.models.ticket_activity import TicketIdempotency, TicketRead
+from app.models.ticket_activity import TicketActivity, TicketIdempotency, TicketRead
 from app.models.user import User, UserChannelAccess
 from app.repositories import ticket_repository
 from app.services import notification_service, sla_service
@@ -240,7 +240,7 @@ def create_ticket(db: Session, user: dict, ticket_in, idempotency_key: str | Non
     if user["auth_type"] == "supplier" and context["vendor_code"] != user["vendor_code"]:
         _error(404, "NOT_FOUND", "Invoice not found.")
     if not can_create(user, context["channel"]):
-        _error(403, "FORBIDDEN", "You cannot create tickets for this channel.")
+        _error(403, "FORBIDDEN", "Only suppliers can raise a query.")
 
     now = datetime.utcnow()
     ticket = Ticket(
@@ -518,3 +518,135 @@ async def upload_attachment(
     ticket_repository.add_activity(db, ticket.id, _actor_id(user), "ATTACHMENT_ADDED", {"attachment_id": attachment.id, "visibility": visibility})
     db.commit()
     return _serialize_attachment(attachment)
+
+
+# Events a supplier may see in their own log. Everything else (assignment, priority changes,
+# internal notes, internal attachments) is staff-only and must never reach a supplier.
+SUPPLIER_VISIBLE_EVENTS = ("CREATED", "REPLIED", "RESOLVED", "CLOSED", "REOPENED", "ATTACHMENT_ADDED")
+_SUPPLIER_EVENT_LABEL = {
+    "CREATED": "Query raised",
+    "RESOLVED": "Marked resolved",
+    "CLOSED": "Query closed",
+    "REOPENED": "Query reopened",
+    "ATTACHMENT_ADDED": "Attachment added",
+}
+
+
+def supplier_query_log(db: Session, user: dict, limit: int = 500):
+    """The vendor code's own query history: what happened, when, on which invoice. Staff-only
+    events and internal-visibility messages/attachments are filtered out."""
+    if user["auth_type"] != "supplier":
+        _error(403, "FORBIDDEN", "This log is for supplier accounts.")
+    rows = (
+        db.query(TicketActivity, Ticket)
+        .join(Ticket, Ticket.id == TicketActivity.ticket_id)
+        .filter(
+            Ticket.vendor_code.in_(user["vendor_codes"]),
+            Ticket.legacy_unlinked.is_(False),
+            TicketActivity.event.in_(SUPPLIER_VISIBLE_EVENTS),
+        )
+        .order_by(TicketActivity.created_at.desc(), TicketActivity.id.desc())
+        .limit(limit)
+        .all()
+    )
+    comment_ids = [
+        (activity.meta_data or {}).get("comment_id")
+        for activity, _ in rows if activity.event == "REPLIED"
+    ]
+    comments = {
+        comment.id: comment
+        for comment in db.query(TicketComment).filter(TicketComment.id.in_([c for c in comment_ids if c])).all()
+    } if any(comment_ids) else {}
+
+    entries = []
+    for activity, ticket in rows:
+        meta = activity.meta_data or {}
+        if activity.event == "ATTACHMENT_ADDED" and meta.get("visibility") != "PUBLIC":
+            continue
+        if activity.event == "REPLIED":
+            comment = comments.get(meta.get("comment_id"))
+            if comment and meta.get("visibility", "PUBLIC") != "PUBLIC":
+                continue
+            by_supplier = bool(comment and (comment.role or "").upper() == "SUPPLIER")
+            label = "You replied" if by_supplier else "Reply from the invoice team"
+        else:
+            label = _SUPPLIER_EVENT_LABEL[activity.event]
+        entries.append({
+            "id": activity.id,
+            "ticket_id": ticket.id,
+            "ticket_no": ticket.ticket_no,
+            "invoice_no": ticket.invoice_no,
+            "subject": ticket.subject,
+            "event": label,
+            "status": ticket.status,
+            "created_at": activity.created_at,
+        })
+    return entries
+
+
+_STAFF_EVENT_LABEL = {
+    "CREATED": "Query raised",
+    "NOTE_ADDED": "Internal note added",
+    "RESOLVED": "Marked resolved",
+    "CLOSED": "Query closed",
+    "REOPENED": "Query reopened",
+    "ATTACHMENT_ADDED": "Attachment added",
+    "TICKET_UPDATED": "Query updated",
+}
+
+
+def staff_activity_log(db: Session, user: dict, limit: int = 500):
+    """Query activity for the Logs / History page: every event on the tickets this staff
+    member is allowed to see (the same scope as the ticket list), with who did it."""
+    if user["auth_type"] != "internal":
+        _error(403, "FORBIDDEN", "This log is for internal users.")
+    visible = ticket_repository.scoped_query(db, user).with_entities(Ticket.id).subquery()
+    rows = (
+        db.query(TicketActivity, Ticket)
+        .join(Ticket, Ticket.id == TicketActivity.ticket_id)
+        .filter(Ticket.id.in_(select(visible.c.id)))
+        .order_by(TicketActivity.created_at.desc(), TicketActivity.id.desc())
+        .limit(limit)
+        .all()
+    )
+    user_ids = {a.actor_id for a, _ in rows if a.actor_id}
+    user_ids |= {(a.meta_data or {}).get("to") for a, _ in rows if a.event in ("ASSIGNED", "REASSIGNED")}
+    names = {u.id: u.name for u in db.query(User).filter(User.id.in_([i for i in user_ids if i])).all()} if user_ids else {}
+    comment_ids = [(a.meta_data or {}).get("comment_id") for a, _ in rows if a.event == "REPLIED"]
+    comments = {
+        c.id: c for c in db.query(TicketComment).filter(TicketComment.id.in_([c for c in comment_ids if c])).all()
+    } if any(comment_ids) else {}
+
+    entries = []
+    for activity, ticket in rows:
+        meta = activity.meta_data or {}
+        by_supplier = activity.actor_id is None and ticket.source == "SUPPLIER" and activity.event in ("CREATED", "REPLIED", "CLOSED", "REOPENED", "ATTACHMENT_ADDED")
+        performed_by = names.get(activity.actor_id) or ("Supplier" if by_supplier else "System")
+        detail = ""
+        if activity.event == "REPLIED":
+            comment = comments.get(meta.get("comment_id"))
+            from_supplier = bool(comment and (comment.role or "").upper() == "SUPPLIER")
+            label = "Supplier replied" if from_supplier else "Replied to supplier"
+            performed_by = "Supplier" if from_supplier else performed_by
+        elif activity.event in ("ASSIGNED", "REASSIGNED"):
+            label = "Assigned" if activity.event == "ASSIGNED" else "Reassigned"
+            detail = f"to {names.get(meta.get('to'), 'a team member')}"
+        elif activity.event == "TICKET_UPDATED":
+            label = _STAFF_EVENT_LABEL["TICKET_UPDATED"]
+            detail = "; ".join(f"{field} {change.get('from')} -> {change.get('to')}" for field, change in meta.items() if isinstance(change, dict))
+        else:
+            label = _STAFF_EVENT_LABEL.get(activity.event, activity.event.replace("_", " ").capitalize())
+        entries.append({
+            "id": activity.id,
+            "ticket_id": ticket.id,
+            "ticket_no": ticket.ticket_no,
+            "invoice_no": ticket.invoice_no,
+            "vendor_code": ticket.vendor_code,
+            "channel": ticket.channel,
+            "subject": ticket.subject,
+            "event": label,
+            "detail": detail,
+            "performed_by": performed_by,
+            "created_at": activity.created_at,
+        })
+    return entries

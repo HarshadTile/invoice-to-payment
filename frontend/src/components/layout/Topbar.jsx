@@ -1,11 +1,12 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
 import { runtime } from '../../data/runtime';
 import { getFiscalYear } from '../../utils/businessLogic';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
-import { pushToast, toggleSidebar } from '../../features/ui/uiSlice';
+import { pushToast, setScopeFilter, toggleSidebar } from '../../features/ui/uiSlice';
+import { useScope } from '../../features/ui/scope';
 import { Bell, HelpCircle, ChevronDown, Menu } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
 import { api } from '../../api/client.js';
@@ -36,8 +37,9 @@ function notificationDate(value) {
   return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 }
 
-function crumbFor(pathname, params) {
-  if (pathname.startsWith('/app/invoices')) return 'Invoice Tracking';
+function crumbFor(pathname, params, lockedChannelLabel) {
+  // A channel-locked login sees only its own channel's invoices, and the title says so.
+  if (pathname.startsWith('/app/invoices')) return lockedChannelLabel ? `${lockedChannelLabel} Invoice Tracking` : 'Invoice Tracking';
   if (pathname.startsWith('/app/search')) return 'Search Invoice(s)';
   if (pathname.startsWith('/app/channel/')) { const c = CHANNELS.find((x) => x.key === params.key); return `Processing Channels / ${c ? c.label : ''}`; }
   if (pathname.startsWith('/app/vendor-code/') || pathname.startsWith('/supplier/vendor-code/')) return `Supplier Visibility / ${params.code || ''}`;
@@ -55,11 +57,11 @@ function crumbFor(pathname, params) {
 }
 
 /* ── Compact vendor dropdown for topbar ─────────────────────────── */
-function TopbarVendorDropdown({ searchParams, onUpdate }) {
+function TopbarVendorDropdown({ scope, onUpdate }) {
   const [open, setOpen]   = useState(false);
   const [typeQ, setTypeQ] = useState('');
   const wrapRef           = useRef(null);
-  const currentVcode      = searchParams.get('vcode') || '';
+  const currentVcode      = scope.vcode;
 
   const vendors = useMemo(() => {
     const seen = new Map();
@@ -155,11 +157,11 @@ function TopbarVendorDropdown({ searchParams, onUpdate }) {
 }
 
 /* ── Compact channel dropdown for topbar (tier-scoped) ─────────── */
-function TopbarChannelDropdown({ searchParams, onUpdate }) {
+function TopbarChannelDropdown({ scope, onUpdate }) {
   const [open, setOpen]   = useState(false);
   const [typeQ, setTypeQ] = useState('');
   const wrapRef           = useRef(null);
-  const currentKey        = searchParams.get('channel') || '';
+  const currentKey        = scope.channel;
 
   // Only shown for HQ, so all channels are allowed
   const allowedChannels = CHANNELS;
@@ -246,29 +248,22 @@ function TopbarChannelDropdown({ searchParams, onUpdate }) {
 
 /* ── Topbar ────────────────────────────────────────────────────────── */
 
-function TopbarFiscalYearDropdown({ searchParams, onUpdate, defaultFY }) {
+function TopbarFiscalYearDropdown({ scope, onUpdate, defaultFY }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
-  const currentFY = searchParams.get('fy') || defaultFY;
+  const currentFY = scope.fy || defaultFY;
   const isAll = currentFY === 'all';
   const invoices = useSelector(selectScopedInvoices);
+  // Only fiscal years that actually have records, plus the current one (the default) and
+  // whichever is selected right now, so the list never offers a year with nothing in it.
   const fyOptions = useMemo(() => {
-    const today = new Date();
-    const currentY = today.getFullYear();
-    const isPastMarch = today.getMonth() >= 3;
-    const currentStartYear = isPastMarch ? currentY : currentY - 1;
-    
-    const years = new Set();
-    // Always include current and last 3 years
-    for (let i = 0; i < 4; i++) {
-      const y = currentStartYear - i;
-      years.add(`${y}-${String(y + 1).slice(2)}`);
-    }
-    
-    // Also include any years found in actual records
+    const years = new Set([defaultFY]);
+    if (currentFY !== 'all') years.add(currentFY);
     invoices.forEach((inv) => inv.date && years.add(getFiscalYear(inv.date)));
     return Array.from(years).sort((a, b) => b.localeCompare(a));
-  }, [invoices]);
+  }, [invoices, defaultFY, currentFY]);
+  // "All Years" and the clear (x) only mean something when there is more than one year.
+  const multiYear = fyOptions.length > 1;
   function pick(fy) { onUpdate('fy', fy); setOpen(false); }
   useEffect(() => {
     function handler(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); }
@@ -292,7 +287,7 @@ function TopbarFiscalYearDropdown({ searchParams, onUpdate, defaultFY }) {
         aria-haspopup="listbox" aria-expanded={open} title="Filter by Fiscal Year"
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{isAll ? 'All Years' : `FY ${currentFY}`}</span>
-        {!isAll
+        {!isAll && multiYear
           ? <span onClick={(e) => { e.stopPropagation(); pick('all'); }} style={{ opacity: .7, fontSize: 15, lineHeight: 1, flexShrink: 0 }} aria-label="Clear filter">×</span>
           : <ChevronDown size={13} style={{ flexShrink: 0, opacity: .6 }} />
         }
@@ -300,7 +295,7 @@ function TopbarFiscalYearDropdown({ searchParams, onUpdate, defaultFY }) {
       {open && (
         <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 60, width: 140, background: '#fff', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 12px 34px rgba(23,24,26,.13)', overflow: 'hidden' }}>
           <div style={{ maxHeight: 260, overflowY: 'auto' }} role="listbox">
-            <button type="button" role="option" aria-selected={isAll} onClick={() => pick('all')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', border: 'none', background: isAll ? 'var(--brand-tint)' : 'none', color: isAll ? 'var(--brand-dark)' : 'var(--text-body)', fontWeight: isAll ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>All Years</button>
+            {multiYear && <button type="button" role="option" aria-selected={isAll} onClick={() => pick('all')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', border: 'none', background: isAll ? 'var(--brand-tint)' : 'none', color: isAll ? 'var(--brand-dark)' : 'var(--text-body)', fontWeight: isAll ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>All Years</button>}
             {fyOptions.map((fy) => (
               <button key={fy} type="button" role="option" aria-selected={currentFY === fy} onClick={() => pick(fy)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', border: 'none', fontSize: 13, background: currentFY === fy ? 'var(--brand-tint)' : 'none', color: currentFY === fy ? 'var(--brand-dark)' : 'var(--text-body)', fontWeight: currentFY === fy ? 700 : 500, cursor: 'pointer' }} onMouseEnter={(e) => { if (currentFY !== fy) e.currentTarget.style.background = 'var(--gray-bg)'; }} onMouseLeave={(e) => { if (currentFY !== fy) e.currentTarget.style.background = 'none'; }}>{fy}</button>
             ))}
@@ -316,7 +311,6 @@ export default function Topbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const params   = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { authType, channelScope, id: userId, supplierLoginVcode } = useSelector((s) => s.auth);
   const [notifications, setNotifications] = useState(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -325,7 +319,7 @@ export default function Topbar() {
   const notificationCount = notificationItems.filter((item) => !item.read_at).length;
   const notificationIdentity = authType === 'supplier' ? `supplier:${supplierLoginVcode}` : `user:${userId}`;
 
-  const crumb = crumbFor(location.pathname, params);
+  const crumb = crumbFor(location.pathname, params, authType === 'internal' && channelScope !== 'all' ? (CHANNEL_LABEL[channelScope] || channelScope) : '');
   const isHQ = channelScope === 'all';
   const isChannelLocked = !isHQ;
   const channelLabel = CHANNEL_LABEL[channelScope] || channelScope;
@@ -387,12 +381,9 @@ export default function Topbar() {
     }
   }
 
-  /** Update a URL param in place (keeps user on current page, e.g. Dashboard or Search) */
-  function updateSearchParam(key, value) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value); else next.delete(key);
-    setSearchParams(next, { replace: true });
-  }
+  /** The fiscal year / channel / vendor chosen here apply to every screen until cleared. */
+  const scope = useScope();
+  function updateScope(key, value) { dispatch(setScopeFilter({ key, value })); }
 
   return (
     <header className="topbar">
@@ -400,15 +391,29 @@ export default function Topbar() {
         onClick={() => dispatch(toggleSidebar())}>
         <Menu size={18} />
       </button>
-      <div className="crumb"><b>{crumb}</b></div>
+      {/* The one visible page title (and the page's <h1>); pages don't repeat it. */}
+      <div className="crumb"><h1 className="crumb-title"><b>{crumb}</b></h1></div>
 
       <div className="topbar-right">
         {authType === 'supplier' && (
-          <TopbarFiscalYearDropdown searchParams={searchParams} onUpdate={updateSearchParam} defaultFY={getFiscalYear(new Date().toISOString())} />
+          <TopbarFiscalYearDropdown scope={scope} onUpdate={updateScope} defaultFY={getFiscalYear(new Date().toISOString())} />
+        )}
+        {authType === 'supplier' && supplierLoginVcode && (
+          <div
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              height: 38, padding: '0 12px',
+              background: '#F0F1F4', border: '1px solid var(--border)', borderRadius: 9,
+              fontSize: 12.5, fontWeight: 600, color: 'var(--text-body)', whiteSpace: 'nowrap',
+            }}
+            title="The vendor code you are signed in with"
+          >
+            <span className="mono">{supplierLoginVcode}</span>
+          </div>
         )}
         {/* Internal users: financial year filter, shown on every page next to Channel and Vendor; defaults to the current FY */}
         {authType === 'internal' && (
-          <TopbarFiscalYearDropdown searchParams={searchParams} onUpdate={updateSearchParam} defaultFY={getFiscalYear(new Date().toISOString())} />
+          <TopbarFiscalYearDropdown scope={scope} onUpdate={updateScope} defaultFY={getFiscalYear(new Date().toISOString())} />
         )}
         {/* Channel + Vendor search dropdowns — shown for all internal users on all pages */}
         {authType === 'internal' && (
@@ -428,9 +433,9 @@ export default function Topbar() {
                 {channelLabel}
               </div>
             ) : (
-              <TopbarChannelDropdown searchParams={searchParams} onUpdate={updateSearchParam} />
+              <TopbarChannelDropdown scope={scope} onUpdate={updateScope} />
             )}
-            <TopbarVendorDropdown searchParams={searchParams} onUpdate={updateSearchParam} />
+            <TopbarVendorDropdown scope={scope} onUpdate={updateScope} />
           </div>
         )}
 

@@ -1,7 +1,7 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
-import { toggleNavExpanded } from '../../features/ui/uiSlice';
+import { ensureNavExpanded, setSidebarCollapsed, toggleNavExpanded, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
 import { askLogout } from '../../features/auth/logoutPrompt';
 import { selectPerm } from '../../features/auth/authSlice';
 import {
@@ -17,6 +17,8 @@ function NavItem({ icon, label, active, badge, onClick, hasChildren, open }) {
       className={`nav-item${active ? ' active' : ''}`}
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
+      aria-label={label}
+      title={label}
     >
       <span className="ic" aria-hidden="true">{icon}</span>
       <span className="nav-label">{label}{badge != null ? ` (${badge})` : ''}</span>
@@ -32,15 +34,36 @@ export default function Sidebar() {
   const { authType, channelScope } = useSelector((s) => s.auth);
   const perm = useSelector(selectPerm);
   const expandedNav = useSelector((s) => s.ui.expandedNav);
+  const collapsed = useSelector((s) => s.ui.sidebarCollapsed);
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
   const isOpen = (id) => expandedNav.includes(id);
   const logout = () => dispatch(askLogout());
+  // In the icon-only rail a group's children have nowhere to show, so opening a group
+  // widens the sidebar first.
+  const toggleGroup = (id) => () => {
+    if (collapsed) { dispatch(setSidebarCollapsed(false)); dispatch(ensureNavExpanded(id)); } else dispatch(toggleNavExpanded(id));
+  };
+  // Always visible (it sits on the sidebar's edge by the logo, not at the end of the scrolling
+  // list), so collapsing never needs a scroll.
+  const collapseToggle = (
+    <button
+      type="button"
+      className="sidebar-edge-toggle"
+      onClick={() => dispatch(toggleSidebarCollapsed())}
+      aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
+      title={collapsed ? 'Expand menu' : 'Collapse menu'}
+      aria-expanded={!collapsed}
+    >
+      <span style={{ display: 'flex', transform: collapsed ? 'none' : 'rotate(180deg)' }}><ChevronRight size={14} /></span>
+    </button>
+  );
 
   // ── Supplier sidebar ──
   if (authType === 'supplier') {
     return (
       <aside className="sidebar">
         <Brand />
+        {collapseToggle}
         <div className="sidebar-scroll">
           <nav className="nav-tree" aria-label="Primary">
             <NavItem icon={<FileText />} label="My Invoices" active={isActive('/supplier/home')} onClick={() => navigate('/supplier/home')} />
@@ -66,11 +89,12 @@ export default function Sidebar() {
     : CHANNELS;
 
   const channelLabel = CHANNEL_LABEL[channelScope] || channelScope;
-  const canUseSettings = perm.manageConfig || perm.manageUsers;
+  const canUseSettings = perm.manageConfig || perm.manageUsers || perm.manageRoles || perm.viewAuditLog;
 
   return (
     <aside className="sidebar">
       <Brand />
+      {collapseToggle}
       <div className="sidebar-scroll">
         <nav className="nav-tree" aria-label="Primary">
           <p className="nav-section">Overview</p>
@@ -98,7 +122,7 @@ export default function Sidebar() {
                 label="Processing Channels"
                 hasChildren
                 open={isOpen('channels')}
-                onClick={() => dispatch(toggleNavExpanded('channels'))}
+                onClick={toggleGroup('channels')}
               />
               {isOpen('channels') && (
                 <div className="nav-children lvl1">
@@ -130,16 +154,16 @@ export default function Sidebar() {
                   label="Settings"
                   hasChildren
                   open={isOpen('settings')}
-                  onClick={() => dispatch(toggleNavExpanded('settings'))}
+                  onClick={toggleGroup('settings')}
                 />
               )}
               {canUseSettings && isOpen('settings') && (
                 <div className="nav-children lvl1">
                   {perm.manageConfig && <NavItem icon={<Sliders />} label="Integration Settings" active={isActive('/app/settings/integrations')} onClick={() => navigate('/app/settings/integrations')} />}
                   {perm.manageConfig && <NavItem icon={<Bell />} label="Notifications" active={isActive('/app/settings/notifications')} onClick={() => navigate('/app/settings/notifications')} />}
-                  <NavItem icon={<History />} label="Audit Logs" active={isActive('/app/settings/auditLogs')} onClick={() => navigate('/app/settings/auditLogs')} />
+                  {perm.viewAuditLog && <NavItem icon={<History />} label="Audit Logs" active={isActive('/app/settings/auditLogs')} onClick={() => navigate('/app/settings/auditLogs')} />}
                   {perm.manageUsers && <NavItem icon={<Users />} label="Users" active={isActive('/app/settings/users')} onClick={() => navigate('/app/settings/users')} />}
-                  {perm.manageUsers && <NavItem icon={<Shield />} label="Roles & Permissions" active={isActive('/app/settings/roles')} onClick={() => navigate('/app/settings/roles')} />}
+                  {perm.manageRoles && <NavItem icon={<Shield />} label="Roles & Permissions" active={isActive('/app/settings/roles')} onClick={() => navigate('/app/settings/roles')} />}
                 </div>
               )}
             </>

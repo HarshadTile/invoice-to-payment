@@ -35,7 +35,6 @@ export default function ProfilePage() {
     const codes = vendorCodesFor(supplierQuery);
     return (
       <>
-        <h1 className="page-title">My Profile</h1>
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
             <div>
@@ -81,7 +80,6 @@ export default function ProfilePage() {
 
   return (
     <>
-      <h1 className="page-title">My Profile</h1>
       <div className="profile-grid">
         <div className="card profile-hero">
           <div className="avatar" aria-hidden="true">{currentUser.initials}</div>

@@ -4,11 +4,11 @@
    same role matrix, same status vocabulary. */
 
 export const ROLE_MATRIX = {
-  Admin: { importExport: true, editRows: true, createTrace: true, manageUsers: true, manageConfig: true },
-  'MDE Invoice Team': { importExport: true, editRows: true, createTrace: true, manageUsers: false, manageConfig: false },
-  Approver: { importExport: false, editRows: false, createTrace: true, manageUsers: false, manageConfig: false },
-  Accounts: { importExport: false, editRows: true, createTrace: true, manageUsers: false, manageConfig: false },
-  Viewer: { importExport: false, editRows: false, createTrace: true, manageUsers: false, manageConfig: false },
+  Admin: { importExport: true, createTrace: true, manageConfig: true, manageUsers: true, manageRoles: true, viewAuditLog: true },
+  'Invoice Team': { importExport: true, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
+  Approver: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
+  Accounts: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
+  Viewer: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
 };
 
 // Every channel the data model knows about. The Manual (e-mail) channel is kept here so

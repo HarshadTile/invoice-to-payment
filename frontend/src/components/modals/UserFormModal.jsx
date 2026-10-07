@@ -11,26 +11,40 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * No password field, ever: creating an account emails the person an invite link to set
  * their own first password — nobody who creates or edits an account sets it for them.
  *
- * Portal / channel access is a property of the account (assigned here), never something the
- * person logging in gets to pick. An Admin always has every channel; any other role must be
- * locked to exactly one portal, matching the login screen's own "Portal / Team" list.
+ * Three separate concepts, deliberately not mixed in one dropdown:
+ *  - Application Role: what the person may do in the app (Admin, Invoice Team, ...).
+ *  - Ticket Role: what they may do in the Inquiry Desk. Never implied by the application
+ *    role — an Accounts or Viewer user has no ticket access unless one is granted here.
+ *  - Authorized Channels: which channels they can work in. Admin always has all of them.
  */
 export default function UserFormModal({ user, roles, onClose, onSave }) {
   const editing = !!user;
   const [values, setValues] = useState(() => (editing
-    ? { name: user.name, email: user.email, role: user.role, status: user.status, channelScope: user.channelScope, ticketRole: user.ticketRole || 'NO_ACCESS' }
-    : { username: '', name: '', email: '', role: roles[0] || 'Viewer', channelScope: LOGIN_CHANNELS[0]?.key || '', ticketRole: 'NO_ACCESS' }));
+    ? {
+      name: user.name, email: user.email, role: user.role, status: user.status,
+      // An Admin's ticket role is the inherited ADMIN, which isn't a grantable value: if they're
+      // later changed to another role, start from no ticket access.
+      ticketRole: user.ticketRole && user.ticketRole !== 'ADMIN' ? user.ticketRole : 'NO_ACCESS',
+      channels: user.channels || [],
+    }
+    : {
+      name: '', email: '', role: roles[0] || 'Viewer',
+      ticketRole: 'NO_ACCESS', channels: [],
+    }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const isAdmin = values.role === 'Admin';
   const set = (key) => (e) => setValues((prev) => ({ ...prev, [key]: e.target.value }));
+  const toggleChannel = (key) => setValues((prev) => ({
+    ...prev,
+    channels: prev.channels.includes(key) ? prev.channels.filter((c) => c !== key) : [...prev.channels, key],
+  }));
 
   function validate() {
     if (!values.name.trim()) return 'Full name is required.';
     if (!emailPattern.test(values.email)) return 'Enter a valid email address.';
-    if (!isAdmin && !values.channelScope) return 'Assign a portal for this role.';
-    if (!editing && !values.username.trim()) return 'Username is required.';
+    if (!isAdmin && values.channels.length === 0) return 'Pick at least one authorized channel for this role.';
     return '';
   }
 
@@ -40,7 +54,12 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
     setError('');
     setBusy(true);
     try {
-      await onSave({ ...values, channelScope: isAdmin ? 'all' : values.channelScope });
+      await onSave({
+        ...values,
+        channels: isAdmin ? [] : values.channels,
+        // Admin inherits full ticket access on the server; send nothing to override.
+        ticketRole: isAdmin ? undefined : values.ticketRole,
+      });
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
@@ -63,69 +82,62 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
     >
       {error && <div className="form-error" role="alert">{error}</div>}
 
-      {!editing && (
-        <div className="form-field">
-          <label>Username</label>
-          <input value={values.username} onChange={set('username')} autoFocus autoComplete="off" />
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 0' }}>
-            They'll get an email to set their own password — no password is set here.
-          </p>
-        </div>
-      )}
-
       <div className="row">
         <div className="form-field" style={{ flex: 1 }}>
           <label>Full Name</label>
-          <input value={values.name} onChange={set('name')} autoFocus={editing} />
+          <input value={values.name} onChange={set('name')} autoFocus />
         </div>
         <div className="form-field" style={{ flex: 1 }}>
           <label>Email</label>
           <input type="email" value={values.email} onChange={set('email')} />
         </div>
       </div>
+      {!editing && (
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '-6px 0 14px' }}>
+          They sign in with this email and get a message to set their own password. No password is set here.
+        </p>
+      )}
 
       <div className="row">
         <div className="form-field" style={{ flex: 1 }}>
-          <label>Role</label>
-          <select
-            value={values.role}
-            onChange={(e) => setValues((prev) => ({
-              ...prev,
-              role: e.target.value,
-              channelScope: prev.channelScope || LOGIN_CHANNELS[0]?.key || '',
-              ticketRole: e.target.value === 'Admin'
-                ? 'ADMIN'
-                : (prev.role === 'Admin' ? (e.target.value === 'MDE Invoice Team' ? 'ASSIGNEE' : 'NO_ACCESS') : prev.ticketRole),
-            }))}
-          >
+          <label>Application Role</label>
+          <select value={values.role} onChange={set('role')}>
             {roles.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
-        {isAdmin ? (
-          <div className="form-field" style={{ flex: 1 }}>
-            <label>Portal Access</label>
-            <input value="All Channels — HQ / Admin" readOnly />
-          </div>
-        ) : (
-          <div className="form-field" style={{ flex: 1 }}>
-            <label>Portal</label>
-            <select value={values.channelScope} onChange={set('channelScope')}>
-              {LOGIN_CHANNELS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+        <div className="form-field" style={{ flex: 1 }}>
+          <label>Ticket Role</label>
+          {isAdmin ? (
+            <input value="Admin (inherited)" readOnly />
+          ) : (
+            <select value={values.ticketRole} onChange={set('ticketRole')}>
+              <option value="NO_ACCESS">No Ticket Access</option>
+              <option value="ASSIGNEE">Assignee</option>
+              <option value="CHANNEL_LEAD">Channel Lead</option>
             </select>
+          )}
+        </div>
+      </div>
+
+      <div className="form-field">
+        <label>Authorized Channels</label>
+        {isAdmin ? (
+          <input value="All Channels — HQ / Admin" readOnly />
+        ) : (
+          <div className="choice-grid">
+            {LOGIN_CHANNELS.map((c) => (
+              <label key={c.key} className="choice-tile">
+                <input
+                  type="checkbox"
+                  checked={values.channels.includes(c.key)}
+                  onChange={() => toggleChannel(c.key)}
+                />
+                {c.label}
+              </label>
+            ))}
           </div>
         )}
       </div>
-
-      {!isAdmin && (
-        <div className="form-field">
-          <label>Inquiry Desk Access</label>
-          <select value={values.ticketRole} onChange={set('ticketRole')}>
-            <option value="NO_ACCESS">No Ticket Access</option>
-            <option value="ASSIGNEE">Assignee</option>
-            <option value="CHANNEL_LEAD">Channel Lead</option>
-          </select>
-        </div>
-      )}
 
       {editing && (
         <div className="row">

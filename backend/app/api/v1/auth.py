@@ -326,3 +326,4 @@ def logout(credentials: HTTPAuthorizationCredentials | None = Depends(optional_s
         except (JWTError, ValueError, TypeError):
             pass
     return {"msg": "Logged out successfully"}
+

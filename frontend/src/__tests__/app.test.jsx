@@ -18,7 +18,7 @@ import authReducer from '../features/auth/authSlice';
 import { ticketsApi } from '../features/tickets/ticketsApi';
 import tablesReducer from '../features/tables/tablesSlice';
 import settingsReducer from '../features/settings/settingsSlice';
-import uiReducer from '../features/ui/uiSlice';
+import uiReducer, { setScopeFilter } from '../features/ui/uiSlice';
 import AppRoutes from '../routes/AppRoutes.jsx';
 import ToastStack from '../components/common/ToastStack.jsx';
 
@@ -121,7 +121,8 @@ describe('Internal admin - full navigation', () => {
     for (const label of ['Msetu / SRM', 'PO Portal', 'MFOX Portal']) {
       const navLink = screen.getAllByText(label)[0];
       await user.click(navLink);
-      expect(await screen.findByRole('heading', { name: label })).toBeInTheDocument();
+      // The top bar carries the page title, e.g. "Processing Channels / Msetu / SRM".
+      expect(await screen.findByRole('heading', { name: (name) => name.endsWith(label) })).toBeInTheDocument();
       // cycle through every sub-view tab for this channel
       const tabs = document.querySelectorAll('.sheet-carousel .car-chip');
       for (const tab of tabs) {
@@ -191,18 +192,14 @@ describe('Internal admin - full navigation', () => {
     expect(await screen.findByText(/Other Codes for Tata Communications Ltd \(\d+\) : separate scope, not shown here/)).toBeInTheDocument();
   });
 
-  it('raises a ticket from an invoice row end to end', async () => {
+  it('the internal team has no Raise a Query option anywhere on the invoice lists', async () => {
     const { user } = await loginAdmin();
-    const raiseButtons = screen.getAllByTitle('Raise a query on this invoice');
-    await user.click(raiseButtons[0]);
-    const modalHeading = await screen.findByRole('heading', { name: /Raise a Query/ });
-    expect(modalHeading).toBeInTheDocument();
-    await user.type(screen.getByPlaceholderText('Briefly describe the query'), 'Payment status query');
-    await user.type(screen.getByPlaceholderText("What's the query..."), 'Automated test ticket');
-    await user.click(screen.getByRole('button', { name: 'Submit Query' }));
-    await waitFor(() => expect(screen.queryByRole('heading', { name: /Raise a Query/ })).not.toBeInTheDocument());
-    await user.click(screen.getAllByText('Inquiry Desk')[0]);
-    expect(await screen.findByText('TCK-1006')).toBeInTheDocument();
+    expect(screen.queryAllByTitle('Raise a query on this invoice')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /Raise query/i })).not.toBeInTheDocument();
+    // ...including the full channel invoice tables
+    await user.click(screen.getAllByText('Msetu / SRM')[0]);
+    await screen.findByRole('heading', { name: (name) => name.endsWith('Msetu / SRM') });
+    expect(screen.queryAllByTitle('Raise a query on this invoice')).toHaveLength(0);
   });
 
   it('assigns, converses, adds an internal note, and resolves from the routed detail page', async () => {
@@ -257,6 +254,22 @@ describe('Internal admin - full navigation', () => {
     expect(await screen.findByText('Total Invoices')).toBeInTheDocument();
   });
 
+  it('collapses the sidebar to an icon rail, remembers it, and widens it to open a group', async () => {
+    const { user } = await loginAdmin();
+    const shell = document.querySelector('.app-shell');
+    expect(shell).not.toHaveClass('sidebar-collapsed');
+    await user.click(screen.getByRole('button', { name: 'Collapse menu' }));
+    expect(shell).toHaveClass('sidebar-collapsed');
+    expect(window.localStorage.getItem('i2p.sidebarCollapsed')).toBe('1');
+    // names stay available (tooltips / accessible names) while the labels are hidden by CSS
+    expect(screen.getByRole('button', { name: 'Logs / History' })).toHaveAttribute('title', 'Logs / History');
+    // a group has nowhere to show its children in the rail, so opening it widens the sidebar
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(shell).not.toHaveClass('sidebar-collapsed');
+    expect(window.localStorage.getItem('i2p.sidebarCollapsed')).toBe('0');
+    window.localStorage.removeItem('i2p.sidebarCollapsed');
+  });
+
   it('Settings: toggles a role permission', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Settings')[0]);
@@ -275,9 +288,9 @@ describe('Internal admin - full navigation', () => {
     await screen.findByText('admin@company.com');
     await user.click(screen.getByRole('button', { name: 'Add User' }));
     const inputs = document.querySelectorAll('.modal-body input');
-    fireEvent.change(inputs[0], { target: { value: 'test.user' } });
-    fireEvent.change(inputs[1], { target: { value: 'Test User' } });
-    fireEvent.change(inputs[2], { target: { value: 'test.user@example.com' } });
+    // Name and email only: the sign-in name comes from the email, and there's no title/department.
+    fireEvent.change(inputs[0], { target: { value: 'Test User' } });
+    fireEvent.change(inputs[1], { target: { value: 'test.user@example.com' } });
     await user.click(screen.getByRole('button', { name: 'Send Invite' }));
     expect(await screen.findByText('test.user@example.com')).toBeInTheDocument();
   });
@@ -312,9 +325,59 @@ describe('Internal admin - full navigation', () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Logs / History')[0]);
     expect(await screen.findByRole('heading', { name: 'Logs / History' })).toBeInTheDocument();
-    const selects = document.querySelectorAll('.card select');
-    fireEvent.change(selects[0], { target: { value: 'msetuSrm' } });
+    expect(screen.getAllByRole('heading', { name: 'Logs / History' })).toHaveLength(1);
+    fireEvent.change(await screen.findByLabelText('Filter by channel'), { target: { value: 'msetuSrm' } });
     expect(document.querySelectorAll('tbody tr').length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText('Search the log'), { target: { value: 'zzz-no-such-entry' } });
+    expect(await screen.findByText('No log entries match your filters.')).toBeInTheDocument();
+  });
+
+  it('the top-bar vendor / channel / year apply on every screen until cleared', async () => {
+    const { store, user } = await loginAdmin();
+    store.dispatch(setScopeFilter({ key: 'vcode', value: 'DIT00388AC' }));
+    store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+    // it follows you to Search Invoice(s) ...
+    await user.click(screen.getAllByText('Search Invoice(s)')[0]);
+    expect(await screen.findByText('Vendor')).toBeInTheDocument();
+    expect(screen.queryByText('INV-MS-1001')).toBeInTheDocument();
+    // ... and every invoice on screen belongs to that vendor code
+    const shown = [...document.querySelectorAll('tbody tr')].map((row) => row.textContent);
+    expect(shown.length).toBeGreaterThan(0);
+    // clearing it (from this page's chip) clears it for the app: Invoice Tracking is unfiltered again
+    await user.click(screen.getByRole('button', { name: /remove vendor|^×$|^x$/i, hidden: true }).closest('span').querySelector('button'));
+    expect(store.getState().ui.scope.vcode).toBe('');
+  });
+
+  it('Supplier Visibility follows the top-bar vendor, and picking another supplier moves it', async () => {
+    const { store, user } = await loginAdmin();
+    store.dispatch(setScopeFilter({ key: 'vcode', value: 'DIT00388AC' })); // a Tata Communications code
+    store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+    await user.click(screen.getAllByText('Supplier Visibility')[0]);
+    await screen.findByText(/Vendor Codes \(\d+\)/);
+    const picker = () => document.querySelector('.form-field select');
+    expect(picker()).toHaveValue('Tata Communications Ltd');
+    await user.selectOptions(picker(), 'Bharat Forge Ltd');
+    expect(store.getState().ui.scope.vcode).toBe('BFL00456');
+    expect(picker()).toHaveValue('Bharat Forge Ltd');
+  });
+
+  it('Supplier Visibility: vendor codes are tabs that narrow the page in place', async () => {
+    const { store, user } = await loginAdmin();
+    store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+    await user.click(screen.getAllByText('Supplier Visibility')[0]);
+    await screen.findByText(/Vendor Codes \(\d+\)/);
+    const tabs = () => screen.getAllByRole('tab');
+    expect(tabs()[0]).toHaveAttribute('aria-selected', 'true'); // "All codes"
+    expect(screen.queryByRole('button', { name: /Open full view of/ })).not.toBeInTheDocument();
+    expect(tabs().length).toBeGreaterThan(1);
+    const firstCode = tabs()[1].textContent.split(' ')[0];
+    await user.click(tabs()[1]);
+    // the same page now shows just that code, with a way to open its own full view
+    expect(tabs()[1]).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByText(new RegExp(`${firstCode} : Total Invoices`))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `Open full view of ${firstCode} →` })).toBeInTheDocument();
+    await user.click(tabs()[0]);
+    expect(screen.getByText('All Codes : Total Invoices')).toBeInTheDocument();
   });
 
   it('Search Invoice(s) returns matching results', async () => {
@@ -346,7 +409,7 @@ describe('Internal admin - full navigation', () => {
     expect(within(menu).getByText(/Admin · All Channels/)).toBeInTheDocument();
 
     await user.click(within(menu).getByRole('menuitem', { name: 'Profile' }));
-    expect(await screen.findByRole('heading', { name: 'My Profile' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument();
     expect(screen.queryByRole('menu')).not.toBeInTheDocument(); // closed by navigating
 
     await user.click(screen.getByRole('button', { name: /Account menu for/ }));
@@ -387,24 +450,30 @@ describe('Supplier session', () => {
     expect(screen.queryByText('Vendor Status Reports')).not.toBeInTheDocument();
   });
 
-  it('opens supplier-facing invoice detail and raises a query', async () => {
+  it('opens supplier-facing invoice detail without a Raise a Query button, and closes it', async () => {
     const { user } = await loginSupplier();
     const viewBtns = screen.queryAllByText('View Full Detail');
     if (viewBtns.length) {
       await user.click(viewBtns[0]);
       expect(screen.getAllByText('Contact for This Invoice').length).toBeGreaterThan(0);
       const modal = document.querySelector('.modal');
-      await user.click(within(modal).getByRole('button', { name: /Raise a Query/ }));
-      expect(await screen.findByRole('heading', { name: /Raise a Query/ })).toBeInTheDocument();
+      expect(within(modal).queryByRole('button', { name: /Raise a Query/ })).not.toBeInTheDocument();
+      await user.click(within(modal).getByRole('button', { name: 'Close' }));
+      await waitFor(() => expect(document.querySelector('.modal')).not.toBeInTheDocument());
     }
   });
 
   it('navigates to My Queries and Logs without error', async () => {
     const { user } = await loginSupplier();
     await user.click(screen.getAllByText('My Queries')[0]);
-    expect(await screen.findByRole('heading', { name: 'My Queries' })).toBeInTheDocument();
+    expect(await screen.findByText('Resolved / Closed')).toBeInTheDocument();
+    // The page title lives in the top bar only (a single <h1>): no in-page heading or intro text repeating it.
+    expect(screen.getAllByRole('heading', { name: 'My Queries' })).toHaveLength(1);
+    expect(screen.queryByText(/Track every query raised/)).not.toBeInTheDocument();
     await user.click(screen.getAllByText('Logs')[0]);
-    expect(await screen.findByRole('heading', { name: /Logs :/ })).toBeInTheDocument();
+    expect(await screen.findByLabelText('Search the log')).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Logs' })).toHaveLength(1);
+    expect(screen.queryByText(/invoice milestones, payments and your queries/)).not.toBeInTheDocument();
   });
 
   it('views its own profile with PAN and vendor code list', async () => {

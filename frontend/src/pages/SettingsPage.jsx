@@ -16,24 +16,24 @@ import UserFormModal from '../components/modals/UserFormModal.jsx';
 import ResetPasswordModal from '../components/modals/ResetPasswordModal.jsx';
 import { Plus, Edit, Trash, Key, Inbox } from '../components/common/icons.jsx';
 
-const TITLES = { integrations: 'Integration Settings', notifications: 'Notifications', auditLogs: 'Audit Logs', users: 'Users', roles: 'Roles & Permissions' };
+// Mirrors ADMIN_LOCKED_CAPABILITIES on the server (app/core/permissions.py).
+const ADMIN_LOCKED = ['manageUsers', 'manageConfig', 'manageRoles'];
 const CAPS = [
-  ['importExport', 'Export Data'],
-  ['editRows', 'Add / Edit / Delete Rows'],
   ['createTrace', 'Search Invoice(s)'],
-  ['manageConfig', 'Manage Integration & Notification Config'],
-  ['manageUsers', 'Manage Users & Roles'],
+  ['importExport', 'Export Data'],
+  ['manageConfig', 'Manage Integration & Notification Settings'],
+  ['manageUsers', 'Manage Users'],
+  ['manageRoles', 'Manage Roles & Permissions'],
+  ['viewAuditLog', 'View Audit Logs'],
 ];
 
 export default function SettingsPage() {
   const { sub: routeSub } = useParams();
   const location = useLocation();
   const sub = routeSub || location.pathname.split('/').filter(Boolean).at(-1);
-  const title = TITLES[sub] || 'Settings';
 
   return (
     <>
-      <h1 className="page-title">{title}</h1>
       {sub === 'integrations' && <IntegrationsTab />}
       {sub === 'notifications' && <NotificationsTab />}
       {sub === 'auditLogs' && <AuditLogsTab />}
@@ -87,7 +87,7 @@ function NotificationsTab() {
             type="button"
             className={`toggle${r[3] === 'On' ? ' on' : ''}`}
             disabled={!perm.manageConfig}
-            onClick={() => dispatch(toggleNotifRule(idx))}
+            onClick={() => dispatch(toggleNotifRule(idx)).catch((err) => dispatch(pushToast(err.message || 'Could not save that change.')))}
           ><div className="dot" /></button>
         </div>
       ))}
@@ -155,13 +155,15 @@ function UsersTab() {
 
   const q = search.trim().toLowerCase();
   const filtered = (users || []).filter((u) => !q
-    || [u.name, u.email, u.role, u.channelScope, u.ticketRole].join(' ').toLowerCase().includes(q));
+    || [u.name, u.email, u.role, u.channelScope, ...(u.channels || []), u.ticketRole].join(' ').toLowerCase().includes(q));
 
   async function handleSave(values) {
     if (formUser) {
       const updated = await usersApi.update(formUser.id, values);
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-      dispatch(pushToast(`${updated.name} updated.`));
+      if (updated.emailLink === 'sent') dispatch(pushToast(`${updated.name} updated. A sign-in link was sent to ${updated.email}.`));
+      else if (updated.emailLink === 'failed') dispatch(pushToast(`${updated.name} updated, but the email to ${updated.email} couldn't be sent. Use the key icon to resend.`));
+      else dispatch(pushToast(`${updated.name} updated.`));
     } else {
       const created = await usersApi.create(values);
       setUsers((prev) => [...(prev || []), created]);
@@ -221,7 +223,7 @@ function UsersTab() {
                 <th scope="col">Email</th>
                 <th scope="col">Role</th>
                 <th scope="col">Inquiry Desk</th>
-                <th scope="col">Portal</th>
+                <th scope="col">Channels</th>
                 <th scope="col">Status</th>
                 {perm.manageUsers && <th scope="col" className="col-actions">Actions</th>}
               </tr>
@@ -244,7 +246,7 @@ function UsersTab() {
                     <td className="cell-muted">{u.email}</td>
                     <td><span className="role-chip">{u.role}</span></td>
                     <td>{u.ticketRole === 'ADMIN' ? 'Admin' : u.ticketRole === 'CHANNEL_LEAD' ? 'Channel Lead' : u.ticketRole === 'ASSIGNEE' ? 'Assignee' : 'No Access'}</td>
-                    <td>{u.channelScope === 'all' ? 'All Channels — HQ' : (CHANNEL_LABEL[u.channelScope] || u.channelScope)}</td>
+                    <td>{u.role === 'Admin' || u.channelScope === 'all' ? 'All Channels — HQ' : ((u.channels && u.channels.length ? u.channels : [u.channelScope]).map((c) => CHANNEL_LABEL[c] || c).join(', '))}</td>
                     <td><Badge tone={u.status === 'Active' ? 'green' : u.status === 'Invited' ? 'amber' : 'gray'}>{u.status}</Badge></td>
                     {perm.manageUsers && (
                       <td className="col-actions">
@@ -309,28 +311,92 @@ function RolesTab() {
   const roleMatrix = useSelector((s) => s.settings.roleMatrix);
   const roles = Object.keys(roleMatrix);
   return (
-    <div className="card">
-      <div className="table-scroll">
-        <table className="perm-table">
-          <thead><tr><th>Capability</th>{roles.map((r) => <th key={r}>{r}</th>)}</tr></thead>
-          <tbody>
-            {CAPS.map(([capKey, capLabel]) => (
-              <tr key={capKey}>
-                <td>{capLabel}</td>
-                {roles.map((r) => (
-                  <td key={r}>
-                    <button
-                      type="button"
-                      className={`check-toggle${roleMatrix[r][capKey] ? ' on' : ''}`}
-                      onClick={() => dispatch(togglePermission({ role: r, cap: capKey }))}
-                    >{roleMatrix[r][capKey] ? '✓' : ''}</button>
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <>
+      <div className="card">
+        <h3 style={{ margin: '0 0 4px' }}>Application roles</h3>
+        <p className="card-hint" style={{ margin: '0 0 12px' }}>
+          What each role can do in the app. Changes apply immediately, are checked by the server and are recorded in the audit log.
+        </p>
+        <div className="table-scroll">
+          <table className="perm-table">
+            <thead><tr><th>Capability</th>{roles.map((r) => <th key={r}>{r}</th>)}</tr></thead>
+            <tbody>
+              {CAPS.map(([capKey, capLabel]) => (
+                <tr key={capKey}>
+                  <td>{capLabel}</td>
+                  {roles.map((r) => (
+                    <td key={r}>
+                      <button
+                        type="button"
+                        className={`check-toggle${roleMatrix[r][capKey] ? ' on' : ''}`}
+                        disabled={r === 'Admin' && ADMIN_LOCKED.includes(capKey)}
+                        title={r === 'Admin' && ADMIN_LOCKED.includes(capKey) ? 'Admin always keeps this, so someone can always fix a mistake.' : undefined}
+                        onClick={() => dispatch(togglePermission({ role: r, cap: capKey }))
+                          .catch((err) => dispatch(pushToast(err.message || 'Could not save that change.')))}
+                      >{roleMatrix[r][capKey] ? '✓' : ''}</button>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
+      <TicketPermissionsCard />
+    </>
+  );
+}
+
+/** Read-only: what each Ticket Role may do in the Inquiry Desk. The table comes from the
+ *  server, generated from the same rules the ticket endpoints enforce. A user's ticket role
+ *  is set per person under Users; it is separate from their application role above. */
+function TicketPermissionsCard() {
+  const [matrix, setMatrix] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/v1/ticket-permissions')
+      .then((data) => {
+        if (cancelled) return;
+        if (Array.isArray(data?.roles) && Array.isArray(data?.rows)) setMatrix(data);
+        else setFailed(true);
+      })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3 style={{ margin: '0 0 4px' }}>Inquiry Desk ticket roles</h3>
+      <p className="card-hint" style={{ margin: '0 0 12px' }}>
+        Read-only. Set a person's ticket role under Users; it is separate from their application role. Channel Leads
+        only act on tickets in their authorized channels. Replying to the supplier and resolving are for the ticket's
+        assignee, so a Channel Lead or Admin must assign the ticket to themselves first.
+      </p>
+      {failed && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Couldn't load the ticket permissions.</p>}
+      {!matrix && !failed && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>}
+      {matrix && (
+        <div className="table-scroll">
+          <table className="perm-table">
+            <thead><tr><th>Action</th>{matrix.roles.map((r) => <th key={r}>{r}</th>)}</tr></thead>
+            <tbody>
+              {matrix.rows.map((row) => (
+                <tr key={row.action}>
+                  <td>{row.action}</td>
+                  {row.cells.map((cell, i) => (
+                    <td key={matrix.roles[i]} style={{ fontSize: 12.5 }}>
+                      {cell.text || (cell.ifAssigned ? null : <span style={{ color: '#CBD5E1' }}>-</span>)}
+                      {cell.ifAssigned && (
+                        <div style={{ color: 'var(--text-muted)' }}>{cell.text ? '+ ' : ''}{cell.ifAssigned} if assigned to them</div>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

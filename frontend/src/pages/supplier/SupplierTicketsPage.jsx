@@ -24,12 +24,6 @@ export default function SupplierTicketsPage() {
 
   return (
     <section className="ticket-desk">
-      <div className="ticket-page-head">
-        <div>
-          <h1 className="page-title">My Queries</h1>
-          <p className="page-sub">Track every query raised against your invoices and continue the conversation.</p>
-        </div>
-      </div>
       <div className="row ticket-stats supplier-stats">
         <StatCard tone="bad" icon={<Inbox />} label="Open" value={summary.open || 0} onClick={() => dispatch(setTicketFilterStatus('Open'))} active={statusFilter === 'Open'} />
         <StatCard tone="warn" icon={<Clock />} label="In Progress" value={summary.in_progress || 0} onClick={() => dispatch(setTicketFilterStatus('In Progress'))} active={statusFilter === 'In Progress'} />

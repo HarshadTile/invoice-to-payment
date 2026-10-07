@@ -3,7 +3,7 @@ import { setAuthFromServer, logout as logoutLocal } from '../auth/authSlice';
 import { hydrateTables } from '../tables/tablesSlice';
 import { hydrateSettings } from '../settings/settingsSlice';
 import { setRuntimeData } from '../../data/runtime';
-import { bumpData } from '../ui/uiSlice';
+import { bumpData, saveScope } from '../ui/uiSlice';
 import { invoiceApi } from '../../api/invoiceApi';
 import { AUTH_BYPASS } from '../auth/authSlice';
 import { ticketsApi } from '../tickets/ticketsApi';
@@ -84,4 +84,5 @@ export const logoutThunk = () => async (dispatch) => {
   api.clearToken();
   dispatch(ticketsApi.util.resetApiState());
   dispatch(logoutLocal());
+  saveScope({ fy: null, channel: '', vcode: '' }); // the next person starts with no top-bar scope
 };

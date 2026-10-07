@@ -2,7 +2,7 @@ import { useDispatch } from 'react-redux';
 import { runtime } from '../../data/runtime';
 import { CHANNEL_LABEL } from '../../data/constants';
 import { combinedStatusFor, currentHandlerFor, currentStageName, findInvoice } from '../../utils/businessLogic';
-import { openModal } from '../../features/ui/uiSlice';
+import { closeModal } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
 import Badge from '../common/Badge.jsx';
 
@@ -21,9 +21,7 @@ export default function SupplierInvoiceDetailModal({ ctx }) {
       title={inv.no}
       width={480}
       foot={(
-        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-          <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'raiseTicket', ctx: { no: inv.no, poItem: inv.poItem } }))}>✉ Raise a Query</button>
-        </div>
+        <button type="button" className="btn" onClick={() => dispatch(closeModal())}>Close</button>
       )}
     >
       <div style={{ textAlign: 'center', padding: '2px 0 16px' }}>

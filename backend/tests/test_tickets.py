@@ -400,3 +400,12 @@ def test_concurrent_ticket_numbers_are_unique():
     with ThreadPoolExecutor(max_workers=5) as pool:
         numbers = list(pool.map(create, range(5)))
     assert len(numbers) == len(set(numbers)) == 5
+
+
+def test_internal_users_cannot_raise_a_query_only_suppliers_can():
+    invoice_no, vendor_code = _invoice_for()
+    admin = _internal_headers("admin", "admin123", "all")
+    lead = _internal_headers("lead", "lead123", "msetuSrm")
+    assert _create_ticket(admin, invoice_no, key="staff-create-1").status_code == 403
+    assert _create_ticket(lead, invoice_no, key="staff-create-2").status_code == 403
+    assert _create_ticket(_supplier_headers(vendor_code), invoice_no, key="supplier-create-1").status_code == 201

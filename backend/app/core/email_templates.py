@@ -84,3 +84,33 @@ def invite_email(name: str, role: str, set_password_link: str, minutes: int) -> 
     intro = f"An account has been created for you on {BRAND} as {role}. Set a password to get started."
     footer = "If you weren't expecting this, you can ignore this email — the account will simply stay inactive."
     return _button_email(f"Welcome to {BRAND}", intro, "Set Your Password", set_password_link, name, minutes, footer)
+
+
+def email_changed_email(name: str, new_email: str) -> tuple[str, str]:
+    """(plain_text, html) sent to the OLD address when an admin moves an active account to a
+    new one — a heads-up for the person who may not know, with no link to act on."""
+    intro = f"The email address on your {BRAND} account was changed by an administrator to {new_email}."
+    footer = "Sign-in links and notifications now go to the new address. If you didn't expect this, contact your administrator."
+    text = f"Hello {name},\n\n{intro}\n\n{footer}\n\nRegards,\n{BRAND} Team"
+    html = f"""\
+<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background:#F4F4F2;font-family:Segoe UI,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F4F2;padding:32px 16px;">
+      <tr><td align="center">
+        <table role="presentation" width="480" cellpadding="0" cellspacing="0"
+               style="background:#ffffff;border-radius:10px;overflow:hidden;max-width:480px;width:100%;">
+          <tr><td style="background:{BRAND_RED};height:5px;"></td></tr>
+          <tr><td style="padding:32px;">
+            <h1 style="margin:0 0 20px;font-size:19px;color:#17181A;">Your account email was changed</h1>
+            <p style="margin:0 0 12px;font-size:14px;color:#3A3D42;line-height:1.55;">Hello {name},</p>
+            <p style="margin:0 0 16px;font-size:14px;color:#3A3D42;line-height:1.55;">{intro}</p>
+            <p style="margin:0 0 28px;font-size:13px;color:#6B6F76;">{footer}</p>
+            <p style="margin:0;font-size:13px;color:#6B6F76;">Regards,<br/>{BRAND} Team</p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>"""
+    return text, html

@@ -1,4 +1,4 @@
-from datetime import datetime
+from app.schemas.common import UTCDateTime
 from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
@@ -73,7 +73,7 @@ class TicketCommentResponse(BaseModel):
     author_role: str
     visibility: Visibility
     body: str
-    created_at: datetime
+    created_at: UTCDateTime
 
 
 class AssigneeResponse(BaseModel):
@@ -90,8 +90,8 @@ class InvoiceSummary(BaseModel):
 
 
 class SlaResponse(BaseModel):
-    response_due_at: datetime | None = None
-    reply_expected_by: datetime | None = None
+    response_due_at: UTCDateTime | None = None
+    reply_expected_by: UTCDateTime | None = None
     breached: bool = False
     overdue_minutes: int = 0
 
@@ -103,7 +103,7 @@ class AttachmentResponse(BaseModel):
     mime_type: str
     size_bytes: int
     visibility: Visibility
-    created_at: datetime
+    created_at: UTCDateTime
 
 
 class TicketResponse(BaseModel):
@@ -130,10 +130,10 @@ class TicketResponse(BaseModel):
     allowed_actions: list[str]
     comments: list[TicketCommentResponse] = []
     attachments: list[AttachmentResponse] = []
-    created_at: datetime
-    updated_at: datetime
-    resolved_at: datetime | None = None
-    closed_at: datetime | None = None
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
+    resolved_at: UTCDateTime | None = None
+    closed_at: UTCDateTime | None = None
 
 
 class TicketPage(BaseModel):
@@ -162,10 +162,35 @@ class TicketActivityResponse(BaseModel):
     event: str
     actor_id: int | None
     meta: dict[str, Any] | None = None
-    created_at: datetime
+    created_at: UTCDateTime
 
 
 class AssignableUserResponse(BaseModel):
     id: int
     name: str
     role: str
+
+
+class SupplierLogEntry(BaseModel):
+    id: int
+    ticket_id: str
+    ticket_no: str | None = None
+    invoice_no: str | None = None
+    subject: str | None = None
+    event: str
+    status: str
+    created_at: UTCDateTime
+
+
+class StaffLogEntry(BaseModel):
+    id: int
+    ticket_id: str
+    ticket_no: str | None = None
+    invoice_no: str | None = None
+    vendor_code: str | None = None
+    channel: str | None = None
+    subject: str | None = None
+    event: str
+    detail: str = ""
+    performed_by: str
+    created_at: UTCDateTime

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.auth import get_current_user
 from app.core.database import get_db
+from app.schemas.common import UTCDateTime
 from app.models.ticket import Ticket
 from app.models.ticket_activity import Notification, SlaPolicy
 from app.services.notification_service import recipient_filter
@@ -22,8 +23,8 @@ class NotificationOut(BaseModel):
     payload: dict[str, Any] | None
     ticket_no: str | None = None
     subject: str | None = None
-    read_at: datetime | None
-    created_at: datetime
+    read_at: UTCDateTime | None
+    created_at: UTCDateTime
 
 
 def _scoped_notifications(db: Session, user: dict):

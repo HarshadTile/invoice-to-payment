@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.core.email import send_email
-from app.core.email_templates import invite_email, password_reset_email
+from app.core.email_templates import email_changed_email, invite_email, password_reset_email
 from app.models.user import PasswordResetToken, User
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
@@ -49,3 +49,9 @@ def issue_invite(db: Session, user: User) -> None:
     link = f"{FRONTEND_URL}/reset-password?token={token}"
     text, html = invite_email(user.name, user.role, link, INVITE_TOKEN_LIFETIME_MINUTES)
     send_email(to=user.email, subject="You've been added to Invoice to Payment Tracker", text=text, html=html)
+
+
+def notify_email_changed(user: User, old_email: str) -> None:
+    """Heads-up to the address an account just moved away from."""
+    text, html = email_changed_email(user.name, user.email)
+    send_email(to=old_email, subject="Your Invoice to Payment Tracker email was changed", text=text, html=html)
