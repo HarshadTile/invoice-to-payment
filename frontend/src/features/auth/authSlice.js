@@ -17,7 +17,7 @@ const initialState = {
   loggedIn: AUTH_BYPASS,
   authType: 'internal', // 'internal' | 'supplier'
   channelScope: 'all', // 'all' | 'msetuSrm' | 'poPortal' | 'mfoxPortal'
-  role: 'Admin', // 'Admin' | 'MDE Invoice Team'
+  role: 'Admin', // 'Admin' | 'Invoice Team'
   supplierQuery: null,
   supplierPAN: null,
   supplierLoginVcode: null,
@@ -49,7 +49,7 @@ const authSlice = createSlice({
       } else {
         state.authType = 'internal';
         state.channelScope = CHANNEL_KEYS.has(val) ? val : 'all';
-        state.role = state.channelScope === 'all' ? 'Admin' : 'MDE Invoice Team';
+        state.role = state.channelScope === 'all' ? 'Admin' : 'Invoice Team';
         state.supplierQuery = null;
         state.supplierPAN = null;
         state.supplierLoginVcode = null;
@@ -78,8 +78,12 @@ export const { switchIdentity, logout, setAuthFromServer } = authSlice.actions;
 export default authSlice.reducer;
 
 /* ---- selectors ---- */
+// What the signed-in role may do, from the saved matrix (Settings > Roles & Permissions, loaded
+// with the workspace) so edits there take effect in the UI; the built-in defaults are only the
+// fallback before it loads. The server enforces the same matrix on every protected endpoint.
 export const selectPerm = (state) => {
-  return ROLE_MATRIX[state.auth.role] || ROLE_MATRIX.Viewer || {};
+  const { role } = state.auth;
+  return state.settings?.roleMatrix?.[role] || ROLE_MATRIX[role] || ROLE_MATRIX.Viewer || {};
 };
 
 /** Is the current login locked to a single channel? */

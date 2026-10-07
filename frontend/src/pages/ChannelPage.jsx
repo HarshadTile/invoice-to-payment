@@ -3,10 +3,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { CHANNELS, VIEW_COLUMNS, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
-import { selectScopedInvoices } from '../features/invoices/selectors';
+import { selectFilteredInvoicesAnyChannel } from '../features/invoices/selectors';
 import { channelViewRows } from '../utils/businessLogic';
 import { setChannelViewTab, setChannelQueryViewMode, openModal, setPageFilters } from '../features/ui/uiSlice';
-import { setRows, selectTable } from '../features/tables/tablesSlice';
+import { setRowsLocal, selectTable } from '../features/tables/tablesSlice';
 import { selectPerm } from '../features/auth/authSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
@@ -81,7 +81,8 @@ export default function ChannelPage() {
   const { key } = useParams();
   const dispatch = useDispatch();
   const channel = CHANNELS.find((c) => c.key === key);
-  const scopedInvoices = useSelector(selectScopedInvoices);
+  // top-bar fiscal year / vendor apply; the channel is this page's own
+  const scopedInvoices = useSelector(selectFilteredInvoicesAnyChannel);
   const savedViewTab = useSelector((s) => s.ui.channelViewTab[key]);
   const perm = useSelector(selectPerm);
   const channelInvoices = scopedInvoices.filter((i) => i.channel === key);
@@ -93,7 +94,6 @@ export default function ChannelPage() {
 
   return (
     <>
-      <h1 className="page-title">{channel.label}</h1>
       <div className="sheet-carousel" style={{ margin: '4px 0 16px' }}>
         <div className="car-track">
           {channel.views.map((v) => (
@@ -235,7 +235,8 @@ function ChannelSubView({ channelKey, view, channelInvoices, canImportExport }) 
   const cols = VIEW_COLUMNS[view];
 
   useEffect(() => {
-    if (!rows.length) dispatch(setRows({ key: tableKey, rows: channelViewRows(channelKey, view, channelInvoices) }));
+    // Derived from the invoice data on screen: kept in memory only, never written to the server.
+    if (!rows.length) dispatch(setRowsLocal({ key: tableKey, rows: channelViewRows(channelKey, view, channelInvoices) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableKey]);
 

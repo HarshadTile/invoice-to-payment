@@ -1,13 +1,12 @@
 import { useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useSearchParams } from 'react-router-dom';
 import { setInquiryViewMode, setTicketFilterStatus } from '../features/ui/uiSlice';
 import { useGetTicketBoardQuery, useGetTicketsQuery, useGetTicketSummaryQuery } from '../features/tickets/ticketsApi';
 import StatCard from '../components/common/StatCard.jsx';
 import TicketTable from '../components/tickets/TicketTable.jsx';
 import TicketBoard from '../components/tickets/TicketBoard.jsx';
 import { CheckCircle, Clock, Columns, Inbox, List } from '../components/common/icons.jsx';
-import { getFiscalYear } from '../utils/businessLogic.js';
+import { useScope } from '../features/ui/scope';
 
 const FILTER_STATUS = {
   Open: ['OPEN'],
@@ -17,14 +16,14 @@ const FILTER_STATUS = {
 
 export default function InquiryDeskPage() {
   const dispatch = useDispatch();
-  const [searchParams] = useSearchParams();
+  const scope = useScope();
   const view = useSelector((state) => state.ui.inquiryViewMode === 'board' ? 'board' : 'list');
   const statusFilter = useSelector((state) => state.ui.ticketFilterStatus);
   const filters = useMemo(() => ({
-    channel: searchParams.get('channel') || undefined,
-    fy: searchParams.get('fy') || getFiscalYear(new Date().toISOString()),
-    vendor_code: searchParams.get('vcode') || undefined,
-  }), [searchParams]);
+    channel: scope.channel || undefined,
+    fy: scope.fy,
+    vendor_code: scope.vcode || undefined,
+  }), [scope.channel, scope.fy, scope.vcode]);
 
   const liveQueryOptions = { pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnMountOrArgChange: true };
   const { data: page, isLoading } = useGetTicketsQuery(
@@ -43,11 +42,7 @@ export default function InquiryDeskPage() {
 
   return (
     <section className="ticket-desk">
-      <div className="ticket-page-head">
-        <div>
-          <h1 className="page-title">Inquiry Desk</h1>
-          <p className="page-sub">Invoice-linked supplier queries across your authorized workspace.</p>
-        </div>
+      <div className="ticket-page-head" style={{ justifyContent: 'flex-end' }}>
         <div className="view-switch" role="group" aria-label="Query view">
           <button type="button" className={view === 'list' ? 'active' : ''} onClick={() => dispatch(setInquiryViewMode('list'))} title="List view"><List /> <span>List</span></button>
           <button type="button" className={view === 'board' ? 'active' : ''} onClick={() => dispatch(setInquiryViewMode('board'))} title="Board view"><Columns /> <span>Board</span></button>

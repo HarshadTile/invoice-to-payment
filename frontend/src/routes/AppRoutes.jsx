@@ -58,9 +58,13 @@ export default function AppRoutes() {
               <Route path="/app/settings/integrations" element={<SettingsPage />} />
               <Route path="/app/settings/notifications" element={<SettingsPage />} />
             </Route>
-            <Route path="/app/settings/auditLogs" element={<SettingsPage />} />
+            <Route element={<RequireCapability cap="viewAuditLog" />}>
+              <Route path="/app/settings/auditLogs" element={<SettingsPage />} />
+            </Route>
             <Route element={<RequireCapability cap="manageUsers" />}>
               <Route path="/app/settings/users" element={<SettingsPage />} />
+            </Route>
+            <Route element={<RequireCapability cap="manageRoles" />}>
               <Route path="/app/settings/roles" element={<SettingsPage />} />
             </Route>
             <Route path="/app/settings" element={<SettingsIndexRedirect />} />

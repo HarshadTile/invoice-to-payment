@@ -11,6 +11,13 @@ import { Mail, Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
 const PAGE_SIZE = 10;
 const EMPTY_SELECTION = Object.freeze([]);
 
+// Pinned columns are given an exact width: the next pinned column's `left` offset is the sum of
+// the widths before it, so a column that grew or shrank with its content left a gap or an
+// overlap and let the columns scrolling underneath show through.
+const CHECK_COL_W = 34;
+const INVOICE_COL_W = 150;
+const fixedWidth = (w) => ({ width: w, minWidth: w, maxWidth: w, boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis' });
+
 // Shared sticky-left style for the first two data columns
 const stickyCell = (left, isHead = false) => ({
   position: 'sticky',
@@ -143,7 +150,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
           <thead>
             <tr>
               {bulk && (
-                <th scope="col" style={{ width: 34, ...stickyCell(0, true) }}>
+                <th scope="col" style={{ ...fixedWidth(CHECK_COL_W), ...stickyCell(0, true) }}>
                   <input
                     type="checkbox"
                     aria-label="Select all rows on this page"
@@ -154,9 +161,9 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               )}
 
               {/* Sticky: Invoice No */}
-              <th scope="col" style={{ width: 120, ...stickyCell(bulk ? 34 : 0, true) }}>Invoice No</th>
+              <th scope="col" style={{ ...fixedWidth(INVOICE_COL_W), ...stickyCell(bulk ? CHECK_COL_W : 0, true) }}>Invoice No</th>
               {/* Sticky: Vendor */}
-              {!supplierView && <th scope="col" style={stickyCell((bulk ? 34 : 0) + 120, true)}>Vendor</th>}
+              {!supplierView && <th scope="col" style={{ ...stickyCell((bulk ? CHECK_COL_W : 0) + INVOICE_COL_W, true), minWidth: 140 }}>Vendor</th>}
 
               {!supplierView && <th scope="col">Vendor Code</th>}
               <th scope="col">Channel</th>
@@ -188,7 +195,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               return (
                 <tr key={`${inv.no}-${rowIndex}`}>
                   {bulk && (
-                    <td style={stickyCell(0)}>
+                    <td style={{ ...fixedWidth(CHECK_COL_W), ...stickyCell(0) }}>
                       <input type="checkbox" aria-label={`Select invoice ${inv.no}`}
                         checked={selected.includes(inv.no)}
                         onChange={() => dispatch(toggleSelectRow({ key: tableKey, no: inv.no }))} />
@@ -196,7 +203,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
                   )}
 
                   {/* Sticky: Invoice No */}
-                  <td style={stickyCell(bulk ? 34 : 0)}>
+                  <td style={{ ...fixedWidth(INVOICE_COL_W), ...stickyCell(bulk ? CHECK_COL_W : 0) }}>
                     <button type="button" className="link-hero" title={rowTitle} onClick={() => openInvoice(inv.no, inv.poItem)}>
                       {inv.no}
                     </button>
@@ -204,7 +211,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
 
                   {/* Sticky: Vendor */}
                   {!supplierView && (
-                    <td style={{ ...stickyCell((bulk ? 34 : 0) + 120), whiteSpace: 'normal', minWidth: 140, maxWidth: 200 }}>
+                    <td style={{ ...stickyCell((bulk ? CHECK_COL_W : 0) + INVOICE_COL_W), whiteSpace: 'normal', minWidth: 140, maxWidth: 200 }}>
                       {inv.vendor}
                     </td>
                   )}
@@ -240,12 +247,14 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
                           onClick={() => openNotify(inv.no, inv.poItem)}
                         ><Mail /></button>
                       )}
-                      <button
-                        type="button" className="kebab"
-                        title="Raise a query on this invoice"
-                        aria-label={`Raise query for invoice ${inv.no}`}
-                        onClick={() => openRaiseTicket(inv.no, inv.poItem)}
-                      ><Flag /></button>
+                      {isSupplierUser && (
+                        <button
+                          type="button" className="kebab"
+                          title="Raise a query on this invoice"
+                          aria-label={`Raise query for invoice ${inv.no}`}
+                          onClick={() => openRaiseTicket(inv.no, inv.poItem)}
+                        ><Flag /></button>
+                      )}
                       <button
                         type="button" className="kebab"
                         title={rowTitle}

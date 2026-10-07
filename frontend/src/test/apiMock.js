@@ -60,7 +60,7 @@ function authFor(form) {
   const channelScope = form.channelScope || 'all';
   return {
     authType: 'internal', channelScope,
-    role: channelScope === 'all' ? 'Admin' : 'MDE Invoice Team',
+    role: channelScope === 'all' ? 'Admin' : 'Invoice Team',
     supplierQuery: null, supplierPAN: null, supplierLoginVcode: null,
     currentUser: internalUser(String(form.username || '').trim().toLowerCase()),
   };
@@ -71,7 +71,7 @@ export function installApiMock() {
   let persistedTickets = JSON.parse(JSON.stringify(INITIAL_TICKETS));
   let persistedUsers = [
     { id: 1, username: 'admin', name: 'Administrator', email: 'admin@company.com', role: 'Admin', status: 'Active', channelScope: 'all', ticketRole: 'ADMIN', channels: [] },
-    { id: 2, username: 'priya', name: 'Priya Deshmukh', email: 'p.deshmukh@company.com', role: 'MDE Invoice Team', status: 'Active', channelScope: 'msetuSrm', ticketRole: 'ASSIGNEE', channels: ['msetuSrm'] },
+    { id: 2, username: 'priya', name: 'Priya Deshmukh', email: 'p.deshmukh@company.com', role: 'Invoice Team', status: 'Active', channelScope: 'msetuSrm', ticketRole: 'ASSIGNEE', channels: ['msetuSrm'] },
   ];
   const statusCode = (value) => String(value || 'OPEN').toUpperCase().replaceAll(' ', '_');
   const normalizeTicket = (ticket) => {
@@ -144,6 +144,8 @@ export function installApiMock() {
     if (path === '/v1/auth/me') throw Object.assign(new Error('no session'), { status: 401 });
     if (path === '/v1/users/') return persistedUsers;
     if (path.startsWith('/tables/')) return TABLE_SEED[path.slice('/tables/'.length)] || [];
+    if (path === '/v1/tickets/activity-log') return [];
+    if (path === '/v1/ticket-permissions') return { roles: ['Admin', 'Channel Lead', 'Assignee', 'Supplier'], rows: [{ action: 'View ticket', cells: [{ text: 'Always', ifAssigned: '' }, { text: 'Always', ifAssigned: '' }, { text: '', ifAssigned: 'Always' }, { text: 'Always', ifAssigned: '' }] }] };
     if (path === '/settings') return bootstrap().settings;
     if (path.startsWith('/v1/notifications')) return [];
     if (path.startsWith('/v1/tickets/summary')) {
@@ -198,7 +200,8 @@ export function installApiMock() {
         id: Math.max(...persistedUsers.map((item) => item.id), 0) + 1,
         status: 'Invited',
         ticketRole: body.role === 'Admin' ? 'ADMIN' : (body.ticketRole || 'NO_ACCESS'),
-        channels: body.channelScope === 'all' ? [] : [body.channelScope],
+        username: body.username || String(body.email).split('@')[0],
+        channels: body.channels || [],
         ...body,
       };
       persistedUsers = [...persistedUsers, created];

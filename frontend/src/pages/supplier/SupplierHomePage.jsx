@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { getFiscalYear } from '../../utils/businessLogic';
+import { useScope } from '../../features/ui/scope';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
 import { setSearch } from '../../features/ui/uiSlice';
 import InvoiceTable from '../../components/invoices/InvoiceTable.jsx';
@@ -18,7 +19,8 @@ export default function SupplierHomePage() {
 
   // Filters live in the URL so they survive opening an invoice and coming back
   // Default window is the last 90 days; once a financial year is picked in the top bar, that year sets the scope instead
-  const fyChosen = searchParams.has('fy');
+  const scope = useScope();
+  const fyChosen = scope.fyChosen;
   const range = fyChosen ? { from: '', to: '' } : defaultInvoiceRange();
   const status = searchParams.get('status') || '';
   const dateFrom = searchParams.has('date_from') ? searchParams.get('date_from') : range.from;
@@ -28,7 +30,7 @@ export default function SupplierHomePage() {
   const invoiceSearch = searchParams.get('invoice_number') || '';
   const poSearch = searchParams.get('po_number') || '';
   const poItemSearch = searchParams.get('po_item') || '';
-  const fySearch = searchParams.get('fy') || getFiscalYear(new Date().toISOString());
+  const fySearch = scope.fy;
 
   const update = (changes, { replace = true } = {}) => {
     const next = new URLSearchParams(searchParams);

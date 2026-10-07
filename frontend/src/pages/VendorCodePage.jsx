@@ -3,7 +3,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
 import { supplierForVendorCode, panFor, vendorCodesFor, posForVendorCode, getInvoiceHistory } from '../utils/businessLogic';
-import { selectScopedInvoices } from '../features/invoices/selectors';
+import { selectFilteredInvoicesAnyVendor } from '../features/invoices/selectors';
+import { totalsByCurrency } from '../utils/amounts';
 import { setVcodeViewTab, openModal } from '../features/ui/uiSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
@@ -52,7 +53,8 @@ export default function VendorCodePage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { authType, channelScope } = useSelector((s) => s.auth);
-  const scoped = useSelector(selectScopedInvoices);
+  // top-bar fiscal year / channel apply; the vendor code is this page's own
+  const scoped = useSelector(selectFilteredInvoicesAnyVendor);
   const savedTab = useSelector((s) => s.ui.vcodeViewTab[code]);
   const { data: ticketPage } = useGetTicketsQuery({ vendor_code: code, page_size: 100 });
   const openIssues = (ticketPage?.items || []).filter((t) => ['OPEN', 'IN_PROGRESS'].includes(t.status)).length;
@@ -67,8 +69,7 @@ export default function VendorCodePage() {
   const paid = invoices.filter((i) => i.status === 'Paid').length;
   const due = invoices.filter((i) => i.status === 'Payment Due').length;
   const inProgress = invoices.length - paid - due - invoices.filter((i) => i.status === 'Rejected' || i.status === 'Deleted').length;
-  const byCurrency = {};
-  invoices.forEach((i) => { const cur = i.amount[0]; byCurrency[cur] = (byCurrency[cur] || 0) + parseFloat(i.amount.slice(1).replace(/,/g, '')); });
+  const byCurrency = totalsByCurrency(invoices);
 
   const activeView = savedTab && VCODE_VIEWS.includes(savedTab) ? savedTab : VCODE_VIEWS[0];
   const isSupplier = authType === 'supplier';
@@ -76,15 +77,11 @@ export default function VendorCodePage() {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--text-muted)', fontWeight: 700 }}>Vendor Code</div>
-          <h1 className="page-title mono" style={{ marginTop: 2 }}>{code}</h1>
-        </div>
-        {canOpenFullVisibility && (
+      {canOpenFullVisibility && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
           <button type="button" className="btn" onClick={() => navigate('/app/supplier-visibility')}>Open full Supplier Visibility →</button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="row">
@@ -125,9 +122,6 @@ export default function VendorCodePage() {
 
       {activeView === 'Invoice Log' ? (
         <>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '-4px 0 14px' }}>
-            {code}'s own invoices: one vendor code, several purchase orders ({poCount}), each kept as its own record with its own Invoice No, PO No, Channel, Status, Current Stage, Handled By and UTR. Search below covers only this code.
-          </p>
           {invoiceFilterBar}
           <div className="card"><InvoiceTable invoices={filteredInvoices} tableKey={`vendorCodePage-${code}`} mode="supplierSafe" /></div>
         </>
