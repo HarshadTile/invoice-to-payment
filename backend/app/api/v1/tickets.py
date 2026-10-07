@@ -11,6 +11,8 @@ from app.repositories import ticket_repository
 from app.schemas.ticket import (
     AssignableUserResponse,
     AttachmentResponse,
+    StaffLogEntry,
+    SupplierLogEntry,
     TicketActivityResponse,
     TicketAssignRequest,
     TicketBoardResponse,
@@ -121,6 +123,16 @@ def get_assignable_users(
     db: Session = Depends(get_db),
 ):
     return ticket_service.assignable_users(db, user, channel)
+
+
+@router.get("/activity-log", response_model=list[StaffLogEntry])
+def get_activity_log(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    return ticket_service.staff_activity_log(db, user)
+
+
+@router.get("/supplier-log", response_model=list[SupplierLogEntry])
+def get_supplier_log(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    return ticket_service.supplier_query_log(db, user)
 
 
 @router.get("/{ticket_id}", response_model=TicketResponse)
