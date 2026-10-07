@@ -77,7 +77,7 @@ def clean_ticket_database():
         password_hash=get_password_hash("lead123"),
         name="Channel Lead",
         email="lead@example.com",
-        role="MDE Invoice Team",
+        role="Invoice Team",
         ticket_role="CHANNEL_LEAD",
         dept="AP",
         title="Lead",

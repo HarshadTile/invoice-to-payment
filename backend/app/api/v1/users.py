@@ -1,3 +1,5 @@
+import logging
+import re
 import secrets
 from typing import Optional
 
@@ -8,61 +10,31 @@ from sqlalchemy.orm import Session
 from app.api.v1.auth import get_current_user_token
 from app.core.audit import write_audit
 from app.core.database import get_db
-from app.core.password_reset import issue_invite, issue_password_reset
+from app.core.permissions import require_capability, require_internal_user
+from app.core.password_reset import issue_invite, issue_password_reset, notify_email_changed
 from app.core.security import get_password_hash
-from app.models.settings import AppSettings
 from app.models.user import PasswordResetToken, User, UserChannelAccess
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-VALID_ROLES = ["Admin", "MDE Invoice Team", "Approver", "Accounts", "Viewer"]
+VALID_ROLES = ["Admin", "Invoice Team", "Approver", "Accounts", "Viewer"]
 VALID_STATUSES = ["Active", "Inactive", "Invited"]
 CHANNEL_SCOPES = ["all", "msetuSrm", "poPortal", "mfoxPortal"]
 TICKET_ROLES = ["CHANNEL_LEAD", "ASSIGNEE", "NO_ACCESS"]
+# Channels a non-admin can be authorized for. "all" is Admin-only and never stored as a membership.
+SPECIFIC_CHANNELS = [c for c in CHANNEL_SCOPES if c != "all"]
 
-DEFAULT_ROLE_MATRIX = {
-    "Admin": {"importExport": True, "editRows": True, "createTrace": True, "manageUsers": True, "manageConfig": True},
-    "MDE Invoice Team": {"importExport": True, "editRows": True, "createTrace": True, "manageUsers": False, "manageConfig": False},
-    "Approver": {"importExport": False, "editRows": False, "createTrace": True, "manageUsers": False, "manageConfig": False},
-    "Accounts": {"importExport": False, "editRows": True, "createTrace": True, "manageUsers": False, "manageConfig": False},
-    "Viewer": {"importExport": False, "editRows": False, "createTrace": True, "manageUsers": False, "manageConfig": False},
-}
-
-
-def require_internal_user(
-    payload: dict = Depends(get_current_user_token),
-    db: Session = Depends(get_db),
-) -> User:
-    if payload.get("auth_type") != "internal":
-        raise HTTPException(status_code=403, detail="Internal users only.")
-    try:
-        user_id = int(payload.get("sub"))
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid session.")
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid session.")
-    if user.status != "Active":
-        raise HTTPException(status_code=403, detail="This account has been deactivated.")
-    return user
-
-
-def require_manage_users(
-    current: User = Depends(require_internal_user),
-    db: Session = Depends(get_db),
-) -> User:
-    settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
-    role_matrix = (settings.role_matrix_json if settings else None) or DEFAULT_ROLE_MATRIX
-    if not bool(role_matrix.get(current.role, {}).get("manageUsers")):
-        raise HTTPException(status_code=403, detail="You don't have permission to manage users.")
-    return current
+require_manage_users = require_capability("manageUsers", "You don't have permission to manage users.")
 
 
 def _effective_ticket_role(role: str, ticket_role: Optional[str]) -> str:
     if role == "Admin":
         return "ADMIN"
     if ticket_role is None:
-        return "ASSIGNEE" if role == "MDE Invoice Team" else "NO_ACCESS"
+        # Application role says nothing about tickets: nobody becomes an assignee or lead
+        # unless an admin grants it explicitly.
+        return "NO_ACCESS"
     value = ticket_role.upper()
     if value not in TICKET_ROLES:
         raise HTTPException(
@@ -88,18 +60,19 @@ def _serialize(user: User) -> dict:
     }
 
 
-def _sync_ticket_channels(user: User, channel_scope: str):
+def _sync_ticket_channels(user: User, channels: list[str]):
     user.ticket_channels.clear()
-    if channel_scope != "all":
-        user.ticket_channels.append(UserChannelAccess(channel=channel_scope))
+    for channel in channels:
+        user.ticket_channels.append(UserChannelAccess(channel=channel))
 
 
 class UserCreate(BaseModel):
-    username: str
+    username: Optional[str] = None  # optional: defaults to the email's local part
     name: str
     email: EmailStr
     role: str
-    channelScope: str
+    channelScope: Optional[str] = None  # legacy single-channel form of `channels`
+    channels: Optional[list[str]] = None
     dept: Optional[str] = ""
     title: Optional[str] = ""
     ticketRole: Optional[str] = None
@@ -112,8 +85,31 @@ class UserUpdate(BaseModel):
     dept: Optional[str] = None
     role: Optional[str] = None
     status: Optional[str] = None
-    channelScope: Optional[str] = None
+    channelScope: Optional[str] = None  # legacy single-channel form of `channels`
+    channels: Optional[list[str]] = None
     ticketRole: Optional[str] = None
+
+
+def _ensure_another_active_admin(db: Session, user: User):
+    """Block any change that would leave no active Admin able to manage users and settings."""
+    others = db.query(User).filter(
+        User.role == "Admin", User.status == "Active", User.id != user.id,
+    ).count()
+    if others == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="This is the only active Admin. Make another user an active Admin first.",
+        )
+
+
+def _username_from_email(db: Session, email: str) -> str:
+    """A unique login name derived from the email, for accounts created without one. People
+    sign in with their email, so the username is just an internal identifier."""
+    base = re.sub(r"[^a-z0-9._-]", "", email.split("@")[0].lower()) or "user"
+    candidate, suffix = base, 2
+    while db.query(User).filter(User.username == candidate).first():
+        candidate, suffix = f"{base}{suffix}", suffix + 1
+    return candidate
 
 
 def _validate_role(role: Optional[str]):
@@ -126,15 +122,26 @@ def _validate_status(status: Optional[str]):
         raise HTTPException(status_code=400, detail=f"Unknown status. Use one of: {', '.join(VALID_STATUSES)}")
 
 
-def _resolve_channel_scope(role: str, channel_scope: Optional[str]) -> str:
+def _resolve_channels(role: str, requested: Optional[list[str]]) -> list[str]:
+    """The channels an account is authorized for. Admin always has every channel (stored as
+    scope "all", no per-channel rows); anyone else needs at least one specific channel."""
     if role == "Admin":
-        return "all"
-    if channel_scope not in CHANNEL_SCOPES or channel_scope == "all":
+        return []
+    picked = list(dict.fromkeys(requested or []))
+    if not picked or any(c not in SPECIFIC_CHANNELS for c in picked):
         raise HTTPException(
             status_code=400,
-            detail="Assign one specific portal (Msetu / SRM, PO Portal or MFOX Portal) for this role.",
+            detail="Pick at least one authorized channel (Msetu / SRM, PO Portal or MFOX Portal) for this role.",
         )
-    return channel_scope
+    return picked
+
+
+def _primary_scope(role: str, channels: list[str], current: Optional[str] = None) -> str:
+    """The single channel_scope kept on the account: "all" for Admin, otherwise the current
+    one if it's still authorized, else the first authorized channel."""
+    if role == "Admin":
+        return "all"
+    return current if current in channels else channels[0]
 
 
 @router.get("/")
@@ -149,16 +156,21 @@ def create_user(
     actor: User = Depends(require_manage_users),
 ):
     _validate_role(user_in.role)
+    username = (user_in.username or "").strip().lower() or _username_from_email(db, user_in.email)
     existing = db.query(User).filter(
-        (User.username == user_in.username) | (User.email == user_in.email)
+        (User.username == username) | (User.email == user_in.email)
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="Username or email already exists.")
 
-    channel_scope = _resolve_channel_scope(user_in.role, user_in.channelScope)
+    requested = user_in.channels if user_in.channels is not None else (
+        [user_in.channelScope] if user_in.channelScope else []
+    )
+    channels = _resolve_channels(user_in.role, requested)
+    channel_scope = _primary_scope(user_in.role, channels)
     ticket_role = _effective_ticket_role(user_in.role, user_in.ticketRole)
     new_user = User(
-        username=user_in.username,
+        username=username,
         password_hash=get_password_hash(secrets.token_urlsafe(32)),
         name=user_in.name,
         email=user_in.email,
@@ -169,7 +181,7 @@ def create_user(
         title=user_in.title or "",
         status="Invited",
     )
-    _sync_ticket_channels(new_user, channel_scope)
+    _sync_ticket_channels(new_user, channels)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -178,7 +190,8 @@ def create_user(
         db,
         actor,
         "Invited user",
-        f"{new_user.name} ({new_user.username}), role {new_user.role}, portal {channel_scope}",
+        f"{new_user.name} ({new_user.username}), role {new_user.role}, "
+        f"channels {', '.join(channels) if channels else 'all'}, ticket role {ticket_role}",
     )
     return _serialize(new_user)
 
@@ -201,10 +214,20 @@ def update_user(
             raise HTTPException(status_code=400, detail="That email is already in use.")
 
     effective_role = patch.role if patch.role is not None else user.role
-    requested_scope = patch.channelScope if patch.channelScope is not None else user.channel_scope
+    effective_status = patch.status if patch.status is not None else user.status
+    if user.role == "Admin" and user.status == "Active" and (effective_role != "Admin" or effective_status != "Active"):
+        _ensure_another_active_admin(db, user)
     if patch.channelScope is not None and patch.channelScope not in CHANNEL_SCOPES:
         raise HTTPException(status_code=400, detail=f"Unknown portal. Use one of: {', '.join(CHANNEL_SCOPES)}")
-    channel_scope = _resolve_channel_scope(effective_role, requested_scope)
+    current_channels = sorted(m.channel for m in user.ticket_channels)
+    if patch.channels is not None:
+        requested = patch.channels
+    elif patch.channelScope is not None:
+        requested = [patch.channelScope]
+    else:
+        requested = current_channels or ([user.channel_scope] if user.channel_scope != "all" else [])
+    channels = _resolve_channels(effective_role, requested)
+    channel_scope = _primary_scope(effective_role, channels, user.channel_scope)
     stored_ticket_role = user.ticket_role
     if user.role == "Admin" and effective_role != "Admin" and patch.ticketRole is None:
         stored_ticket_role = None
@@ -213,16 +236,17 @@ def update_user(
         patch.ticketRole if patch.ticketRole is not None else stored_ticket_role,
     )
 
+    old_email = user.email
     changes = []
     for field in ("name", "email", "title", "dept", "role", "status"):
         value = getattr(patch, field)
         if value is not None and value != getattr(user, field):
             changes.append(f"{field} -> {value}")
             setattr(user, field, value)
-    if channel_scope != user.channel_scope:
-        changes.append(f"portal -> {channel_scope}")
+    if channel_scope != user.channel_scope or sorted(channels) != current_channels:
+        changes.append(f"channels -> {', '.join(channels) if channels else 'all'}")
         user.channel_scope = channel_scope
-        _sync_ticket_channels(user, channel_scope)
+        _sync_ticket_channels(user, channels)
     if ticket_role != user.ticket_role:
         changes.append(f"ticket role -> {ticket_role}")
         user.ticket_role = ticket_role
@@ -231,7 +255,41 @@ def update_user(
     db.refresh(user)
     if changes:
         write_audit(db, actor, "Updated user", f"{user.name} ({user.username}): {', '.join(changes)}")
-    return _serialize(user)
+    result = _serialize(user)
+    if user.email != old_email:
+        # "sent" / "failed" / None (nothing to send, e.g. an Inactive account) — lets the UI
+        # tell the admin whether the new address actually got a link.
+        result["emailLink"] = _handle_email_change(db, user, old_email)
+    return result
+
+
+def _handle_email_change(db: Session, user: User, old_email: str) -> Optional[str]:
+    """A link already emailed to the old address must not keep working once the account
+    moves to a new one, and the new address should immediately get a working link — which
+    also proves it's a real inbox. Never fails the edit itself: the new email is already
+    saved, and an admin can resend from the key icon if the mail doesn't go out. An Active
+    account's old address also gets a heads-up that it moved."""
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.id, PasswordResetToken.used == False,  # noqa: E712
+    ).update({"used": True})
+    db.commit()
+    if user.status not in ("Invited", "Active"):
+        return None
+    try:
+        if user.status == "Invited":
+            issue_invite(db, user)
+        else:
+            issue_password_reset(db, user, admin_initiated=True)
+        outcome = "sent"
+    except Exception:  # noqa: BLE001 — SMTP can fail in many ways; see docstring
+        logger.exception("Couldn't email a link to the new address for user %s", user.username)
+        outcome = "failed"
+    if user.status == "Active":
+        try:
+            notify_email_changed(user, old_email)
+        except Exception:  # noqa: BLE001
+            logger.exception("Couldn't notify the old address for user %s", user.username)
+    return outcome
 
 
 @router.post("/{user_id}/reset-password")
@@ -263,6 +321,8 @@ def delete_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
+    if user.role == "Admin" and user.status == "Active":
+        _ensure_another_active_admin(db, user)
     name, username = user.name, user.username
     db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user_id).delete()
     db.delete(user)

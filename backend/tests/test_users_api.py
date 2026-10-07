@@ -395,3 +395,166 @@ def test_deleting_a_user_also_removes_their_reset_tokens():
     db = SessionLocal()
     assert db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user_id).count() == 0
     db.close()
+
+
+def test_changing_an_email_revokes_old_links_and_sends_a_fresh_one_to_the_new_address(no_real_email):
+    _cleanup("temp_user_email_1")
+    created = as_admin.post("/api/v1/users/", json={
+        "username": "temp_user_email_1", "name": "Email One", "email": "old1@example.com",
+        "role": "Viewer", "channelScope": "msetuSrm",
+    })
+    user_id = created.json()["id"]
+    old_token = _latest_token(user_id)
+    no_real_email.clear()
+
+    updated = as_admin.patch(f"/api/v1/users/{user_id}", json={"email": "new1@example.com"})
+    assert updated.status_code == 200
+    assert updated.json()["email"] == "new1@example.com"
+
+    # The link sent to the old address is dead; a new one went to the new address.
+    assert anonymous.post("/api/v1/auth/reset-password", json={"token": old_token, "password": "BrandNew1!"}).status_code == 400
+    assert [m["to"] for m in no_real_email] == ["new1@example.com"]
+    assert updated.json()["emailLink"] == "sent"
+    assert anonymous.post("/api/v1/auth/reset-password", json={"token": _latest_token(user_id), "password": "BrandNew1!"}).status_code == 200
+    _cleanup("temp_user_email_1")
+
+
+def test_editing_something_other_than_the_email_sends_nothing(no_real_email):
+    _cleanup("temp_user_email_2")
+    created = as_admin.post("/api/v1/users/", json={
+        "username": "temp_user_email_2", "name": "Email Two", "email": "old2@example.com",
+        "role": "Viewer", "channelScope": "msetuSrm",
+    })
+    user_id = created.json()["id"]
+    token = _latest_token(user_id)
+    no_real_email.clear()
+
+    as_admin.patch(f"/api/v1/users/{user_id}", json={"name": "Renamed"})
+    assert no_real_email == []
+    assert _latest_token(user_id) == token
+    _cleanup("temp_user_email_2")
+
+
+def test_an_email_send_failure_does_not_undo_the_email_change(monkeypatch):
+    _cleanup("temp_user_email_3")
+    created = as_admin.post("/api/v1/users/", json={
+        "username": "temp_user_email_3", "name": "Email Three", "email": "old3@example.com",
+        "role": "Viewer", "channelScope": "msetuSrm",
+    })
+    user_id = created.json()["id"]
+
+    def boom(**kwargs):
+        raise OSError("smtp down")
+    monkeypatch.setattr("app.core.password_reset.send_email", boom)
+
+    updated = as_admin.patch(f"/api/v1/users/{user_id}", json={"email": "new3@example.com"})
+    assert updated.status_code == 200
+    assert updated.json()["email"] == "new3@example.com"
+    assert updated.json()["emailLink"] == "failed"
+    _cleanup("temp_user_email_3")
+
+
+def test_changing_an_active_users_email_also_notifies_the_old_address(no_real_email):
+    _cleanup("temp_user_email_4")
+    created = as_admin.post("/api/v1/users/", json={
+        "username": "temp_user_email_4", "name": "Email Four", "email": "old4@example.com",
+        "role": "Viewer", "channelScope": "msetuSrm",
+    })
+    user_id = created.json()["id"]
+    _activate(user_id)
+    no_real_email.clear()
+
+    updated = as_admin.patch(f"/api/v1/users/{user_id}", json={"email": "new4@example.com"})
+    assert updated.json()["emailLink"] == "sent"
+    assert sorted(m["to"] for m in no_real_email) == ["new4@example.com", "old4@example.com"]
+    _cleanup("temp_user_email_4")
+
+
+def test_ticket_role_is_never_implied_by_the_application_role():
+    for index, role in enumerate(["Invoice Team", "Approver", "Accounts", "Viewer"]):
+        username = f"temp_user_tr_{index}"
+        _cleanup(username)
+        created = as_admin.post("/api/v1/users/", json={
+            "username": username, "name": f"Tr {index}", "email": f"tr{index}@example.com",
+            "role": role, "channels": ["msetuSrm"],
+        })
+        assert created.status_code == 200, created.text
+        assert created.json()["ticketRole"] == "NO_ACCESS", role
+        _cleanup(username)
+
+
+def test_a_ticket_role_can_be_granted_explicitly_to_any_application_role():
+    _cleanup("temp_user_tr_9")
+    created = as_admin.post("/api/v1/users/", json={
+        "username": "temp_user_tr_9", "name": "Tr Nine", "email": "tr9@example.com",
+        "role": "Accounts", "channels": ["poPortal"], "ticketRole": "ASSIGNEE",
+    })
+    assert created.json()["ticketRole"] == "ASSIGNEE"
+    _cleanup("temp_user_tr_9")
+
+
+def test_a_user_can_be_authorized_for_several_channels():
+    _cleanup("temp_user_ch_1")
+    created = as_admin.post("/api/v1/users/", json={
+        "username": "temp_user_ch_1", "name": "Ch One", "email": "ch1@example.com",
+        "role": "Viewer", "channels": ["poPortal", "msetuSrm", "poPortal"],
+    })
+    assert created.status_code == 200, created.text
+    body = created.json()
+    assert body["channels"] == ["msetuSrm", "poPortal"]  # de-duplicated, sorted
+    assert body["channelScope"] == "poPortal"  # first one given is the primary
+
+    updated = as_admin.patch(f"/api/v1/users/{body['id']}", json={"channels": ["mfoxPortal"]})
+    assert updated.json()["channels"] == ["mfoxPortal"]
+    assert updated.json()["channelScope"] == "mfoxPortal"
+    _cleanup("temp_user_ch_1")
+
+
+def test_non_admins_need_at_least_one_specific_channel_and_admins_have_all():
+    no_channels = as_admin.post("/api/v1/users/", json={
+        "username": "temp_user_ch_2", "name": "Ch Two", "email": "ch2@example.com",
+        "role": "Viewer", "channels": [],
+    })
+    assert no_channels.status_code == 400
+    with_all = as_admin.post("/api/v1/users/", json={
+        "username": "temp_user_ch_3", "name": "Ch Three", "email": "ch3@example.com",
+        "role": "Viewer", "channels": ["all"],
+    })
+    assert with_all.status_code == 400
+
+    _cleanup("temp_user_ch_4")
+    admin = as_admin.post("/api/v1/users/", json={
+        "username": "temp_user_ch_4", "name": "Ch Four", "email": "ch4@example.com",
+        "role": "Admin", "channels": ["poPortal"],
+    })
+    assert admin.json()["channelScope"] == "all"
+    assert admin.json()["channels"] == []
+    assert admin.json()["ticketRole"] == "ADMIN"
+    _cleanup("temp_user_ch_4")
+
+
+def test_the_old_role_name_is_no_longer_accepted():
+    response = as_admin.post("/api/v1/users/", json={
+        "username": "temp_user_ch_5", "name": "Ch Five", "email": "ch5@example.com",
+        "role": "MDE Invoice Team", "channels": ["msetuSrm"],
+    })
+    assert response.status_code == 400
+
+
+def test_username_is_optional_and_derived_from_the_email():
+    for name in ("jane.doe", "jane.doe2"):
+        _cleanup(name)
+    first = as_admin.post("/api/v1/users/", json={
+        "name": "Jane Doe", "email": "Jane.Doe@example.com", "role": "Viewer", "channels": ["msetuSrm"],
+    })
+    assert first.status_code == 200, first.text
+    assert first.json()["username"] == "jane.doe"
+
+    # Same local part at another domain gets a numbered suffix instead of colliding.
+    second = as_admin.post("/api/v1/users/", json={
+        "name": "Jane Doe Two", "email": "jane.doe@other.example.com", "role": "Viewer", "channels": ["msetuSrm"],
+    })
+    assert second.status_code == 200, second.text
+    assert second.json()["username"] == "jane.doe2"
+    for name in ("jane.doe", "jane.doe2"):
+        _cleanup(name)

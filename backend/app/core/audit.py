@@ -42,3 +42,4 @@ def actor_from_token(db: Session, payload: dict) -> "User | str":
         return f"Supplier {payload.get('sub')}"
     user = db.query(User).filter(User.id == int(payload.get("sub"))).first()
     return user or f"User #{payload.get('sub')}"
+

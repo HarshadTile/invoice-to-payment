@@ -1,13 +1,17 @@
 from fastapi import APIRouter, Depends
 from typing import Dict, Any, List
+from sqlalchemy import false
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timezone
 
 from app.api.v1.auth import get_current_user_token
+from app.core.audit import AUDIT_TABLE_KEY
 from app.core.database import get_db
+from app.core.permissions import has_capability, normalize_matrix
 from app.models.ticket import Ticket, TicketComment
 from app.models.settings import TableRow, AppSettings
 from app.models.sync_log import SyncLog
+from app.models.user import User
 from app.schemas.sync_log import SyncLogResponse
 from collections import defaultdict
 
@@ -109,8 +113,18 @@ def get_workspace_data(
     tickets = [_serialize_ticket(t) for t in tickets_db]
     
 
-    # Query Tables
-    tables_db = db.query(TableRow).all()
+    # Query Tables. Suppliers get none of the internal grids; the audit log is Admin-only.
+    is_internal = auth_type == "internal"
+    can_view_audit = False
+    if is_internal:
+        caller = db.query(User).filter(User.id == int(payload.get("sub"))).first()
+        can_view_audit = bool(caller and has_capability(db, caller, "viewAuditLog"))
+    tables_query = db.query(TableRow)
+    if not is_internal:
+        tables_query = tables_query.filter(false())
+    elif not can_view_audit:
+        tables_query = tables_query.filter(TableRow.table_key != AUDIT_TABLE_KEY)
+    tables_db = tables_query.all()
     tables_dict = defaultdict(list)
     
     # Sort by row_index to reconstruct arrays properly
@@ -121,9 +135,9 @@ def get_workspace_data(
     # Query Settings
     settings_db = db.query(AppSettings).filter(AppSettings.id == 1).first()
     settings_dict = {}
-    if settings_db:
+    if settings_db and is_internal:
         settings_dict = {
-            "roleMatrix": settings_db.role_matrix_json,
+            "roleMatrix": normalize_matrix(settings_db.role_matrix_json),
             "twoFactorOn": settings_db.two_factor,
             "senderEmail": settings_db.sender_email
         }
