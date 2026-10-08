@@ -57,10 +57,10 @@ function authFor(form) {
       supplierLoginVcode: form.vcode || 'DIT00388AC', currentUser: DEFAULT_USER,
     };
   }
-  const channelScope = form.channelScope || 'all';
+  const channelScope = form.channelScope === 'internalTeam' ? 'internalTeam' : 'all';
   return {
     authType: 'internal', channelScope,
-    role: channelScope === 'all' ? 'Admin' : 'Invoice Team',
+    role: channelScope === 'all' ? 'Admin' : 'MDE Invoice Team',
     supplierQuery: null, supplierPAN: null, supplierLoginVcode: null,
     currentUser: internalUser(String(form.username || '').trim().toLowerCase()),
   };
@@ -68,62 +68,10 @@ function authFor(form) {
 
 export function installApiMock() {
   let seq = 1005;
-  let persistedTickets = JSON.parse(JSON.stringify(INITIAL_TICKETS));
-  let persistedUsers = [
-    { id: 1, username: 'admin', name: 'Administrator', email: 'admin@company.com', role: 'Admin', status: 'Active', channelScope: 'all', ticketRole: 'ADMIN', channels: [] },
-    { id: 2, username: 'priya', name: 'Priya Deshmukh', email: 'p.deshmukh@company.com', role: 'Invoice Team', status: 'Active', channelScope: 'msetuSrm', ticketRole: 'ASSIGNEE', channels: ['msetuSrm'] },
-  ];
-  const statusCode = (value) => String(value || 'OPEN').toUpperCase().replaceAll(' ', '_');
-  const normalizeTicket = (ticket) => {
-    const invoiceNo = ticket.invoice_no || ticket.no;
-    const invoice = INVOICE_DATA.find((item) => item.no === invoiceNo);
-    const status = statusCode(ticket.status);
-    const actions = status === 'CLOSED' ? [] : status === 'RESOLVED'
-      ? ['close', 'reopen']
-      : ['reply', 'note', 'attach_public', 'attach_internal', 'change_priority', ...(status === 'OPEN' ? ['assign'] : ['reassign', 'resolve'])];
-    return {
-      id: ticket.id,
-      ticket_no: ticket.ticket_no || ticket.id,
-      invoice_no: invoiceNo,
-      invoice: invoice ? { invoice_no: invoice.no, po_no: invoice.po, amount: invoice.amount, status: invoice.status } : null,
-      channel: invoice?.channel || 'msetuSrm',
-      fy: '2026-27',
-      vendor_code: invoice?.vcode || 'DIT00388AC',
-      category: ticket.category,
-      priority: ticket.priority === 'Urgent' ? 'HIGH' : String(ticket.priority || 'Medium').toUpperCase(),
-      subject: ticket.subject || ticket.category,
-      description: ticket.description || ticket.desc || 'No description provided.',
-      status,
-      awaiting: ticket.awaiting || 'STAFF',
-      source: ticket.source || 'SUPPLIER',
-      assignee: ticket.assignee && ticket.assignee !== 'Unassigned' ? { id: 1, name: typeof ticket.assignee === 'string' ? ticket.assignee : ticket.assignee.name } : null,
-      sla: { response_due_at: '2026-09-10T12:00:00', reply_expected_by: null, breached: false, overdue_minutes: 0 },
-      unread: false,
-      reopen_count: 0,
-      row_version: ticket.row_version || 1,
-      legacy_unlinked: false,
-      allowed_actions: actions,
-      comments: (ticket.comments || []).map((comment, index) => ({
-        id: comment.id || index + 1,
-        ticket_id: ticket.id,
-        author: comment.author || 'Supplier',
-        author_id: null,
-        author_role: String(comment.role || 'SUPPLIER').toUpperCase().replaceAll(' ', '_'),
-        visibility: comment.visibility || 'PUBLIC',
-        body: comment.body || comment.text,
-        created_at: comment.created_at || '2026-09-09T10:00:00',
-      })),
-      attachments: ticket.attachments || [],
-      created_at: ticket.created_at || '2026-09-09T09:00:00',
-      updated_at: ticket.updated_at || '2026-09-09T10:00:00',
-      resolved_at: status === 'RESOLVED' ? '2026-09-09T11:00:00' : null,
-      closed_at: status === 'CLOSED' ? '2026-09-09T12:00:00' : null,
-    };
-  };
   const bootstrap = () => ({
     invoices: INVOICE_DATA.map((r) => ({ ...r, stageIndex: 1 })),
     syncLog: SYNC_LOG,
-    tickets: persistedTickets,
+    tickets: JSON.parse(JSON.stringify(INITIAL_TICKETS)),
     ticketSeq: 1005,
     tables: JSON.parse(JSON.stringify(TABLE_SEED)),
     settings: {
@@ -140,143 +88,49 @@ export function installApiMock() {
   });
 
   const get = vi.fn(async (path) => {
-    if (path === '/v1/workspace') return bootstrap();
-    if (path === '/v1/auth/me') throw Object.assign(new Error('no session'), { status: 401 });
-    if (path === '/v1/users/') return persistedUsers;
+    if (path === '/workspace') return bootstrap();
+    if (path === '/auth/me') throw Object.assign(new Error('no session'), { status: 401 });
     if (path.startsWith('/tables/')) return TABLE_SEED[path.slice('/tables/'.length)] || [];
-    if (path === '/v1/tickets/activity-log') return [];
-    if (path === '/v1/ticket-permissions') return { roles: ['Admin', 'Channel Lead', 'Assignee', 'Supplier'], rows: [{ action: 'View ticket', cells: [{ text: 'Always', ifAssigned: '' }, { text: 'Always', ifAssigned: '' }, { text: '', ifAssigned: 'Always' }, { text: 'Always', ifAssigned: '' }] }] };
     if (path === '/settings') return bootstrap().settings;
-    if (path.startsWith('/v1/notifications')) return [];
-    if (path.startsWith('/v1/tickets/summary')) {
-      const rows = persistedTickets.map(normalizeTicket);
-      return {
-        open: rows.filter((item) => item.status === 'OPEN').length,
-        in_progress: rows.filter((item) => item.status === 'IN_PROGRESS').length,
-        sla_breached: rows.filter((item) => item.sla.breached).length,
-        resolved_closed: rows.filter((item) => ['RESOLVED', 'CLOSED'].includes(item.status)).length,
-      };
-    }
-    if (path.startsWith('/v1/tickets/board')) {
-      const groups = { open: [], in_progress: [], resolved: [], closed: [] };
-      persistedTickets.map(normalizeTicket).forEach((item) => groups[item.status.toLowerCase()].push(item));
-      return groups;
-    }
-    if (path.startsWith('/v1/tickets/assignable-users')) return [{ id: 1, name: 'Priya Deshmukh', role: 'ASSIGNEE' }];
-    if (path.endsWith('/activity')) {
-      const id = path.split('/')[3];
-      const ticket = persistedTickets.find((item) => item.id === id);
-      return (ticket?.activity || []).map((item, index) => ({ id: index + 1, event: 'UPDATED', actor_id: 1, meta: {}, created_at: item.created_at || '2026-09-09T10:00:00' }));
-    }
-    if (path.startsWith('/v1/tickets/')) {
-      const id = path.split('?')[0].split('/').pop();
-      const t = persistedTickets.find(x => x.id === id);
-      if (!t) throw Object.assign(new Error('Not found'), { status: 404 });
-      return normalizeTicket(t);
-    }
-    if (path.startsWith('/v1/tickets')) {
-      const items = persistedTickets.map(normalizeTicket);
-      return { items, page: 1, page_size: 100, total: items.length };
-    }
     return {};
   });
 
   const CREDS = { admin: 'admin123', 'admin@company.com': 'admin123', ravi: 'ravi123', 'r.kulkarni@company.com': 'ravi123', priya: 'priya123' };
 
   const post = vi.fn(async (path, body) => {
-    if (path === '/v1/auth/login' || path === '/v1/auth/supplier/login') {
+    if (path === '/auth/login') {
       const form = body || {};
       if (form.mode !== 'supplier') {
         const u = String(form.username || '').toLowerCase();
         if (CREDS[u] !== form.password) {
-          throw Object.assign(new Error('Invalid EAML ID or password.'), { status: 401 });
+          throw Object.assign(new Error('Invalid username or password.'), { status: 401 });
         }
       }
       return { token: 'test-token', auth: authFor(form) };
     }
-    if (path === '/v1/auth/logout') return { ok: true };
-    if (path === '/v1/users/') {
-      const created = {
-        id: Math.max(...persistedUsers.map((item) => item.id), 0) + 1,
-        status: 'Invited',
-        ticketRole: body.role === 'Admin' ? 'ADMIN' : (body.ticketRole || 'NO_ACCESS'),
-        username: body.username || String(body.email).split('@')[0],
-        channels: body.channels || [],
-        ...body,
-      };
-      persistedUsers = [...persistedUsers, created];
-      return created;
-    }
-    if (/^\/v1\/users\/\d+\/reset-password$/.test(path)) return { msg: 'Reset link sent.' };
-    if (path === '/v1/tickets') {
+    if (path === '/auth/logout') return { ok: true };
+    if (path === '/tickets') {
       seq += 1;
       const id = 'TCK-' + seq;
-      const newTicket = {
-        id, no: body.invoice_no, category: body.category, subject: body.subject, description: body.description || 'No description provided.',
-        status: 'OPEN', priority: body.priority || 'MEDIUM', assignee_id: '1', assignee: null,
-        raisedBy: body.raised_by || 'Supplier', raisedDate: '09 Sep 2026', slaHours: 24,
-        comments: [], activities: [{ createdAt: '09 Sep 2026', event: `Ticket created`, metaData: '' }],
-        row_version: 1
+      return {
+        ticket: {
+          id, no: body.no, category: body.category, desc: body.desc || 'No description provided.',
+          status: 'Open', priority: body.priority || 'Medium', assignee: 'MDE Invoice Team',
+          raisedBy: body.raisedBy, raisedDate: '09 Sep 2026', slaHours: 24,
+          comments: [], activity: [{ date: '09 Sep 2026', text: `Ticket created by ${body.raisedBy}.` }],
+        },
+        seq,
       };
-      // add to in-memory store so the next refetch includes it
-      persistedTickets.unshift(newTicket);
-      return normalizeTicket(newTicket);
     }
-    if (path.includes('/comments')) {
-      const ticketId = path.split('/')[3];
-      const t = persistedTickets.find(x => x.id === ticketId);
-      if (t) {
-        t.comments.push({ id: 1000 + t.comments.length, text: body.body, visibility: body.visibility, author: 'You', role: body.visibility === 'INTERNAL' ? 'CHANNEL_LEAD' : 'ASSIGNEE' });
-        t.row_version += 1;
-      }
-      return normalizeTicket(t);
-    }
-    if (path.endsWith('/read')) return { read: true };
-    if (path.endsWith('/assign') || path.endsWith('/resolve') || path.endsWith('/close') || path.endsWith('/reopen')) {
-      const ticketId = path.split('/')[3];
-      const t = persistedTickets.find((item) => item.id === ticketId);
-      if (path.endsWith('/assign')) { t.status = 'In Progress'; t.assignee = 'Priya Deshmukh'; }
-      if (path.endsWith('/resolve')) t.status = 'Resolved';
-      if (path.endsWith('/close')) t.status = 'Closed';
-      if (path.endsWith('/reopen')) t.status = 'In Progress';
-      t.row_version += 1;
-      return normalizeTicket(t);
-    }
-    throw new Error(`Unmocked POST path: ${path}`);
-  });
-
-  const patch = vi.fn(async (path, body) => {
-    if (/^\/v1\/users\/\d+$/.test(path)) {
-      const id = Number(path.split('/').pop());
-      let updated;
-      persistedUsers = persistedUsers.map((item) => {
-        if (item.id !== id) return item;
-        updated = { ...item, ...body };
-        return updated;
-      });
-      return updated;
-    }
-    if (path.startsWith('/v1/tickets/')) {
-      const id = path.split('/')[3];
-      const t = persistedTickets.find(x => x.id === id);
-      if (t) {
-        if (body.priority) t.priority = body.priority;
-        if (body.category) t.category = body.category;
-        t.row_version += 1;
-      }
-      return normalizeTicket(t);
-    }
+    // comment posts: let the optimistic reducer keep the local update
     return {};
   });
+
+  const patch = vi.fn(async () => ({}));
   const put = vi.fn(async (_path, body) => (body && body.rows ? body.rows : {}));
-  const remove = vi.fn(async (path) => {
-    const id = Number(path.split('/').pop());
-    persistedUsers = persistedUsers.filter((item) => item.id !== id);
-    return { msg: 'User removed.' };
-  });
 
   return {
-    get, post, patch, put, delete: remove,
+    get, post, patch, put,
     setToken: vi.fn(),
     clearToken: vi.fn(),
     hasToken: vi.fn(() => false),

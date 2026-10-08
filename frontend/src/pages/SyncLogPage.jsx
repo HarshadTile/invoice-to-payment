@@ -6,6 +6,7 @@ export default function SyncLogPage() {
   const failCount = runtime.syncLog.filter((s) => s.status === 'Failed').length;
   return (
     <>
+      <h1 className="page-title">Sync Log</h1>
       <div className="row" style={{ marginBottom: 18 }}>
         <div className="stat-card"><div className="lbl">Total Syncs (24h)</div><div className="val">{runtime.syncLog.length}</div></div>
         <div className="stat-card"><div className="lbl">Successful</div><div className="val">{okCount}</div></div>

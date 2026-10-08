@@ -7,7 +7,7 @@ export default function StatCard({ label, value, sub, tone, icon, onClick, activ
       onClick={onClick}
       type={onClick ? 'button' : undefined}
       data-active={active ? 'true' : undefined}
-      aria-pressed={onClick && active !== undefined ? !!active : undefined}
+      aria-pressed={onClick ? !!active : undefined}
     >
       {icon && <div className="icon-badge" aria-hidden="true">{icon}</div>}
       <div className="lbl">{label}</div>

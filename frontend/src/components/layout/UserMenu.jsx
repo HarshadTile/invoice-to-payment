@@ -5,8 +5,6 @@ import { askLogout } from '../../features/auth/logoutPrompt';
 import { User, LogOut } from '../common/icons.jsx';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
 
-const EMPTY_ARRAY = [];
-
 /** Avatar button in the top bar that opens an account menu: who is signed in,
  *  their email and role, a link to the profile page, and Logout. */
 export default function UserMenu() {
@@ -21,7 +19,7 @@ export default function UserMenu() {
   const wrapRef = useRef(null);
 
   const isSupplier = authType === 'supplier';
-  const invoices = useSelector((s) => s.auth.authType === 'supplier' ? selectScopedInvoices(s) : EMPTY_ARRAY);
+  const invoices = useSelector((s) => s.auth.authType === 'supplier' ? selectScopedInvoices(s) : []);
   const realName = invoices.find(i => i.vcode === supplierLoginVcode)?.vendor;
   const name = isSupplier ? (realName || supplierQuery) : currentUser.name;
   const email = isSupplier ? '' : currentUser.email;

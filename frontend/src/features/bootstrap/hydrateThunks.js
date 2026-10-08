@@ -1,21 +1,18 @@
 import { api } from '../../api/client';
 import { setAuthFromServer, logout as logoutLocal } from '../auth/authSlice';
+import { hydrateTickets } from '../tickets/ticketsSlice';
 import { hydrateTables } from '../tables/tablesSlice';
 import { hydrateSettings } from '../settings/settingsSlice';
 import { setRuntimeData } from '../../data/runtime';
-import { bumpData, saveScope } from '../ui/uiSlice';
+import { bumpData } from '../ui/uiSlice';
 import { invoiceApi } from '../../api/invoiceApi';
 import { AUTH_BYPASS } from '../auth/authSlice';
-import { ticketsApi } from '../tickets/ticketsApi';
 
 const USE_FASTAPI_INVOICES = import.meta.env.MODE !== 'test'
   && import.meta.env.VITE_USE_FASTAPI_INVOICES === 'true';
 
 async function loadInvoices(auth, fallback) {
-  // Supplier records must always come from the authenticated invoice source.
-  // Workspace bootstrap data is retained only for the internal prototype path.
-  if (import.meta.env.MODE === 'test') return fallback;
-  if (auth?.authType !== 'supplier' && !USE_FASTAPI_INVOICES) return fallback;
+  if (!USE_FASTAPI_INVOICES) return fallback;
   const vendorCode = auth?.authType === 'supplier' ? auth.vcode : undefined;
   return invoiceApi.listAll(vendorCode ? { vendor_code: vendorCode } : {});
 }
@@ -27,6 +24,7 @@ export const loadBootstrap = (auth) => async (dispatch) => {
   const invoices = await loadInvoices(auth, b.invoices);
   setRuntimeData({ invoices, syncLog: b.syncLog });
   dispatch(bumpData()); // memoised invoice selectors must re-read the new data
+  dispatch(hydrateTickets({ items: b.tickets, seq: b.ticketSeq }));
   dispatch(hydrateTables(b.tables));
   dispatch(hydrateSettings(b.settings));
   return b;
@@ -46,7 +44,6 @@ export const loginThunk = (form, opts = {}) => async (dispatch) => {
     auth = res.auth;
   }
   api.setToken(token, { persist: opts.remember !== false });
-  dispatch(ticketsApi.util.resetApiState());
   // Load the data BEFORE flipping to "logged in": the route guards redirect into
   // the app the moment auth flips, and pages must not render (and cache) an empty
   // dataset while the bootstrap request is still in flight.
@@ -64,7 +61,6 @@ export const restoreSession = () => async (dispatch) => {
   if (!api.hasToken()) return false;
   try {
     const { auth } = await api.get('/v1/auth/me');
-    dispatch(ticketsApi.util.resetApiState());
     dispatch(setAuthFromServer(auth));
     await dispatch(loadBootstrap(auth));
     return true;
@@ -82,7 +78,5 @@ export const logoutThunk = () => async (dispatch) => {
     /* token already gone / server down — clear locally anyway */
   }
   api.clearToken();
-  dispatch(ticketsApi.util.resetApiState());
   dispatch(logoutLocal());
-  saveScope({ fy: null, channel: '', vcode: '' }); // the next person starts with no top-bar scope
 };

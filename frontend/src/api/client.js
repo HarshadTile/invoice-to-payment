@@ -16,26 +16,21 @@ function readStored(store) {
 
 let token = readStored(localStorage) || readStored(sessionStorage);
 
-async function req(method, path, body, options = {}) {
-  const isForm = body instanceof FormData;
+async function req(method, path, body) {
   const res = await fetch(`/api${path}`, {
     method,
     headers: {
-      ...(!isForm && body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
     },
-    body: body === undefined ? undefined : (isForm ? body : JSON.stringify(body)),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     try {
       const data = await res.json();
-      if (typeof data?.error === 'string') message = data.error;
-      else if (data?.error?.message) message = data.error.message;
-      else if (data?.detail?.error?.message) message = data.detail.error.message;
-      else if (typeof data?.detail === 'string') message = data.detail;
+      if (data && data.error) message = data.error;
     } catch {
       /* response had no JSON body */
     }
@@ -56,11 +51,10 @@ function writeToken(value, persist) {
 }
 
 export const api = {
-  get: (path, options) => req('GET', path, undefined, options),
-  post: (path, body, options) => req('POST', path, body, options),
-  patch: (path, body, options) => req('PATCH', path, body, options),
-  put: (path, body, options) => req('PUT', path, body, options),
-  delete: (path, options) => req('DELETE', path, undefined, options),
+  get: (path) => req('GET', path),
+  post: (path, body) => req('POST', path, body),
+  patch: (path, body) => req('PATCH', path, body),
+  put: (path, body) => req('PUT', path, body),
   setToken(value, { persist = true } = {}) {
     token = value;
     writeToken(value, persist);
@@ -71,5 +65,4 @@ export const api = {
     try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
   },
   hasToken: () => !!token,
-  authHeaders: () => (token ? { Authorization: `Bearer ${token}` } : {}),
 };

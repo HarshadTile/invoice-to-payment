@@ -10,8 +10,6 @@ import {
 } from './ProtectedRoute.jsx';
 import AppLayout from '../components/layout/AppLayout.jsx';
 import LoginPage from '../pages/LoginPage.jsx';
-import ForgotPasswordPage from '../pages/ForgotPasswordPage.jsx';
-import ResetPasswordPage from '../pages/ResetPasswordPage.jsx';
 import InvoicesPage from '../pages/InvoicesPage.jsx';
 import SearchInvoicePage from '../pages/SearchInvoicePage.jsx';
 import ChannelPage from '../pages/ChannelPage.jsx';
@@ -26,16 +24,12 @@ import ProfilePage from '../pages/ProfilePage.jsx';
 import SupplierHomePage from '../pages/supplier/SupplierHomePage.jsx';
 import SupplierLogsPage from '../pages/supplier/SupplierLogsPage.jsx';
 import SupplierTicketsPage from '../pages/supplier/SupplierTicketsPage.jsx';
-import TicketDetailPage from '../pages/TicketDetailPage.jsx';
 
 export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to={AUTH_BYPASS ? '/app/invoices' : '/login'} replace />} />
       <Route path="/login" element={AUTH_BYPASS ? <Navigate to="/app/invoices" replace /> : <RedirectIfLoggedIn><LoginPage /></RedirectIfLoggedIn>} />
-      {/* Always reachable, even mid-session — an emailed reset link shouldn't get bounced by a stale login. */}
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* Internal / HQ side */}
       <Route element={<RequireInternal />}>
@@ -46,7 +40,6 @@ export default function AppRoutes() {
           <Route path="/app/channel/:key" element={<ChannelPage />} />
           <Route path="/app/vendor-code/:code" element={<VendorCodePage />} />
           <Route path="/app/inquiry-desk" element={<InquiryDeskPage />} />
-          <Route path="/app/inquiry-desk/:id" element={<TicketDetailPage />} />
           <Route path="/app/profile" element={<ProfilePage />} />
 
           <Route element={<RequireHQ />}>
@@ -58,13 +51,9 @@ export default function AppRoutes() {
               <Route path="/app/settings/integrations" element={<SettingsPage />} />
               <Route path="/app/settings/notifications" element={<SettingsPage />} />
             </Route>
-            <Route element={<RequireCapability cap="viewAuditLog" />}>
-              <Route path="/app/settings/auditLogs" element={<SettingsPage />} />
-            </Route>
+            <Route path="/app/settings/auditLogs" element={<SettingsPage />} />
             <Route element={<RequireCapability cap="manageUsers" />}>
               <Route path="/app/settings/users" element={<SettingsPage />} />
-            </Route>
-            <Route element={<RequireCapability cap="manageRoles" />}>
               <Route path="/app/settings/roles" element={<SettingsPage />} />
             </Route>
             <Route path="/app/settings" element={<SettingsIndexRedirect />} />
@@ -77,10 +66,9 @@ export default function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route path="/supplier" element={<Navigate to="/supplier/home" replace />} />
           <Route path="/supplier/home" element={<SupplierHomePage />} />
-          <Route path="/supplier/vendor-code/:code" element={<Navigate to="/supplier/home" replace />} />
+          <Route path="/supplier/vendor-code/:code" element={<VendorCodePage />} />
           <Route path="/supplier/logs" element={<SupplierLogsPage />} />
           <Route path="/supplier/tickets" element={<SupplierTicketsPage />} />
-          <Route path="/supplier/tickets/:id" element={<TicketDetailPage />} />
           <Route path="/supplier/profile" element={<ProfilePage />} />
         </Route>
       </Route>

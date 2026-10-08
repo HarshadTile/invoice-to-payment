@@ -1,38 +1,8 @@
 import { createSlice, nanoid } from '@reduxjs/toolkit';
-import { logout } from '../auth/authSlice';
-
-const SIDEBAR_COLLAPSED_KEY = 'i2p.sidebarCollapsed';
-
-/** Remembered per browser; storage can be unavailable (private mode, blocked), so never throw. */
-export function readSidebarCollapsed() {
-  try { return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'; } catch { return false; }
-}
-export function saveSidebarCollapsed(collapsed) {
-  try { window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch { /* not persisted */ }
-}
-
-/* The top-bar scope (fiscal year, channel, vendor) applies to every internal screen and stays
-   until the user clears it. Kept for the browser session (not across browser restarts); `fy`
-   null means "the current fiscal year", 'all' means every year. */
-const SCOPE_KEY = 'i2p.scopeFilters';
-const NO_SCOPE = { fy: null, channel: '', vcode: '' };
-
-function readScope() {
-  try {
-    const saved = JSON.parse(window.sessionStorage.getItem(SCOPE_KEY) || 'null');
-    if (saved && typeof saved === 'object') return { ...NO_SCOPE, ...saved };
-  } catch { /* unavailable or corrupt: start with no scope */ }
-  return { ...NO_SCOPE };
-}
-export function saveScope(scope) {
-  try { window.sessionStorage.setItem(SCOPE_KEY, JSON.stringify(scope)); } catch { /* not persisted */ }
-}
 
 const initialState = {
-  scope: readScope(),
   expandedNav: ['channels'],
   sidebarOpen: false, // off-canvas menu on narrow screens
-  sidebarCollapsed: readSidebarCollapsed(), // icon-only rail on wide screens
   dataVersion: 0, // bumped when runtime.invoices is edited in place, so views re-read it
   modal: null, // { kind, ctx }
   toasts: [], // { id, msg }
@@ -46,15 +16,10 @@ const initialState = {
   inquiryViewMode: 'list',
   inquiryChannelTab: null,
   channelQueryViewMode: 'list',
+  supplierHomeTab: 'current',
   supplierVisibilityQuery: 'Tata Communications Ltd',
   globalLogsChannel: null,
   globalLogsStatus: null,
-  // Filter-bar state (search text, status, date range) for pages that also mirror
-  // it into the URL — keyed the same way as `search`/`tablePage` above, so a
-  // filter set on Search Invoice(s) or a channel's Invoice Log survives
-  // navigating away and back, instead of resetting because the sidebar always
-  // links to the bare path with no query string.
-  pageFilters: {}, // filterKey -> arbitrary filter object
 };
 
 const uiSlice = createSlice({
@@ -77,19 +42,6 @@ const uiSlice = createSlice({
     },
     closeSidebar(state) {
       state.sidebarOpen = false;
-    },
-    setScopeFilter(state, action) {
-      const { key, value } = action.payload; // key: 'fy' | 'channel' | 'vcode'
-      state.scope[key] = key === 'fy' ? (value || null) : (value || '');
-    },
-    clearScopeFilters(state) {
-      state.scope = { fy: 'all', channel: '', vcode: '' };
-    },
-    toggleSidebarCollapsed(state) {
-      state.sidebarCollapsed = !state.sidebarCollapsed;
-    },
-    setSidebarCollapsed(state, action) {
-      state.sidebarCollapsed = !!action.payload;
     },
     openModal(state, action) {
       state.modal = action.payload; // { kind, ctx }
@@ -152,6 +104,9 @@ const uiSlice = createSlice({
     setChannelQueryViewMode(state, action) {
       state.channelQueryViewMode = action.payload;
     },
+    setSupplierHomeTab(state, action) {
+      state.supplierHomeTab = action.payload;
+    },
     setSupplierVisibilityQuery(state, action) {
       state.supplierVisibilityQuery = action.payload;
     },
@@ -164,23 +119,15 @@ const uiSlice = createSlice({
     resetFiltersOnIdentitySwitch(state) {
       state.search = {};
     },
-    setPageFilters(state, action) {
-      const { key, filters } = action.payload;
-      state.pageFilters[key] = filters;
-    },
-  },
-  extraReducers: (builder) => {
-    // A different person signing in must not inherit the previous person's scope.
-    builder.addCase(logout, (state) => { state.scope = { ...NO_SCOPE }; });
   },
 });
 
 export const {
-  toggleNavExpanded, ensureNavExpanded, toggleSidebar, closeSidebar, setScopeFilter, clearScopeFilters, toggleSidebarCollapsed, setSidebarCollapsed, bumpData, openModal, closeModal, pushToast, dismissToast,
+  toggleNavExpanded, ensureNavExpanded, toggleSidebar, closeSidebar, bumpData, openModal, closeModal, pushToast, dismissToast,
   setSearch, setTablePage, toggleSelectRow, setSelectAll, clearSelection,
   setInvoicesTopTab, setTicketFilterStatus,
   setChannelViewTab, setVcodeViewTab, setInquiryViewMode, setInquiryChannelTab,
-  setChannelQueryViewMode, setSupplierVisibilityQuery,
-  setGlobalLogsChannel, setGlobalLogsStatus, resetFiltersOnIdentitySwitch, setPageFilters,
+  setChannelQueryViewMode, setSupplierHomeTab, setSupplierVisibilityQuery,
+  setGlobalLogsChannel, setGlobalLogsStatus, resetFiltersOnIdentitySwitch,
 } = uiSlice.actions;
 export default uiSlice.reducer;
