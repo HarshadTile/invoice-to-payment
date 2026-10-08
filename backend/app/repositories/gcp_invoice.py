@@ -104,18 +104,40 @@ def get_invoices(
     start = (page - 1) * page_size
     return records[start:start + page_size], total
 
-def get_invoice_by_number(invoice_number: str) -> dict | None:
-    """Find one invoice in the in-memory cached Excel data."""
+def get_invoice_by_number(invoice_number: str, po_item: int | None = None) -> dict | None:
+    """Find one invoice in the in-memory cached Excel data.
+
+    INV_NO is NOT unique in the source data: the same invoice number can cover
+    several PO line items, each a separate real row (e.g. one invoice number with
+    6 rows for PO items 10/20/30/40/50). Without po_item this returns whichever
+    matching row comes first in the file, same as before; pass po_item to get the
+    exact line item.
+    """
     all_records = _load_excel_data()
+    matches = []
 
     for record in all_records:
         source_invoice_number = record.get("INV_NO")
         if source_invoice_number is None:
             continue
         if str(source_invoice_number).strip() == invoice_number.strip():
-            return record
+            matches.append(record)
 
-    return None
+    if not matches:
+        return None
+
+    if po_item is not None:
+        for record in matches:
+            source_po_item = record.get("PO_ITEM")
+            if source_po_item is None:
+                continue
+            try:
+                if int(str(source_po_item).strip()) == po_item:
+                    return record
+            except (TypeError, ValueError):
+                continue
+
+    return matches[0]
 
 def get_all_cached_invoices():
     """Helper to return the full un-paginated list for fast aggregation."""

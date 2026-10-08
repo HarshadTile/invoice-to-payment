@@ -1,12 +1,30 @@
-import { useSelector } from 'react-redux';
+import { useEffect, useRef } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { Navigate, Outlet } from 'react-router-dom';
 import { AUTH_BYPASS, selectPerm } from '../features/auth/authSlice';
+import { pushToast } from '../features/ui/uiSlice';
+
+function PortalRedirect({ to, message }) {
+  const dispatch = useDispatch();
+  const notified = useRef(false);
+
+  useEffect(() => {
+    if (notified.current) return;
+    notified.current = true;
+    dispatch(pushToast(message));
+  }, [dispatch, message]);
+
+  return <Navigate to={to} replace />;
+}
 
 /** Gate for the internal (HQ / Internal Team) side of the app. */
 export function RequireInternal() {
   const { loggedIn, authType } = useSelector((s) => s.auth);
   if (!loggedIn) return <Navigate to="/login" replace />;
-  if (authType !== 'internal') return <Navigate to="/supplier/home" replace />;
+  if (authType !== 'internal') return <PortalRedirect
+    to="/supplier/home"
+    message="You're signed in as a supplier. You've been redirected to My Invoices. Log out to sign in to the internal portal."
+  />;
   return <Outlet />;
 }
 
@@ -15,7 +33,10 @@ export function RequireSupplier() {
   const { loggedIn, authType } = useSelector((s) => s.auth);
   if (!loggedIn) return <Navigate to="/login" replace />;
   if (AUTH_BYPASS) return <Outlet />;
-  if (authType !== 'supplier') return <Navigate to="/app/invoices" replace />;
+  if (authType !== 'supplier') return <PortalRedirect
+    to="/app/invoices"
+    message="You're signed in to the internal portal. You've been redirected to Invoices. Log out to sign in as a supplier."
+  />;
   return <Outlet />;
 }
 
@@ -39,7 +60,11 @@ export function SettingsIndexRedirect() {
     ? '/app/settings/integrations'
     : perm.manageUsers
       ? '/app/settings/users'
-      : '/app/invoices';
+      : perm.manageRoles
+        ? '/app/settings/roles'
+        : perm.viewAuditLog
+          ? '/app/settings/auditLogs'
+          : '/app/invoices';
   return <Navigate to={target} replace />;
 }
 

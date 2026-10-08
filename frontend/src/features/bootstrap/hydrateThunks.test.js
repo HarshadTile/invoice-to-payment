@@ -7,7 +7,7 @@ const mockApi = vi.hoisted(() => ({
 vi.mock('../../api/client', () => ({ api: mockApi }));
 
 import authReducer from '../auth/authSlice';
-import ticketsReducer from '../tickets/ticketsSlice';
+import { ticketsApi } from '../tickets/ticketsApi';
 import tablesReducer from '../tables/tablesSlice';
 import settingsReducer from '../settings/settingsSlice';
 import uiReducer from '../ui/uiSlice';
@@ -16,7 +16,8 @@ import { runtime, setRuntimeData } from '../../data/runtime';
 import { loginThunk } from './hydrateThunks';
 
 const makeStore = () => configureStore({
-  reducer: { auth: authReducer, tickets: ticketsReducer, tables: tablesReducer, settings: settingsReducer, ui: uiReducer },
+  reducer: { auth: authReducer, tables: tablesReducer, settings: settingsReducer, ui: uiReducer, [ticketsApi.reducerPath]: ticketsApi.reducer },
+  middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(ticketsApi.middleware),
 });
 
 const BOOTSTRAP = {

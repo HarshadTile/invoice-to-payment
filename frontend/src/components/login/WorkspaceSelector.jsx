@@ -1,7 +1,8 @@
 import { BuildingIcon, CaretIcon } from './icons.jsx';
 
-/* Per-channel login options. "Internal Team" bundle is removed —
-   each channel is now its own login. Manual has no own login. */
+/* Per-channel login options. An Admin account (channel_scope "all") may pick any of these
+   to preview that channel's view; an account locked to one portal (Settings > Users) can
+   only ever land on its own — the backend enforces that regardless of what's picked here. */
 const OPTIONS = [
   { value: 'all',        label: 'All Channels — HQ / Admin' },
   { value: 'msetuSrm',  label: 'Msetu / SRM' },
