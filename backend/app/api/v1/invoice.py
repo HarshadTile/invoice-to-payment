@@ -1,8 +1,9 @@
 from math import ceil
 from datetime import date
 from collections import defaultdict
-from fastapi import APIRouter, HTTPException, Query
-from app.schemas.invoice import InvoiceListResponse, InvoiceResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
+from app.api.v1.auth import get_current_user_token
+from app.schemas.invoice import ApproversResponse, InvoiceListResponse, InvoiceResponse
 from app.services.invoice import (
     get_gcp_invoice_list,
     get_gcp_invoice_response,
@@ -16,6 +17,28 @@ router = APIRouter(
 )
 
 
+def _supplier_vendor_code(user: dict) -> str | None:
+    """Vendor code a supplier token is locked to; None for internal users."""
+    if user.get("auth_type") == "supplier":
+        return str(user.get("sub"))
+    return None
+
+
+def _redact_for_supplier(invoice: InvoiceResponse) -> InvoiceResponse:
+    """Drop internal approval details that suppliers must never receive."""
+    no_approvers = ApproversResponse(**{f"approver_{i}": None for i in range(1, 8)})
+    workflow = invoice.workflow.model_copy(update={
+        "approved_by": None,
+        "pending_with": None,
+        "approvers": no_approvers,
+        "workflow_steps": None,
+        "accountant": None,
+        "document_sent_to_accounts_date": None,
+        "approver_remarks": None,
+    })
+    return invoice.model_copy(update={"workflow": workflow})
+
+
 @router.get("", response_model=InvoiceListResponse)
 def get_all_invoices(
     page: int = Query(default=1, ge=1),
@@ -25,7 +48,12 @@ def get_all_invoices(
     invoice_number: str | None = None,
     po_number: str | None = None,
     po_item: int | None = None,
+    user: dict = Depends(get_current_user_token),
 ):
+    supplier_code = _supplier_vendor_code(user)
+    if supplier_code:
+        vendor_code = supplier_code  # a supplier can only ever see its own code
+
     invoices, total = get_gcp_invoice_list(
         page=page,
         page_size=page_size,
@@ -35,6 +63,9 @@ def get_all_invoices(
         po_number=po_number,
         po_item=po_item,
     )
+
+    if supplier_code:
+        invoices = [_redact_for_supplier(i) for i in invoices]
 
     total_pages = ceil(total / page_size) if total else 0
 
@@ -49,7 +80,9 @@ def get_all_invoices(
 @router.get("/summary")
 def get_invoice_summary(
     vendor_code: str | None = None,
+    user: dict = Depends(get_current_user_token),
 ):
+    vendor_code = _supplier_vendor_code(user) or vendor_code
     all_rows = get_all_cached_invoices()
     
     if vendor_code:
@@ -88,7 +121,10 @@ def get_invoice_summary(
 def get_recent_invoices(
     limit: int = 5,
     vendor_code: str | None = None,
+    user: dict = Depends(get_current_user_token),
 ):
+    supplier_code = _supplier_vendor_code(user)
+    vendor_code = supplier_code or vendor_code
     invoices, _ = get_gcp_invoice_list(
         page=1,
         page_size=limit,
@@ -97,14 +133,21 @@ def get_recent_invoices(
     
     # Sort them by date descending (get_gcp_invoice_list doesn't support sorting yet)
     invoices.sort(key=lambda x: x.invoice_date or date.min, reverse=True)
-    return invoices[:limit]
+    invoices = invoices[:limit]
+    return [_redact_for_supplier(i) for i in invoices] if supplier_code else invoices
 
 @router.get("/{invoice_number:path}", response_model=InvoiceResponse)
-def get_invoice_by_number(invoice_number: str):
-    invoice = get_gcp_invoice_response(invoice_number)
+def get_invoice_by_number(
+    invoice_number: str,
+    po_item: int | None = None,
+    user: dict = Depends(get_current_user_token),
+):
+    invoice = get_gcp_invoice_response(invoice_number, po_item=po_item)
+    supplier_code = _supplier_vendor_code(user)
 
-    if invoice is None:
+    # 404 (not 403) for other suppliers' invoices so their existence isn't revealed
+    if invoice is None or (supplier_code and invoice.supplier.vendor_code != supplier_code):
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    return invoice
+    return _redact_for_supplier(invoice) if supplier_code else invoice
 
