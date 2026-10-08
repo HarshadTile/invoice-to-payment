@@ -178,6 +178,32 @@ def test_notifications_follow_current_assignment_scope_and_read_state():
     assert client.get("/api/v1/notifications?unread=true", headers=admin).json() == []
 
 
+def test_notification_unread_count_paging_and_read_by_ticket():
+    invoice_no, vendor_code = _invoice_for()
+    supplier = _supplier_headers(vendor_code)
+    admin = _internal_headers("admin", "admin123", "all")
+    created = _create_ticket(supplier, invoice_no).json()
+
+    count = client.get("/api/v1/notifications/unread-count", headers=admin)
+    assert count.status_code == 200
+    assert count.json()["unread"] == len(client.get("/api/v1/notifications?unread=true", headers=admin).json()) >= 1
+
+    first_page = client.get("/api/v1/notifications?limit=1", headers=admin).json()
+    assert len(first_page) == 1
+    assert client.get("/api/v1/notifications?limit=0", headers=admin).status_code == 422
+    rest = client.get("/api/v1/notifications?limit=1&offset=1", headers=admin).json()
+    assert all(item["id"] != first_page[0]["id"] for item in rest)
+
+    cleared = client.post(f"/api/v1/notifications/ticket/{created['id']}/read", headers=admin)
+    assert cleared.status_code == 200
+    assert cleared.json()["read"] >= 1
+    assert all(
+        item["ticket_id"] != created["id"]
+        for item in client.get("/api/v1/notifications?unread=true", headers=admin).json()
+    )
+    assert client.post("/api/v1/notifications/ticket/NOPE/read", headers=admin).json() == {"read": 0}
+
+
 def test_new_and_reopened_ticket_notify_hq_admin_and_channel_lead():
     invoice_no, vendor_code = _invoice_for()
     supplier = _supplier_headers(vendor_code)

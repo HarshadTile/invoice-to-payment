@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -66,14 +66,28 @@ class SlaPolicyIn(BaseModel):
 @router.get("/notifications", response_model=list[NotificationOut])
 def list_notifications(
     unread: bool = False,
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     query = _scoped_notifications(db, user)
     if unread:
         query = query.filter(Notification.read_at.is_(None))
-    rows = query.order_by(Notification.created_at.desc()).limit(100).all()
+    rows = (
+        query.order_by(Notification.created_at.desc(), Notification.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
     return [_notification_out(db, item) for item in rows]
+
+
+@router.get("/notifications/unread-count")
+def unread_notification_count(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Exact number of unread notifications, however many there are (the list is paged)."""
+    count = _scoped_notifications(db, user).filter(Notification.read_at.is_(None)).count()
+    return {"unread": count}
 
 
 @router.post("/notifications/read-all")
@@ -98,6 +112,25 @@ def read_notification(
     notification.read_at = datetime.utcnow()
     db.commit()
     return {"read": True}
+
+
+@router.post("/notifications/ticket/{ticket_id}/read")
+def read_ticket_notifications(
+    ticket_id: str,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Opening a query clears this person's notifications about it."""
+    rows = (
+        _scoped_notifications(db, user)
+        .filter(Notification.ticket_id == ticket_id, Notification.read_at.is_(None))
+        .all()
+    )
+    now = datetime.utcnow()
+    for notification in rows:
+        notification.read_at = now
+    db.commit()
+    return {"read": len(rows)}
 
 
 def _require_admin(user: dict):
