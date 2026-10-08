@@ -77,16 +77,10 @@ export default function VendorCodePage() {
 
   return (
     <>
-      {canOpenFullVisibility && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          <button type="button" className="btn" onClick={() => navigate('/app/supplier-visibility')}>Open full Supplier Visibility →</button>
-        </div>
-      )}
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="row">
-          <div className="form-field" style={{ flex: 1 }}><label>Supplier Name</label><input value={supplier} readOnly /></div>
-          <div className="form-field" style={{ flex: 1 }}><label>PAN</label><input value={panFor(supplier)} readOnly /></div>
+      <div className="card" style={{ marginBottom: 12, padding: '12px 18px' }}>
+        <div className="row" style={{ gap: 12 }}>
+          <div className="form-field" style={{ flex: 1, marginBottom: 0 }}><label>Supplier Name</label><input value={supplier} readOnly /></div>
+          <div className="form-field" style={{ flex: 1, marginBottom: 0 }}><label>PAN</label><input value={panFor(supplier)} readOnly /></div>
         </div>
         {!isSupplier && siblingCodes.length > 0 && (
           <>
@@ -102,7 +96,7 @@ export default function VendorCodePage() {
         )}
       </div>
 
-      <div className="row" style={{ marginBottom: 16 }}>
+      <div className="row" style={{ marginBottom: 12, gap: 10 }}>
         <div className="stat-card" style={{ minWidth: 0 }}><div className="lbl">Total Invoices</div><div className="val">{invoices.length}</div></div>
         <div className="stat-card" style={{ minWidth: 0 }}><div className="lbl">Total POs</div><div className="val">{poCount}</div></div>
         <div className="stat-card" style={{ minWidth: 0 }}><div className="lbl">Total Amount</div><div className="val" style={{ fontSize: 15 }}>{Object.entries(byCurrency).map(([c, v]) => `${c}${v.toLocaleString('en-IN')}`).join(' + ') || '-'}</div></div>
@@ -112,12 +106,15 @@ export default function VendorCodePage() {
         <div className={`stat-card${openIssues ? ' bad' : ''}`} style={{ minWidth: 0 }}><div className="lbl">Open Issues</div><div className="val">{openIssues}</div></div>
       </div>
 
-      <div className="sheet-carousel" style={{ marginBottom: 14 }}>
+      <div className="sheet-carousel" style={{ marginBottom: 10 }}>
         <div className="car-track">
           {VCODE_VIEWS.map((v) => (
             <button type="button" key={v} className={`car-chip${v === activeView ? ' active' : ''}`} onClick={() => dispatch(setVcodeViewTab({ code, view: v }))}>{v}</button>
           ))}
         </div>
+        {canOpenFullVisibility && (
+          <button type="button" className="btn" style={{ flexShrink: 0 }} onClick={() => navigate('/app/supplier-visibility')}>Open full Supplier Visibility →</button>
+        )}
       </div>
 
       {activeView === 'Invoice Log' ? (

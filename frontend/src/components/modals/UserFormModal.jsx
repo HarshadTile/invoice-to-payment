@@ -71,6 +71,7 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
     <ModalShell
       title={editing ? `Edit User: ${user.name}` : 'Add User'}
       width={520}
+      onClose={busy ? () => {} : onClose}
       foot={(
         <>
           <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>

@@ -5,7 +5,7 @@ export const askLogout = () => openModal({
   kind: 'confirm',
   ctx: {
     title: 'Log Out',
-    message: 'Log out of this workspace? Any saved changes will remain available after you sign in again.',
+    message: 'Are you sure you want to log out? You will need to sign in again to continue.',
     confirmLabel: 'Log Out',
     action: { type: 'logout' },
   },

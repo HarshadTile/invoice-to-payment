@@ -69,6 +69,7 @@ export default function Sidebar() {
             <NavItem icon={<FileText />} label="My Invoices" active={isActive('/supplier/home')} onClick={() => navigate('/supplier/home')} />
             <NavItem icon={<History />} label="Logs" active={isActive('/supplier/logs')} onClick={() => navigate('/supplier/logs')} />
             <NavItem icon={<MessageSquare />} label="My Queries" active={isActive('/supplier/tickets')} onClick={() => navigate('/supplier/tickets')} />
+            <NavItem icon={<Bell />} label="Notifications" active={isActive('/supplier/notifications')} onClick={() => navigate('/supplier/notifications')} />
           </nav>
           <div className="nav-bottom">
             <NavItem icon={<User />} label="My Profile" active={isActive('/supplier/profile')} onClick={() => navigate('/supplier/profile')} />
@@ -139,6 +140,7 @@ export default function Sidebar() {
             <NavItem icon={<Building />} label="Supplier Visibility" active={isActive('/app/supplier-visibility')} onClick={() => navigate('/app/supplier-visibility')} />
           )}
           <NavItem icon={<MessageSquare />} label="Inquiry Desk" active={isActive('/app/inquiry-desk')} onClick={() => navigate('/app/inquiry-desk')} />
+          <NavItem icon={<Bell />} label="Notifications" active={isActive('/app/notifications')} onClick={() => navigate('/app/notifications')} />
         </nav>
 
         <div className="nav-bottom">
@@ -160,7 +162,7 @@ export default function Sidebar() {
               {canUseSettings && isOpen('settings') && (
                 <div className="nav-children lvl1">
                   {perm.manageConfig && <NavItem icon={<Sliders />} label="Integration Settings" active={isActive('/app/settings/integrations')} onClick={() => navigate('/app/settings/integrations')} />}
-                  {perm.manageConfig && <NavItem icon={<Bell />} label="Notifications" active={isActive('/app/settings/notifications')} onClick={() => navigate('/app/settings/notifications')} />}
+                  {perm.manageConfig && <NavItem icon={<Bell />} label="Auto-Notify Rules" active={isActive('/app/settings/notifications')} onClick={() => navigate('/app/settings/notifications')} />}
                   {perm.viewAuditLog && <NavItem icon={<History />} label="Audit Logs" active={isActive('/app/settings/auditLogs')} onClick={() => navigate('/app/settings/auditLogs')} />}
                   {perm.manageUsers && <NavItem icon={<Users />} label="Users" active={isActive('/app/settings/users')} onClick={() => navigate('/app/settings/users')} />}
                   {perm.manageRoles && <NavItem icon={<Shield />} label="Roles & Permissions" active={isActive('/app/settings/roles')} onClick={() => navigate('/app/settings/roles')} />}

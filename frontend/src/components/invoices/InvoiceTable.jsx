@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
@@ -6,6 +7,8 @@ import { matchesInvoiceQuery } from '../../utils/invoiceQuery';
 import { setSearch, setTablePage, toggleSelectRow, setSelectAll, clearSelection, openModal, pushToast } from '../../features/ui/uiSlice';
 import Badge from '../common/Badge.jsx';
 import PagerFoot from '../common/PagerFoot.jsx';
+import SortDateTh from '../common/SortDateTh.jsx';
+import { useDateSort } from '../../utils/dateSort';
 import { Mail, Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
 
 const PAGE_SIZE = 10;
@@ -42,7 +45,8 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const selected  = useSelector((s) => s.ui.tableSelected[tableKey] || EMPTY_SELECTION);
   const isSupplierUser = useSelector((s) => s.auth.authType === 'supplier');
 
-  const filtered = search ? invoices.filter((inv) => matchesInvoiceQuery(inv, search)) : invoices;
+  const matched = useMemo(() => (search ? invoices.filter((inv) => matchesInvoiceQuery(inv, search)) : invoices), [invoices, search]);
+  const { sorted: filtered, dir: dateDir, toggle: toggleDate } = useDateSort(matched, (inv) => inv.date);
 
   const totalPages   = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage  = Math.min(page, totalPages);
@@ -174,7 +178,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               {/* Renamed from "Handled By" which was truncating */}
               {!supplierView && <th scope="col">Owner</th>}
               <th scope="col">UTR No</th>
-              <th scope="col">Date</th>
+              <SortDateTh dir={dateDir} onToggle={toggleDate} />
               <th scope="col" className="col-actions">Actions</th>
             </tr>
           </thead>

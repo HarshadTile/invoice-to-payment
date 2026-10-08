@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation } from 'react-router-dom';
 import { useParams } from 'react-router-dom';
-import { selectTable, toggleNotifRule, setRowsLocal } from '../features/tables/tablesSlice';
+import { selectTable, setRowsLocal } from '../features/tables/tablesSlice';
 import { api } from '../api/client';
 import { CHANNEL_LABEL } from '../data/constants';
 import { togglePermission } from '../features/settings/settingsSlice';
@@ -11,10 +11,11 @@ import { pushToast } from '../features/ui/uiSlice';
 import { usersApi } from '../api/usersApi';
 import EditableTable from '../components/common/EditableTable.jsx';
 import Badge from '../components/common/Badge.jsx';
+import AutoNotifyRules from '../components/settings/AutoNotifyRules.jsx';
 import ModalShell from '../components/modals/ModalShell.jsx';
 import UserFormModal from '../components/modals/UserFormModal.jsx';
 import ResetPasswordModal from '../components/modals/ResetPasswordModal.jsx';
-import { Plus, Edit, Trash, Key, Inbox } from '../components/common/icons.jsx';
+import { Plus, Edit, Trash, Key, Inbox, ChevronRight } from '../components/common/icons.jsx';
 
 // Mirrors ADMIN_LOCKED_CAPABILITIES on the server (app/core/permissions.py).
 const ADMIN_LOCKED = ['manageUsers', 'manageConfig', 'manageRoles'];
@@ -35,7 +36,7 @@ export default function SettingsPage() {
   return (
     <>
       {sub === 'integrations' && <IntegrationsTab />}
-      {sub === 'notifications' && <NotificationsTab />}
+      {sub === 'notifications' && <AutoNotifyRules />}
       {sub === 'auditLogs' && <AuditLogsTab />}
       {sub === 'users' && <UsersTab />}
       {sub === 'roles' && <RolesTab />}
@@ -57,40 +58,6 @@ function IntegrationsTab() {
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
-
-function NotificationsTab() {
-  const dispatch = useDispatch();
-  const tableKey = 'settings-notifications';
-  const rows = useSelector((s) => selectTable(s, tableKey));
-  const senderEmail = useSelector((s) => s.settings.senderEmail);
-  const perm = useSelector(selectPerm);
-
-  return (
-    <div className="card">
-      <div className="toolbar">
-        <div className="toolbar-left"><h3 style={{ margin: 0 }}>Auto-Notify Rules</h3></div>
-      </div>
-      <div className="form-field" style={{ maxWidth: 420, marginBottom: 6 }}>
-        <label>Sender email for auto-mails</label>
-        <input value={senderEmail} readOnly />
-      </div>
-      {rows.map((r, idx) => (
-        <div className="notif-row" key={idx}>
-          <div className="notif-main">
-            <div className="notif-title">{r[0]}</div>
-            <div className="notif-sub">Auto-mails <b>{r[1]}</b>{r[2] !== '-' ? <> · CC <b>{r[2]}</b></> : null}</div>
-          </div>
-          <button
-            type="button"
-            className={`toggle${r[3] === 'On' ? ' on' : ''}`}
-            disabled={!perm.manageConfig}
-            onClick={() => dispatch(toggleNotifRule(idx)).catch((err) => dispatch(pushToast(err.message || 'Could not save that change.')))}
-          ><div className="dot" /></button>
-        </div>
-      ))}
     </div>
   );
 }
@@ -288,6 +255,7 @@ function UsersTab() {
         <ModalShell
           title="Remove User"
           width={440}
+          onClose={deleting ? () => {} : () => setPendingDelete(null)}
           foot={(
             <>
               <button type="button" className="btn" onClick={() => setPendingDelete(null)} disabled={deleting}>Cancel</button>
@@ -347,12 +315,19 @@ function RolesTab() {
   );
 }
 
-/** Read-only: what each Ticket Role may do in the Inquiry Desk. The table comes from the
+/** Read-only reference: what each Ticket Role may do in the Inquiry Desk. The table comes from the
  *  server, generated from the same rules the ticket endpoints enforce. A user's ticket role
  *  is set per person under Users; it is separate from their application role above. */
+function StatusChips({ text, own }) {
+  const items = String(text || '').split(',').map((t) => t.trim()).filter(Boolean);
+  if (!items.length) return null;
+  return <div className={`tp-val${own ? ' own' : ''}`}>{items.join(', ')}{own && <sup>*</sup>}</div>;
+}
+
 function TicketPermissionsCard() {
   const [matrix, setMatrix] = useState(null);
   const [failed, setFailed] = useState(false);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     let cancelled = false;
     api.get('/v1/ticket-permissions')
@@ -366,35 +341,48 @@ function TicketPermissionsCard() {
   }, []);
 
   return (
-    <div className="card" style={{ marginTop: 16 }}>
-      <h3 style={{ margin: '0 0 4px' }}>Inquiry Desk ticket roles</h3>
-      <p className="card-hint" style={{ margin: '0 0 12px' }}>
-        Read-only. Set a person's ticket role under Users; it is separate from their application role. Channel Leads
-        only act on tickets in their authorized channels. Replying to the supplier and resolving are for the ticket's
-        assignee, so a Channel Lead or Admin must assign the ticket to themselves first.
-      </p>
-      {failed && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Couldn't load the ticket permissions.</p>}
-      {!matrix && !failed && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>}
-      {matrix && (
-        <div className="table-scroll">
-          <table className="perm-table">
-            <thead><tr><th>Action</th>{matrix.roles.map((r) => <th key={r}>{r}</th>)}</tr></thead>
-            <tbody>
-              {matrix.rows.map((row) => (
-                <tr key={row.action}>
-                  <td>{row.action}</td>
-                  {row.cells.map((cell, i) => (
-                    <td key={matrix.roles[i]} style={{ fontSize: 12.5 }}>
-                      {cell.text || (cell.ifAssigned ? null : <span style={{ color: '#CBD5E1' }}>-</span>)}
-                      {cell.ifAssigned && (
-                        <div style={{ color: 'var(--text-muted)' }}>{cell.text ? '+ ' : ''}{cell.ifAssigned} if assigned to them</div>
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="card tp-card">
+      <button type="button" className="tp-head" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span>
+          <b>Inquiry Desk ticket roles</b>
+          <small>What each ticket role can do, by query status. Read-only.</small>
+        </span>
+        <span className={`chev${open ? ' open' : ''}`} aria-hidden="true"><ChevronRight size={16} /></span>
+      </button>
+
+      {open && (
+        <div className="tp-body">
+          <ul className="tp-notes">
+            <li>A person's ticket role is set under <b>Users</b> and is separate from their application role.</li>
+            <li>Channel Leads act only on queries in their authorized channels.</li>
+            <li>Replying to the supplier and resolving are for the query's assignee, so a Channel Lead or Admin must assign it to themselves first.</li>
+          </ul>
+          {failed && <p className="tp-state">Couldn't load the ticket permissions.</p>}
+          {!matrix && !failed && <p className="tp-state">Loading…</p>}
+          {matrix && (
+            <>
+              <div className="table-scroll">
+                <table className="tp-table">
+                  <thead><tr><th>Action</th>{matrix.roles.map((r) => <th key={r}>{r}</th>)}</tr></thead>
+                  <tbody>
+                    {matrix.rows.map((row) => (
+                      <tr key={row.action}>
+                        <td>{row.action}</td>
+                        {row.cells.map((cell, i) => (
+                          <td key={matrix.roles[i]}>
+                            {!cell.text && !cell.ifAssigned && <span className="tp-none">–</span>}
+                            {cell.text && <StatusChips text={cell.text} />}
+                            {cell.ifAssigned && <StatusChips text={cell.ifAssigned} own />}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="tp-legend"><sup>*</sup> Only when the query is assigned to that person.</p>
+            </>
+          )}
         </div>
       )}
     </div>

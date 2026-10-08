@@ -7,6 +7,8 @@ import {
   LOG_TYPES, filterLogRows, formatDay, formatDayTime, invoiceLogRows, logRowsToCsv, staffQueryLogRows,
 } from '../../utils/supplierLog';
 import PagerFoot from './PagerFoot.jsx';
+import SortDateTh from './SortDateTh.jsx';
+import { useDateSort } from '../../utils/dateSort';
 import Badge from './Badge.jsx';
 import { Download } from './icons.jsx';
 
@@ -42,7 +44,8 @@ export default function GlobalLogsBody({ invoiceList }) {
     () => [...invoiceLogRows(invoiceList), ...staffQueryLogRows(entries, invoiceList, true)],
     [invoiceList, entries],
   );
-  const rows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
+  const filteredRows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
+  const { sorted: rows, dir: dateDir, toggle: toggleDate } = useDateSort(filteredRows, (row) => row.when, 'desc');
   const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / PAGE_SIZE)));
   const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
@@ -95,7 +98,7 @@ export default function GlobalLogsBody({ invoiceList }) {
       <div className="table-scroll">
         <table>
           <thead>
-            <tr><th>Date</th><th>Invoice No</th><th>Vendor Code</th><th>PO No</th><th>Type</th><th>Event</th><th>Performed By</th><th>Details</th></tr>
+            <tr><SortDateTh dir={dateDir} onToggle={toggleDate} /><th>Invoice No</th><th>Vendor Code</th><th>PO No</th><th>Type</th><th>Event</th><th>Performed By</th><th>Details</th></tr>
           </thead>
           <tbody>
             {pageRows.length === 0 && (

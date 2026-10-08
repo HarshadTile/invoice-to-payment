@@ -14,6 +14,7 @@ import {
   useUpdateTicketMutation,
   useUploadAttachmentMutation,
 } from '../features/tickets/ticketsApi.js';
+import { useMarkTicketNotificationsReadMutation } from '../features/notifications/notificationsApi';
 import Badge from '../components/common/Badge.jsx';
 import { ArrowLeft, CheckCircle, Clock, Paperclip, RotateCcw, Send } from '../components/common/icons.jsx';
 import { TICKET_CATEGORIES } from '../data/constants.js';
@@ -60,6 +61,7 @@ export default function TicketDetailPage() {
   });
 
   const [markRead] = useMarkTicketReadMutation();
+  const [clearNotifications] = useMarkTicketNotificationsReadMutation();
   const [reply, replyState] = useReplyToTicketMutation();
   const [assign, assignState] = useAssignTicketMutation();
   const [updateTicket, updateState] = useUpdateTicketMutation();
@@ -72,6 +74,11 @@ export default function TicketDetailPage() {
   useEffect(() => {
     if (ticket?.unread && !supplier) markRead(ticket.id);
   }, [ticket?.id, ticket?.unread, supplier, markRead]);
+
+  // Opening a query clears this person's notifications about it, so the bell badge doesn't keep counting it.
+  useEffect(() => {
+    if (ticket?.id) clearNotifications({ ticketId: ticket.id });
+  }, [ticket?.id, clearNotifications]);
 
   async function run(request) {
     setError('');

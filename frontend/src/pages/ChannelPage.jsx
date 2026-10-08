@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { CHANNELS, VIEW_COLUMNS, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
 import { selectFilteredInvoicesAnyChannel } from '../features/invoices/selectors';
 import { channelViewRows } from '../utils/businessLogic';
-import { setChannelViewTab, setChannelQueryViewMode, openModal, setPageFilters } from '../features/ui/uiSlice';
+import { setChannelViewTab, openModal, setPageFilters } from '../features/ui/uiSlice';
 import { setRowsLocal, selectTable } from '../features/tables/tablesSlice';
 import { selectPerm } from '../features/auth/authSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
@@ -13,9 +13,6 @@ import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../components
 import EditableTable from '../components/common/EditableTable.jsx';
 import StatCard from '../components/common/StatCard.jsx';
 import Badge from '../components/common/Badge.jsx';
-import TicketTable from '../components/tickets/TicketTable.jsx';
-import TicketBoard from '../components/tickets/TicketBoard.jsx';
-import { useGetTicketBoardQuery, useGetTicketsQuery } from '../features/tickets/ticketsApi';
 
 /** Status + date-range filter (same one used on My Invoices / Search Invoice(s)), scoped to this channel's invoices.
  *  Persisted per channel in Redux so it survives navigating away and back — the
@@ -85,7 +82,7 @@ export default function ChannelPage() {
   const scopedInvoices = useSelector(selectFilteredInvoicesAnyChannel);
   const savedViewTab = useSelector((s) => s.ui.channelViewTab[key]);
   const perm = useSelector(selectPerm);
-  const channelInvoices = scopedInvoices.filter((i) => i.channel === key);
+  const channelInvoices = useMemo(() => scopedInvoices.filter((i) => i.channel === key), [scopedInvoices, key]);
   const { shown: filteredChannelInvoices, bar: channelFilterBar } = useChannelInvoiceFilter(channelInvoices, key);
 
   if (!channel) return <p>Unknown channel.</p>;
@@ -109,8 +106,7 @@ export default function ChannelPage() {
         </>
       )}
       {activeView === 'History' && <ChannelHistory channelKey={key} channelInvoices={channelInvoices} />}
-      {activeView === 'Queries' && <ChannelQueries channelKey={key} />}
-      {!['Invoice Log', 'History', 'Queries'].includes(activeView) && (
+      {!['Invoice Log', 'History'].includes(activeView) && (
         <ChannelSubView channelKey={key} view={activeView} channelInvoices={channelInvoices} canImportExport={perm.importExport} />
       )}
     </>
@@ -195,39 +191,6 @@ function ChannelHistory({ channelKey, channelInvoices }) {
   );
 }
 
-function ChannelQueries({ channelKey }) {
-  const dispatch = useDispatch();
-  const { data: page, isLoading } = useGetTicketsQuery({ channel: channelKey, include_closed: true, page_size: 100 });
-  const { data: board = {}, isLoading: boardLoading } = useGetTicketBoardQuery({ channel: channelKey });
-  const viewMode = useSelector((s) => s.ui.channelQueryViewMode);
-  const tickets = page?.items || [];
-  const open = tickets.filter((t) => t.status === 'OPEN').length;
-  const inProgress = tickets.filter((t) => t.status === 'IN_PROGRESS').length;
-  const breached = tickets.filter((t) => t.sla?.breached).length;
-  const resolved = tickets.filter((t) => t.status === 'RESOLVED' || t.status === 'CLOSED').length;
-  const view = viewMode === 'board' ? 'board' : 'list';
-
-  return (
-    <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-        <div className="sheet-carousel">
-          <div className="car-track">
-            <button type="button" className={`car-chip${view === 'list' ? ' active' : ''}`} onClick={() => dispatch(setChannelQueryViewMode('list'))}>☰ List</button>
-            <button type="button" className={`car-chip${view === 'board' ? ' active' : ''}`} onClick={() => dispatch(setChannelQueryViewMode('board'))}>▦ Board</button>
-          </div>
-        </div>
-      </div>
-      <div className="row" style={{ marginBottom: 14 }}>
-        <StatCard tone="bad" icon="✉" label="Open" value={open} />
-        <StatCard tone="warn" icon="◑" label="In Progress" value={inProgress} />
-        <StatCard tone="bad" icon="⚠" label="SLA Breached" value={breached} />
-        <StatCard icon="✓" label="Resolved / Closed" value={resolved} />
-      </div>
-      {view === 'list' ? <TicketTable tickets={tickets} loading={isLoading} /> : <TicketBoard groups={board} loading={boardLoading} />}
-    </>
-  );
-}
-
 function ChannelSubView({ channelKey, view, channelInvoices, canImportExport }) {
   const dispatch = useDispatch();
   const tableKey = `channel-${channelKey}-${view.replace(/\s+/g, '_')}`;
@@ -235,10 +198,9 @@ function ChannelSubView({ channelKey, view, channelInvoices, canImportExport }) 
   const cols = VIEW_COLUMNS[view];
 
   useEffect(() => {
-    // Derived from the invoice data on screen: kept in memory only, never written to the server.
-    if (!rows.length) dispatch(setRowsLocal({ key: tableKey, rows: channelViewRows(channelKey, view, channelInvoices) }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableKey]);
+    // Derived from the invoice data on screen (so it follows the top-bar year / vendor): kept in memory only, never written to the server.
+    dispatch(setRowsLocal({ key: tableKey, rows: channelViewRows(channelKey, view, channelInvoices) }));
+  }, [dispatch, tableKey, channelKey, view, channelInvoices]);
 
   return (
     <div className="card">
