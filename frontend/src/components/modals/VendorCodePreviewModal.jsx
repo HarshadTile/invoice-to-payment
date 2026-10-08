@@ -1,6 +1,6 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { supplierForVendorCode, panFor, supplierEmailFor, synthPhone, posForVendorCode } from '../../utils/businessLogic';
+import { supplierForVendorCode, panFor, posForVendorCode } from '../../utils/businessLogic';
 import { runtime } from '../../data/runtime';
 import { closeModal } from '../../features/ui/uiSlice';
 import { useGetTicketsQuery } from '../../features/tickets/ticketsApi';
@@ -39,8 +39,6 @@ export default function VendorCodePreviewModal({ ctx }) {
     >
       <div className="validation-row"><span>Supplier</span><span style={{ fontWeight: 700 }}>{supplier}</span></div>
       <div className="validation-row"><span>PAN</span><span>{panFor(supplier)}</span></div>
-      <div className="validation-row"><span>Contact Email</span><span>{supplierEmailFor(supplier)}</span></div>
-      <div className="validation-row"><span>Contact Phone</span><span>{synthPhone(supplier)}</span></div>
       <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em', display: 'block', margin: '14px 0 8px' }}>On This Vendor Code</label>
       <div className="validation-row"><span>Total Invoices</span><span>{invoices.length}</span></div>
       <div className="validation-row"><span>Purchase Orders</span><span>{poCount}</span></div>

@@ -1,8 +1,8 @@
 /* In-memory stand-in for src/api/client used by the component test suite.
  * It mimics just enough of the server for the login → hydrate → mutate flows. */
 import { vi } from 'vitest';
-import { INVOICE_DATA, SYNC_LOG } from '../data/invoices';
-import { INITIAL_TICKETS } from '../data/tickets';
+import { INVOICE_DATA, SYNC_LOG } from './fixtures/invoices';
+import { INITIAL_TICKETS } from './fixtures/tickets';
 import { ROLE_MATRIX } from '../data/constants';
 
 const TABLE_SEED = {
@@ -59,7 +59,7 @@ function authFor(form) {
   }
   const channelScope = form.channelScope || 'all';
   return {
-    authType: 'internal', channelScope,
+    authType: 'internal', id: 1, channelScope,
     role: channelScope === 'all' ? 'Admin' : 'Invoice Team',
     supplierQuery: null, supplierPAN: null, supplierLoginVcode: null,
     currentUser: internalUser(String(form.username || '').trim().toLowerCase()),
@@ -69,6 +69,8 @@ function authFor(form) {
 export function installApiMock() {
   let seq = 1005;
   let persistedTickets = JSON.parse(JSON.stringify(INITIAL_TICKETS));
+  // The bell and the Notifications page both read these; tests can change them via the returned `notifications` handle.
+  const notifications = [];
   let persistedUsers = [
     { id: 1, username: 'admin', name: 'Administrator', email: 'admin@company.com', role: 'Admin', status: 'Active', channelScope: 'all', ticketRole: 'ADMIN', channels: [] },
     { id: 2, username: 'priya', name: 'Priya Deshmukh', email: 'p.deshmukh@company.com', role: 'Invoice Team', status: 'Active', channelScope: 'msetuSrm', ticketRole: 'ASSIGNEE', channels: ['msetuSrm'] },
@@ -147,7 +149,11 @@ export function installApiMock() {
     if (path === '/v1/tickets/activity-log') return [];
     if (path === '/v1/ticket-permissions') return { roles: ['Admin', 'Channel Lead', 'Assignee', 'Supplier'], rows: [{ action: 'View ticket', cells: [{ text: 'Always', ifAssigned: '' }, { text: 'Always', ifAssigned: '' }, { text: '', ifAssigned: 'Always' }, { text: 'Always', ifAssigned: '' }] }] };
     if (path === '/settings') return bootstrap().settings;
-    if (path.startsWith('/v1/notifications')) return [];
+    if (path === '/v1/notifications/unread-count') return { unread: notifications.filter((n) => !n.read_at).length };
+    if (path.startsWith('/v1/notifications')) {
+      const limit = Number(new URLSearchParams(path.split('?')[1] || '').get('limit')) || 100;
+      return notifications.slice(0, limit).map((n) => ({ ...n }));
+    }
     if (path.startsWith('/v1/tickets/summary')) {
       const rows = persistedTickets.map(normalizeTicket);
       return {
@@ -195,6 +201,24 @@ export function installApiMock() {
       return { token: 'test-token', auth: authFor(form) };
     }
     if (path === '/v1/auth/logout') return { ok: true };
+    if (path === '/v1/notifications/read-all') {
+      notifications.forEach((n) => { n.read_at = n.read_at || new Date().toISOString(); });
+      return { read: true };
+    }
+    {
+      const one = path.match(/^\/v1\/notifications\/(\d+)\/read$/);
+      if (one) {
+        const item = notifications.find((n) => n.id === Number(one[1]));
+        if (item) item.read_at = item.read_at || new Date().toISOString();
+        return { read: true };
+      }
+      const byTicket = path.match(/^\/v1\/notifications\/ticket\/([^/]+)\/read$/);
+      if (byTicket) {
+        const rows = notifications.filter((n) => n.ticket_id === byTicket[1] && !n.read_at);
+        rows.forEach((n) => { n.read_at = new Date().toISOString(); });
+        return { read: rows.length };
+      }
+    }
     if (path === '/v1/users/') {
       const created = {
         id: Math.max(...persistedUsers.map((item) => item.id), 0) + 1,
@@ -277,6 +301,7 @@ export function installApiMock() {
 
   return {
     get, post, patch, put, delete: remove,
+    notifications,
     setToken: vi.fn(),
     clearToken: vi.fn(),
     hasToken: vi.fn(() => false),
