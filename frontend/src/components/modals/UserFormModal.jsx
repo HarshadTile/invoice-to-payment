@@ -15,7 +15,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  *  - Application Role: what the person may do in the app (Admin, Invoice Team, ...).
  *  - Ticket Role: what they may do in the Inquiry Desk. Never implied by the application
  *    role — an Accounts or Viewer user has no ticket access unless one is granted here.
- *  - Authorized Channels: which channels they can work in. Admin always has all of them.
+ *  - Authorized Channel: the one channel they work in. Admin always has all of them.
  */
 export default function UserFormModal({ user, roles, onClose, onSave }) {
   const editing = !!user;
@@ -25,7 +25,8 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
       // An Admin's ticket role is the inherited ADMIN, which isn't a grantable value: if they're
       // later changed to another role, start from no ticket access.
       ticketRole: user.ticketRole && user.ticketRole !== 'ADMIN' ? user.ticketRole : 'NO_ACCESS',
-      channels: user.channels || [],
+      // One channel per person; an older account that still has several starts from the first.
+      channels: (user.channels || []).slice(0, 1),
     }
     : {
       name: '', email: '', role: roles[0] || 'Viewer',
@@ -36,15 +37,12 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
 
   const isAdmin = values.role === 'Admin';
   const set = (key) => (e) => setValues((prev) => ({ ...prev, [key]: e.target.value }));
-  const toggleChannel = (key) => setValues((prev) => ({
-    ...prev,
-    channels: prev.channels.includes(key) ? prev.channels.filter((c) => c !== key) : [...prev.channels, key],
-  }));
+  const pickChannel = (key) => setValues((prev) => ({ ...prev, channels: [key] }));
 
   function validate() {
     if (!values.name.trim()) return 'Full name is required.';
     if (!emailPattern.test(values.email)) return 'Enter a valid email address.';
-    if (!isAdmin && values.channels.length === 0) return 'Pick at least one authorized channel for this role.';
+    if (!isAdmin && values.channels.length === 0) return 'Select the channel this user can access.';
     return '';
   }
 
@@ -121,7 +119,7 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
       </div>
 
       <div className="form-field">
-        <label>Authorized Channels</label>
+        <label>Authorized Channel</label>
         {isAdmin ? (
           <input value="All Channels — HQ / Admin" readOnly />
         ) : (
@@ -129,9 +127,10 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
             {LOGIN_CHANNELS.map((c) => (
               <label key={c.key} className="choice-tile">
                 <input
-                  type="checkbox"
+                  type="radio"
+                  name="authorized-channel"
                   checked={values.channels.includes(c.key)}
-                  onChange={() => toggleChannel(c.key)}
+                  onChange={() => pickChannel(c.key)}
                 />
                 {c.label}
               </label>

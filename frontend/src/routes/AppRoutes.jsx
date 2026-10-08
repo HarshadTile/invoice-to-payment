@@ -5,6 +5,7 @@ import {
   RequireSupplier,
   RequireHQ,
   RequireCapability,
+  RequireTicketAccess,
   SettingsIndexRedirect,
   RedirectIfLoggedIn,
 } from './ProtectedRoute.jsx';
@@ -46,10 +47,12 @@ export default function AppRoutes() {
           <Route path="/app/search" element={<SearchInvoicePage />} />
           <Route path="/app/channel/:key" element={<ChannelPage />} />
           <Route path="/app/vendor-code/:code" element={<VendorCodePage />} />
-          <Route path="/app/inquiry-desk" element={<InquiryDeskPage />} />
-          <Route path="/app/inquiry-desk/:id" element={<TicketDetailPage />} />
+          <Route element={<RequireTicketAccess />}>
+            <Route path="/app/inquiry-desk" element={<InquiryDeskPage />} />
+            <Route path="/app/inquiry-desk/:id" element={<TicketDetailPage />} />
+            <Route path="/app/notifications" element={<NotificationsPage />} />
+          </Route>
           <Route path="/app/profile" element={<ProfilePage />} />
-          <Route path="/app/notifications" element={<NotificationsPage />} />
 
           <Route element={<RequireHQ />}>
             <Route path="/app/supplier-visibility" element={<SupplierVisibilityPage />} />

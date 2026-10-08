@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
 import { ensureNavExpanded, setSidebarCollapsed, toggleNavExpanded, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
 import { askLogout } from '../../features/auth/logoutPrompt';
-import { selectPerm } from '../../features/auth/authSlice';
+import { selectHasTicketAccess, selectPerm } from '../../features/auth/authSlice';
 import {
   FileText, Search, Layers, Building, MessageSquare, BarChart3, History,
   RefreshCw, Settings, Sliders, Users, Shield, Bell, User, LogOut, ChevronRight,
@@ -33,6 +33,7 @@ export default function Sidebar() {
   const location = useLocation();
   const { authType, channelScope } = useSelector((s) => s.auth);
   const perm = useSelector(selectPerm);
+  const hasTicketAccess = useSelector(selectHasTicketAccess);
   const expandedNav = useSelector((s) => s.ui.expandedNav);
   const collapsed = useSelector((s) => s.ui.sidebarCollapsed);
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
@@ -139,8 +140,12 @@ export default function Sidebar() {
           {isHQ && (
             <NavItem icon={<Building />} label="Supplier Visibility" active={isActive('/app/supplier-visibility')} onClick={() => navigate('/app/supplier-visibility')} />
           )}
-          <NavItem icon={<MessageSquare />} label="Inquiry Desk" active={isActive('/app/inquiry-desk')} onClick={() => navigate('/app/inquiry-desk')} />
-          <NavItem icon={<Bell />} label="Notifications" active={isActive('/app/notifications')} onClick={() => navigate('/app/notifications')} />
+          {hasTicketAccess && (
+            <>
+              <NavItem icon={<MessageSquare />} label="Inquiry Desk" active={isActive('/app/inquiry-desk')} onClick={() => navigate('/app/inquiry-desk')} />
+              <NavItem icon={<Bell />} label="Notifications" active={isActive('/app/notifications')} onClick={() => navigate('/app/notifications')} />
+            </>
+          )}
         </nav>
 
         <div className="nav-bottom">

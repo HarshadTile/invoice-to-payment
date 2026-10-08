@@ -1,6 +1,6 @@
 import { useSelector } from 'react-redux';
 import { Navigate, Outlet } from 'react-router-dom';
-import { AUTH_BYPASS, selectPerm } from '../features/auth/authSlice';
+import { AUTH_BYPASS, selectHasTicketAccess, selectPerm } from '../features/auth/authSlice';
 
 /** Gate for the internal (HQ / Internal Team) side of the app. */
 export function RequireInternal() {
@@ -16,6 +16,13 @@ export function RequireSupplier() {
   if (!loggedIn) return <Navigate to="/login" replace />;
   if (AUTH_BYPASS) return <Outlet />;
   if (authType !== 'supplier') return <Navigate to="/app/invoices" replace />;
+  return <Outlet />;
+}
+
+/** Inquiry Desk and Notifications: staff need a ticket role (see selectHasTicketAccess). */
+export function RequireTicketAccess() {
+  const allowed = useSelector(selectHasTicketAccess);
+  if (!allowed) return <Navigate to="/app/invoices" replace />;
   return <Outlet />;
 }
 

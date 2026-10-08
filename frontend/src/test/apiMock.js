@@ -59,7 +59,7 @@ function authFor(form) {
   }
   const channelScope = form.channelScope || 'all';
   return {
-    authType: 'internal', id: 1, channelScope,
+    authType: 'internal', id: 1, channelScope, ticketRole: channelScope === 'all' ? 'ADMIN' : (form.ticketRole || 'ASSIGNEE'),
     role: channelScope === 'all' ? 'Admin' : 'Invoice Team',
     supplierQuery: null, supplierPAN: null, supplierLoginVcode: null,
     currentUser: internalUser(String(form.username || '').trim().toLowerCase()),

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { useGetNotificationsQuery, useGetUnreadCountQuery, NOTIFICATION_LIVE } from '../../features/notifications/notificationsApi';
+import { selectHasTicketAccess } from '../../features/auth/authSlice';
 import { useNotificationActions } from '../../features/notifications/useNotificationActions';
 import { notificationDate, notificationLabel } from '../../utils/notifications';
 import { Bell } from '../common/icons.jsx';
@@ -10,8 +13,11 @@ const MENU_LIMIT = 30;
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
+  const navigate = useNavigate();
+  const supplier = useSelector((s) => s.auth.authType === 'supplier');
+  const hasTicketAccess = useSelector(selectHasTicketAccess);
   const { identity, open: openNotification, readAll } = useNotificationActions();
-  const skip = !identity;
+  const skip = !identity || !hasTicketAccess;
 
   const { data: count, isError: countFailed } = useGetUnreadCountQuery({ identity }, { ...NOTIFICATION_LIVE, skip });
   const { data: items, isLoading, isError, refetch } = useGetNotificationsQuery({ identity, limit: MENU_LIMIT }, { ...NOTIFICATION_LIVE, skip: skip || !open });
@@ -30,6 +36,7 @@ export default function NotificationBell() {
   }, [open]);
 
   const list = items || [];
+  if (!hasTicketAccess) return null; // staff without a ticket role have no notifications
   return (
     <div className="notification-menu-wrap" ref={wrapRef}>
       <button
@@ -47,7 +54,7 @@ export default function NotificationBell() {
             <b>Notifications</b>
             <button type="button" onClick={readAll} disabled={!unread}>Mark all read</button>
           </div>
-          <div className="notification-menu-list">
+          <div className={`notification-menu-list${list.some((n) => !n.read_at) ? ' has-unread' : ''}`}>
             {isLoading && <p className="notification-empty">Loading...</p>}
             {isError && (
               <p className="notification-empty">
@@ -62,6 +69,12 @@ export default function NotificationBell() {
               </button>
             ))}
           </div>
+          <button
+            type="button" className="notification-viewall"
+            onClick={() => { setOpen(false); navigate(supplier ? '/supplier/notifications' : '/app/notifications'); }}
+          >
+            View all notifications
+          </button>
         </div>
       )}
     </div>

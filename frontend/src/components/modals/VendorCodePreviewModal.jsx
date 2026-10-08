@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supplierForVendorCode, panFor, posForVendorCode } from '../../utils/businessLogic';
 import { runtime } from '../../data/runtime';
 import { closeModal } from '../../features/ui/uiSlice';
+import { selectHasTicketAccess } from '../../features/auth/authSlice';
 import { useGetTicketsQuery } from '../../features/tickets/ticketsApi';
 import ModalShell from './ModalShell.jsx';
 
@@ -14,7 +15,8 @@ export default function VendorCodePreviewModal({ ctx }) {
   const supplier = supplierForVendorCode(code);
   const invoices = runtime.invoices.filter((i) => i.vcode === code);
   const poCount = Object.keys(posForVendorCode(code)).length;
-  const { data: ticketPage } = useGetTicketsQuery({ vendor_code: code, page_size: 100 });
+  const hasTicketAccess = useSelector(selectHasTicketAccess);
+  const { data: ticketPage } = useGetTicketsQuery({ vendor_code: code, page_size: 100 }, { skip: !hasTicketAccess });
   const openIssues = (ticketPage?.items || []).filter((t) => ['OPEN', 'IN_PROGRESS'].includes(t.status)).length;
 
   return (

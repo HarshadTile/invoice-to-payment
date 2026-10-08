@@ -14,7 +14,7 @@ import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
 import { api } from '../api/client';
-import authReducer from '../features/auth/authSlice';
+import authReducer, { setAuthFromServer } from '../features/auth/authSlice';
 import { ticketsApi } from '../features/tickets/ticketsApi';
 import { notificationsApi } from '../features/notifications/notificationsApi';
 import tablesReducer from '../features/tables/tablesSlice';
@@ -260,6 +260,15 @@ describe('Internal admin - full navigation', () => {
       expect(document.querySelectorAll('.notification-item.unread').length).toBe(2);
     });
 
+    it('the bell menu links to the full Notifications page', async () => {
+      seed();
+      const { user } = await loginAdmin();
+      await user.click(await screen.findByRole('button', { name: 'Notifications, 2 unread' }));
+      await user.click(await screen.findByRole('button', { name: 'View all notifications' }));
+      await waitFor(() => expect(document.querySelectorAll('.inbox-row').length).toBe(3));
+      expect(document.querySelector('.notification-menu')).toBeNull();
+    });
+
     it('opening one marks it read and lowers the badge', async () => {
       seed();
       const { user } = await loginAdmin();
@@ -352,6 +361,35 @@ describe('Internal admin - full navigation', () => {
     fireEvent.change(inputs[1], { target: { value: 'test.user@example.com' } });
     await user.click(screen.getByRole('button', { name: 'Send Invite' }));
     expect(await screen.findByText('test.user@example.com')).toBeInTheDocument();
+  });
+
+  it('Settings: a user is authorized for one channel at a time', async () => {
+    const { user } = await loginAdmin();
+    await user.click(screen.getAllByText('Settings')[0]);
+    await user.click(screen.getAllByText('Users')[0]);
+    await screen.findByText('admin@company.com');
+    await user.click(screen.getByRole('button', { name: 'Add User' }));
+    fireEvent.change(document.querySelector('.modal-body select'), { target: { value: 'Viewer' } });
+    const radios = () => [...document.querySelectorAll('.modal-body input[type="radio"]')];
+    expect(radios().length).toBe(3);
+    expect(document.querySelectorAll('.modal-body input[type="checkbox"]').length).toBe(0);
+    await user.click(radios()[1]);
+    await user.click(radios()[0]);
+    expect(radios().map((r) => r.checked)).toEqual([true, false, false]);
+  });
+
+  it('staff without a ticket role do not get the Inquiry Desk, Notifications or the bell', async () => {
+    const { store, user } = await loginAdmin();
+    expect(document.querySelector('.nav-item[aria-label="Inquiry Desk"]')).not.toBeNull();
+    expect(document.querySelector('.notification-button')).not.toBeNull();
+
+    store.dispatch(setAuthFromServer({ ticketRole: 'NO_ACCESS' }));
+    await waitFor(() => expect(document.querySelector('.nav-item[aria-label="Inquiry Desk"]')).toBeNull());
+    expect(document.querySelector('.nav-item[aria-label="Notifications"]')).toBeNull();
+    expect(document.querySelector('.notification-button')).toBeNull();
+    // the rest of the app is still there
+    expect(document.querySelector('.nav-item[aria-label="Search Invoice(s)"]')).not.toBeNull();
+    expect(user).toBeTruthy();
   });
 
   it('Settings: toggles an auto-notify rule', async () => {

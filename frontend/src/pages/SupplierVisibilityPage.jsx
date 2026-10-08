@@ -7,6 +7,7 @@ import { selectFilteredInvoicesAnyVendor } from '../features/invoices/selectors'
 import { setScopeFilter, setSupplierVisibilityQuery } from '../features/ui/uiSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import StatCard from '../components/common/StatCard.jsx';
+import { selectHasTicketAccess } from '../features/auth/authSlice';
 import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
 
 export default function SupplierVisibilityPage() {
@@ -39,7 +40,8 @@ export default function SupplierVisibilityPage() {
   // code that belongs to this supplier is included, not just the exact string picked.
   const isSameSupplier = (i) => (pan !== '-' ? i.pan === pan : i.vendor === supplier);
   const invoices = scoped.filter(isSameSupplier);
-  const { data: ticketPage } = useGetTicketsQuery({ include_closed: true, page_size: 100 });
+  const hasTicketAccess = useSelector(selectHasTicketAccess);
+  const { data: ticketPage } = useGetTicketsQuery({ include_closed: true, page_size: 100 }, { skip: !hasTicketAccess });
   const ticketItems = ticketPage?.items || [];
   const openIssues = ticketItems.filter((t) => codes.includes(t.vendor_code) && ['OPEN', 'IN_PROGRESS'].includes(t.status)).length;
   const paid = invoices.filter((i) => i.status === 'Paid').length;

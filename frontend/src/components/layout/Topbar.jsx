@@ -291,7 +291,7 @@ export default function Topbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const params   = useParams();
-  const { authType, channelScope, supplierLoginVcode } = useSelector((s) => s.auth);
+  const { authType, channelScope } = useSelector((s) => s.auth);
 
   const crumb = crumbFor(location.pathname, params, authType === 'internal' && channelScope !== 'all' ? (CHANNEL_LABEL[channelScope] || channelScope) : '');
   const isHQ = channelScope === 'all';
@@ -314,19 +314,6 @@ export default function Topbar() {
       <div className="topbar-right">
         {authType === 'supplier' && (
           <TopbarFiscalYearDropdown scope={scope} onUpdate={updateScope} defaultFY={getFiscalYear(new Date().toISOString())} />
-        )}
-        {authType === 'supplier' && supplierLoginVcode && !location.pathname.startsWith('/supplier/home') && (
-          <div
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              height: 38, padding: '0 12px',
-              background: '#F0F1F4', border: '1px solid var(--border)', borderRadius: 9,
-              fontSize: 12.5, fontWeight: 600, color: 'var(--text-body)', whiteSpace: 'nowrap',
-            }}
-            title="The vendor code you are signed in with"
-          >
-            <span className="mono">{supplierLoginVcode}</span>
-          </div>
         )}
         {/* Internal users: financial year filter, shown on every page next to Channel and Vendor; defaults to the current FY */}
         {authType === 'internal' && (

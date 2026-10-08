@@ -9,6 +9,7 @@ import { setVcodeViewTab, openModal } from '../features/ui/uiSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
 import Timeline from '../components/common/Timeline.jsx';
+import { selectHasTicketAccess } from '../features/auth/authSlice';
 import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
 
 const VCODE_VIEWS = ['Invoice Log', 'History'];
@@ -56,7 +57,8 @@ export default function VendorCodePage() {
   // top-bar fiscal year / channel apply; the vendor code is this page's own
   const scoped = useSelector(selectFilteredInvoicesAnyVendor);
   const savedTab = useSelector((s) => s.ui.vcodeViewTab[code]);
-  const { data: ticketPage } = useGetTicketsQuery({ vendor_code: code, page_size: 100 });
+  const hasTicketAccess = useSelector(selectHasTicketAccess);
+  const { data: ticketPage } = useGetTicketsQuery({ vendor_code: code, page_size: 100 }, { skip: !hasTicketAccess });
   const openIssues = (ticketPage?.items || []).filter((t) => ['OPEN', 'IN_PROGRESS'].includes(t.status)).length;
 
   const supplier = supplierForVendorCode(code);
@@ -131,7 +133,8 @@ export default function VendorCodePage() {
 
 function VendorCodeHistory({ code, invoices }) {
   const dispatch = useDispatch();
-  const { data: ticketPage } = useGetTicketsQuery({ vendor_code: code, include_closed: true, page_size: 100 });
+  const hasTicketAccess = useSelector(selectHasTicketAccess);
+  const { data: ticketPage } = useGetTicketsQuery({ vendor_code: code, include_closed: true, page_size: 100 }, { skip: !hasTicketAccess });
   const done = invoices.filter((i) => i.status === 'Paid').length;
   const failed = invoices.filter((i) => i.status === 'Rejected' || i.status === 'Deleted').length;
   const ongoing = invoices.length - done - failed;
