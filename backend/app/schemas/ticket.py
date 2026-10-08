@@ -1,42 +1,196 @@
-﻿from pydantic import BaseModel
-from typing import List, Optional
+from app.schemas.common import UTCDateTime
+from typing import Any, Literal
 
-class TicketCommentBase(BaseModel):
-    author: str
-    role: str
-    date: str
-    text: str
-    seq: int
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
-class TicketCommentCreate(TicketCommentBase):
+
+Priority = Literal["LOW", "MEDIUM", "HIGH"]
+Visibility = Literal["PUBLIC", "INTERNAL"]
+
+
+class TicketCreate(BaseModel):
+    invoice_no: str = Field(min_length=1, max_length=64)
+    category: str = Field(min_length=1, max_length=64)
+    priority: Priority = "MEDIUM"
+    subject: str = Field(min_length=1, max_length=150)
+    description: str = Field(min_length=1, max_length=5000)
+
+    @field_validator("invoice_no", "category", "subject", "description")
+    @classmethod
+    def trim_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class VersionedRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+
+
+class TicketCommentCreate(VersionedRequest):
+    body: str = Field(min_length=1, max_length=5000, validation_alias=AliasChoices("body", "text"))
+    visibility: Visibility = "PUBLIC"
+
+    @field_validator("body")
+    @classmethod
+    def trim_body(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class TicketAssignRequest(VersionedRequest):
+    assignee_id: int = Field(gt=0)
+    note: str | None = Field(default=None, max_length=5000)
+
+
+class TicketResolveRequest(VersionedRequest):
+    resolution_note: str = Field(min_length=1, max_length=5000)
+
+
+class TicketReopenRequest(VersionedRequest):
+    reason: str = Field(min_length=1, max_length=5000)
+
+
+class TicketCloseRequest(VersionedRequest):
     pass
 
-class TicketCommentResponse(TicketCommentBase):
+
+class TicketPatchRequest(VersionedRequest):
+    priority: Priority | None = None
+    category: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class TicketCommentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     ticket_id: str
+    author: str
+    author_id: int | None = None
+    author_role: str
+    visibility: Visibility
+    body: str
+    created_at: UTCDateTime
 
-    class Config:
-        from_attributes = True
 
-class TicketBase(BaseModel):
-    no: Optional[str] = None
-    category: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[str] = None
-    priority: Optional[str] = None
-    assignee: Optional[str] = None
-    raised_by: Optional[str] = None
-    raised_date: Optional[str] = None
-    sla_hours: Optional[int] = None
-    resolved_date: Optional[str] = None
+class AssigneeResponse(BaseModel):
+    id: int | None = None
+    name: str | None = None
+    team: str | None = None
 
-class TicketCreate(TicketBase):
+
+class InvoiceSummary(BaseModel):
+    invoice_no: str
+    po_no: str | None = None
+    amount: str | None = None
+    status: str | None = None
+
+
+class SlaResponse(BaseModel):
+    response_due_at: UTCDateTime | None = None
+    reply_expected_by: UTCDateTime | None = None
+    breached: bool = False
+    overdue_minutes: int = 0
+
+
+class AttachmentResponse(BaseModel):
+    id: int
+    comment_id: int | None = None
+    original_name: str
+    mime_type: str
+    size_bytes: int
+    visibility: Visibility
+    created_at: UTCDateTime
+
+
+class TicketResponse(BaseModel):
     id: str
-    no: str
+    ticket_no: str
+    invoice_no: str | None
+    invoice: InvoiceSummary | None = None
+    channel: str | None
+    fy: str | None
+    vendor_code: str | None
+    category: str
+    priority: Priority
+    subject: str
+    description: str
+    status: str
+    awaiting: str
+    source: str
+    assignee: AssigneeResponse | None = None
+    sla: SlaResponse
+    unread: bool = False
+    reopen_count: int
+    row_version: int
+    legacy_unlinked: bool = False
+    allowed_actions: list[str]
+    comments: list[TicketCommentResponse] = []
+    attachments: list[AttachmentResponse] = []
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
+    resolved_at: UTCDateTime | None = None
+    closed_at: UTCDateTime | None = None
 
-class TicketResponse(TicketBase):
-    id: str
-    comments: List[TicketCommentResponse] = []
 
-    class Config:
-        from_attributes = True
+class TicketPage(BaseModel):
+    items: list[TicketResponse]
+    page: int
+    page_size: int
+    total: int
+
+
+class TicketSummaryResponse(BaseModel):
+    open: int
+    in_progress: int
+    sla_breached: int
+    resolved_closed: int
+
+
+class TicketBoardResponse(BaseModel):
+    open: list[TicketResponse]
+    in_progress: list[TicketResponse]
+    resolved: list[TicketResponse]
+    closed: list[TicketResponse]
+
+
+class TicketActivityResponse(BaseModel):
+    id: int
+    event: str
+    actor_id: int | None
+    meta: dict[str, Any] | None = None
+    created_at: UTCDateTime
+
+
+class AssignableUserResponse(BaseModel):
+    id: int
+    name: str
+    role: str
+
+
+class SupplierLogEntry(BaseModel):
+    id: int
+    ticket_id: str
+    ticket_no: str | None = None
+    invoice_no: str | None = None
+    subject: str | None = None
+    event: str
+    status: str
+    created_at: UTCDateTime
+
+
+class StaffLogEntry(BaseModel):
+    id: int
+    ticket_id: str
+    ticket_no: str | None = None
+    invoice_no: str | None = None
+    vendor_code: str | None = None
+    channel: str | None = None
+    subject: str | None = None
+    event: str
+    detail: str = ""
+    performed_by: str
+    created_at: UTCDateTime

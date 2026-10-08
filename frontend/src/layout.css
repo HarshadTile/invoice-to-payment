@@ -104,11 +104,13 @@
   gap:16px;padding:0 clamp(16px,2.5vw,28px);
 }
 .crumb{font-size:13px;color:var(--text-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.crumb-title{margin:0;font:inherit;color:inherit;display:inline;}
 .crumb b{
   color:var(--ink);font-weight:700;font-size:15px;
   font-family:var(--font-display);letter-spacing:-.005em;
 }
 .topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.topbar-context-filters{display:flex;align-items:center;gap:10px;}
 
 /* global search (scoped so in-page toolbar .search-box is unaffected) */
 .topbar-search{position:relative;display:flex;align-items:center;}
@@ -156,6 +158,25 @@
 }
 .icon-btn:hover{background:var(--gray-bg);color:var(--text-body);}
 .icon-btn:focus-visible{outline:2px solid var(--brand);outline-offset:1px;}
+.notification-button{position:relative;}
+.notification-count{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 4px;border:2px solid #fff;border-radius:9px;background:var(--brand);color:#fff;font-size:9px;font-weight:700;line-height:14px;text-align:center;}
+.notification-menu-wrap{position:relative;flex-shrink:0;}
+.notification-menu{position:absolute;right:0;top:calc(100% + 10px);z-index:70;width:min(380px,calc(100vw - 24px));background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-md);overflow:hidden;}
+.notification-menu-head{height:48px;padding:0 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-soft);}
+.notification-menu-head b{font-size:14px;}
+.notification-menu-head button{border:0;background:none;color:var(--brand);font-size:11.5px;font-weight:700;cursor:pointer;}
+.notification-menu-list{max-height:420px;overflow-y:auto;}
+.notification-empty{margin:0;padding:28px 16px;text-align:center;color:var(--text-muted);font-size:12.5px;}
+.notification-item{width:100%;display:grid;grid-template-columns:8px minmax(0,1fr);gap:10px;padding:12px 14px;border:0;border-bottom:1px solid var(--border-soft);background:#fff;text-align:left;cursor:pointer;}
+.notification-item:last-child{border-bottom:0;}
+.notification-item:hover{background:var(--gray-bg);}
+.notification-item.unread{background:#fff7f8;}
+.notification-item-dot{width:7px;height:7px;margin-top:5px;border-radius:50%;background:transparent;}
+.notification-item.unread .notification-item-dot{background:var(--brand);}
+.notification-item span:last-child{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.notification-item b{font-size:12.5px;color:var(--ink);}
+.notification-item small{font-size:11.5px;color:var(--text-body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.notification-item time{font-size:10.5px;color:var(--text-muted);}
 
 .avatar{
   width:38px;height:38px;border-radius:50%;
@@ -188,8 +209,38 @@
   .topbar{gap:10px;padding:0 14px;}
   .topbar-right{gap:8px;}
 }
+/* Collapsed sidebar: an icon-only rail on wide screens. Names show as tooltips, a group's
+   children are hidden (opening a group widens the sidebar first). Phones keep the off-canvas
+   menu and ignore this. */
+@media (min-width:861px){
+  .sidebar{position:relative;z-index:40;transition:width .2s ease,min-width .2s ease;}
+  /* round handle straddling the sidebar's right edge, level with the logo */
+  .sidebar-edge-toggle{
+    position:absolute;top:25px;right:-13px;z-index:5;
+    width:26px;height:26px;padding:0;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:#fff;border:1px solid var(--border);color:#6B7280;cursor:pointer;
+    box-shadow:0 1px 4px rgba(23,24,26,.14);
+    transition:color .15s ease,border-color .15s ease,background .15s ease;
+  }
+  .sidebar-edge-toggle:hover{color:var(--brand);border-color:var(--brand);}
+  .sidebar-edge-toggle:focus-visible{outline:2px solid var(--brand);outline-offset:2px;}
+  .sidebar-collapsed .sidebar{width:72px;min-width:72px;}
+  .sidebar-collapsed .brand{padding:16px 10px;}
+  .sidebar-collapsed .brand img{width:46px;height:auto;}
+  .sidebar-collapsed .sidebar-scroll{padding:10px 8px 12px;}
+  .sidebar-collapsed .nav-label,
+  .sidebar-collapsed .nav-item .chev,
+  .sidebar-collapsed .nav-children{display:none;}
+  .sidebar-collapsed .nav-item{justify-content:center;padding:10px 0;}
+  .sidebar-collapsed .nav-item.active{box-shadow:none;}
+  .sidebar-collapsed .nav-section{
+    height:1px;margin:10px 12px;padding:0;overflow:hidden;font-size:0;color:transparent;background:var(--border);
+  }
+}
 /* menu button + backdrop only exist on narrow screens */
-.menu-btn,.nav-backdrop{display:none;}
+.menu-btn,.nav-backdrop,.sidebar-edge-toggle{display:none;}
+@media (min-width:861px){.sidebar-edge-toggle{display:flex;}}
 
 /* phones & small tablets: the sidebar becomes an off-canvas menu opened from the
    top bar, so every nav item (incl. channel / settings children) stays reachable */
@@ -218,7 +269,8 @@
   #content{padding:20px 16px 32px;}
 }
 @media (max-width:560px){
-  .topbar-right .icon-btn{display:none;}
+  .topbar-context-filters{display:none;}
+  .topbar-right .help-button{display:none;}
   .role-select{max-width:150px;}
   .crumb b{font-size:14px;}
   #content{padding:16px 14px 28px;}

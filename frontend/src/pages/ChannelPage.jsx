@@ -1,36 +1,99 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { CHANNELS, VIEW_COLUMNS, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
-import { selectScopedInvoices } from '../features/invoices/selectors';
-import { channelViewRows, ticketBreached, ticketInvoice } from '../utils/businessLogic';
-import { setChannelViewTab, setChannelQueryViewMode, openModal } from '../features/ui/uiSlice';
-import { setRows, selectTable } from '../features/tables/tablesSlice';
+import { selectFilteredInvoicesAnyChannel } from '../features/invoices/selectors';
+import { channelViewRows } from '../utils/businessLogic';
+import { setChannelViewTab, setChannelQueryViewMode, openModal, setPageFilters } from '../features/ui/uiSlice';
+import { setRowsLocal, selectTable } from '../features/tables/tablesSlice';
 import { selectPerm } from '../features/auth/authSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
+import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
 import EditableTable from '../components/common/EditableTable.jsx';
 import StatCard from '../components/common/StatCard.jsx';
 import Badge from '../components/common/Badge.jsx';
 import TicketTable from '../components/tickets/TicketTable.jsx';
 import TicketBoard from '../components/tickets/TicketBoard.jsx';
+import { useGetTicketBoardQuery, useGetTicketsQuery } from '../features/tickets/ticketsApi';
+
+/** Status + date-range filter (same one used on My Invoices / Search Invoice(s)), scoped to this channel's invoices.
+ *  Persisted per channel in Redux so it survives navigating away and back — the
+ *  sidebar always links to the bare channel URL, which would otherwise reset it. */
+function useChannelInvoiceFilter(channelInvoices, channelKey) {
+  const dispatch = useDispatch();
+  const filterKey = `channel-${channelKey}`;
+  const saved = useSelector((s) => s.ui.pageFilters[filterKey]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = defaultInvoiceRange();
+
+  const cameInFresh = !['status', 'date_from', 'date_to'].some((k) => searchParams.has(k));
+  const restored = cameInFresh ? saved : null;
+
+  const status = restored?.status ?? (searchParams.get('status') || '');
+  const dateFrom = restored?.dateFrom ?? (searchParams.has('date_from') ? searchParams.get('date_from') : range.from);
+  const dateTo = restored?.dateTo ?? (searchParams.has('date_to') ? searchParams.get('date_to') : range.to);
+
+  // Write restored filters into the URL once, and keep Redux's copy current on every change.
+  useEffect(() => {
+    if (!restored) return;
+    const next = new URLSearchParams(searchParams);
+    let changed = false;
+    if (restored.status && !next.has('status')) { next.set('status', restored.status); changed = true; }
+    if (restored.dateFrom !== undefined && !next.has('date_from')) { next.set('date_from', restored.dateFrom); changed = true; }
+    if (restored.dateTo !== undefined && !next.has('date_to')) { next.set('date_to', restored.dateTo); changed = true; }
+    if (changed) setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey]);
+
+  useEffect(() => {
+    dispatch(setPageFilters({ key: filterKey, filters: { status, dateFrom, dateTo } }));
+  }, [dispatch, filterKey, status, dateFrom, dateTo]);
+
+  const update = (changes) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(changes).forEach(([k, v]) => { if (v === null) next.delete(k); else next.set(k, v); });
+    setSearchParams(next, { replace: true });
+  };
+
+  const inRange = channelInvoices.filter((i) => {
+    const ymd = invoiceYMD(i);
+    return (!dateFrom || ymd >= dateFrom) && (!dateTo || ymd <= dateTo);
+  });
+  const shown = inRange.filter((i) => !status || i.status === status);
+  const isDefaultRange = dateFrom === range.from && dateTo === range.to;
+  const rangeLabel = !dateFrom && !dateTo ? 'all dates' : (isDefaultRange ? 'last 90 days' : `${dateFrom || 'earliest'} to ${dateTo || 'latest'}`);
+
+  const bar = (
+    <InvoiceFilterBar
+      status={status} dateFrom={dateFrom} dateTo={dateTo}
+      onStatusChange={(v) => update({ status: v || null })} onDateFrom={(v) => update({ date_from: v })} onDateTo={(v) => update({ date_to: v })}
+      onLast90Days={() => update({ date_from: null, date_to: null })}
+      onAllDates={() => update({ date_from: '', date_to: '' })}
+      onClear={() => update({ status: null, date_from: '', date_to: '' })}
+      statusCountBase={inRange} resultCount={shown.length} rangeLabel={rangeLabel}
+    />
+  );
+  return { shown, bar };
+}
 
 export default function ChannelPage() {
   const { key } = useParams();
   const dispatch = useDispatch();
   const channel = CHANNELS.find((c) => c.key === key);
-  const scopedInvoices = useSelector(selectScopedInvoices);
+  // top-bar fiscal year / vendor apply; the channel is this page's own
+  const scopedInvoices = useSelector(selectFilteredInvoicesAnyChannel);
   const savedViewTab = useSelector((s) => s.ui.channelViewTab[key]);
   const perm = useSelector(selectPerm);
+  const channelInvoices = scopedInvoices.filter((i) => i.channel === key);
+  const { shown: filteredChannelInvoices, bar: channelFilterBar } = useChannelInvoiceFilter(channelInvoices, key);
 
   if (!channel) return <p>Unknown channel.</p>;
 
   const activeView = savedViewTab && channel.views.includes(savedViewTab) ? savedViewTab : channel.views[0];
-  const channelInvoices = scopedInvoices.filter((i) => i.channel === key);
 
   return (
     <>
-      <h1 className="page-title">{channel.label}</h1>
       <div className="sheet-carousel" style={{ margin: '4px 0 16px' }}>
         <div className="car-track">
           {channel.views.map((v) => (
@@ -40,12 +103,15 @@ export default function ChannelPage() {
       </div>
 
       {activeView === 'Invoice Log' && (
-        <div className="card"><InvoiceTable invoices={channelInvoices} tableKey={`channel-${key}`} mode="full" /></div>
+        <>
+          {channelFilterBar}
+          <div className="card"><InvoiceTable invoices={filteredChannelInvoices} tableKey={`channel-${key}`} mode="full" /></div>
+        </>
       )}
       {activeView === 'History' && <ChannelHistory channelKey={key} channelInvoices={channelInvoices} />}
       {activeView === 'Queries' && <ChannelQueries channelKey={key} />}
       {!['Invoice Log', 'History', 'Queries'].includes(activeView) && (
-        <ChannelSubView channelKey={key} view={activeView} channelInvoices={channelInvoices} canEdit={perm.editRows} canImportExport={perm.importExport} />
+        <ChannelSubView channelKey={key} view={activeView} channelInvoices={channelInvoices} canImportExport={perm.importExport} />
       )}
     </>
   );
@@ -131,13 +197,14 @@ function ChannelHistory({ channelKey, channelInvoices }) {
 
 function ChannelQueries({ channelKey }) {
   const dispatch = useDispatch();
-  const allTickets = useSelector((s) => s.tickets.items);
+  const { data: page, isLoading } = useGetTicketsQuery({ channel: channelKey, include_closed: true, page_size: 100 });
+  const { data: board = {}, isLoading: boardLoading } = useGetTicketBoardQuery({ channel: channelKey });
   const viewMode = useSelector((s) => s.ui.channelQueryViewMode);
-  const tickets = allTickets.filter((t) => { const inv = ticketInvoice(t); return inv && inv.channel === channelKey; });
-  const open = tickets.filter((t) => t.status === 'Open').length;
-  const inProgress = tickets.filter((t) => t.status === 'In Progress').length;
-  const breached = tickets.filter(ticketBreached).length;
-  const resolved = tickets.filter((t) => t.status === 'Resolved' || t.status === 'Closed').length;
+  const tickets = page?.items || [];
+  const open = tickets.filter((t) => t.status === 'OPEN').length;
+  const inProgress = tickets.filter((t) => t.status === 'IN_PROGRESS').length;
+  const breached = tickets.filter((t) => t.sla?.breached).length;
+  const resolved = tickets.filter((t) => t.status === 'RESOLVED' || t.status === 'CLOSED').length;
   const view = viewMode === 'board' ? 'board' : 'list';
 
   return (
@@ -156,19 +223,20 @@ function ChannelQueries({ channelKey }) {
         <StatCard tone="bad" icon="⚠" label="SLA Breached" value={breached} />
         <StatCard icon="✓" label="Resolved / Closed" value={resolved} />
       </div>
-      {view === 'list' ? <div className="card"><TicketTable tickets={tickets} /></div> : <TicketBoard tickets={tickets} />}
+      {view === 'list' ? <TicketTable tickets={tickets} loading={isLoading} /> : <TicketBoard groups={board} loading={boardLoading} />}
     </>
   );
 }
 
-function ChannelSubView({ channelKey, view, channelInvoices, canEdit, canImportExport }) {
+function ChannelSubView({ channelKey, view, channelInvoices, canImportExport }) {
   const dispatch = useDispatch();
   const tableKey = `channel-${channelKey}-${view.replace(/\s+/g, '_')}`;
   const rows = useSelector((s) => selectTable(s, tableKey));
   const cols = VIEW_COLUMNS[view];
 
   useEffect(() => {
-    if (!rows.length) dispatch(setRows({ key: tableKey, rows: channelViewRows(channelKey, view, channelInvoices) }));
+    // Derived from the invoice data on screen: kept in memory only, never written to the server.
+    if (!rows.length) dispatch(setRowsLocal({ key: tableKey, rows: channelViewRows(channelKey, view, channelInvoices) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableKey]);
 
@@ -179,7 +247,6 @@ function ChannelSubView({ channelKey, view, channelInvoices, canEdit, canImportE
         cols={cols}
         rows={rows}
         statusCol
-        canEdit={canEdit}
         canImportExport={canImportExport}
         onViewInvoice={(no) => dispatch(openModal({ kind: 'invoiceDetail', ctx: { no } }))}
         onViewVendorCode={(code) => dispatch(openModal({ kind: 'vendorCodePreview', ctx: { code } }))}

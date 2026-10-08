@@ -41,12 +41,24 @@ export const { hydrateSettings, togglePermissionLocal, toggleTwoFactorLocal } = 
 export default settingsSlice.reducer;
 
 /* ---- write-through thunks ---- */
+// Optimistic, but the server has the final say (it validates and permission-checks every
+// edit): if it refuses, undo the local toggle and let the caller show why.
 export const togglePermission = (payload) => async (dispatch, getState) => {
   dispatch(togglePermissionLocal(payload));
-  await api.put('/v1/settings', { roleMatrix: getState().settings.roleMatrix });
+  try {
+    await api.put('/v1/settings', { roleMatrix: getState().settings.roleMatrix });
+  } catch (err) {
+    dispatch(togglePermissionLocal(payload));
+    throw err;
+  }
 };
 
 export const toggleTwoFactor = () => async (dispatch, getState) => {
   dispatch(toggleTwoFactorLocal());
-  await api.put('/v1/settings', { twoFactorOn: getState().settings.twoFactorOn });
+  try {
+    await api.put('/v1/settings', { twoFactorOn: getState().settings.twoFactorOn });
+  } catch (err) {
+    dispatch(toggleTwoFactorLocal());
+    throw err;
+  }
 };

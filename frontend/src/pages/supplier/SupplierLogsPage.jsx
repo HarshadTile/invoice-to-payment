@@ -1,65 +1,130 @@
-import { useDispatch, useSelector } from 'react-redux';
+import { useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
 import { getFiscalYear } from '../../utils/businessLogic';
-import { useSearchParams } from 'react-router-dom';
-import { CHANNEL_LABEL } from '../../data/constants';
-import { activityLogRows } from '../../utils/businessLogic';
-import { openModal } from '../../features/ui/uiSlice';
+import { useScope } from '../../features/ui/scope';
+import { api } from '../../api/client';
+import {
+  LOG_TYPES, filterLogRows, formatDay, formatDayTime, invoiceLogRows, logRowsToCsv, queryLogRows,
+} from '../../utils/supplierLog';
+import PagerFoot from '../../components/common/PagerFoot.jsx';
+import Badge from '../../components/common/Badge.jsx';
+import { Download } from '../../components/common/icons.jsx';
+
+const PAGE_SIZE = 20;
+const TYPE_TONE = { Invoice: 'blue', Payment: 'green', Query: 'amber' };
 
 export default function SupplierLogsPage() {
-  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const code = useSelector((s) => s.auth.supplierLoginVcode);
-  const [searchParams] = useSearchParams();
-  const fySearch = searchParams.get('fy') || getFiscalYear(new Date().toISOString());
+  const fySearch = useScope().fy;
   const scopedInvoices = useSelector(selectScopedInvoices);
-  const invoices = scopedInvoices.filter((i) => i.vcode === code && (fySearch === 'all' || getFiscalYear(i.date) === fySearch));
-  const done = invoices.filter((i) => i.status === 'Paid');
-  const activityRows = activityLogRows(invoices);
+  const invoices = useMemo(
+    () => scopedInvoices.filter((i) => i.vcode === code && (fySearch === 'all' || getFiscalYear(i.date) === fySearch)),
+    [scopedInvoices, code, fySearch],
+  );
+
+  const [queryEntries, setQueryEntries] = useState([]);
+  const [queryError, setQueryError] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/v1/tickets/supplier-log')
+      .then((data) => { if (!cancelled) setQueryEntries(Array.isArray(data) ? data : []); })
+      .catch(() => { if (!cancelled) setQueryError(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const [filters, setFilters] = useState({ search: '', type: 'all', from: '', to: '' });
+  const [page, setPage] = useState(1);
+  const setFilter = (key) => (e) => { setFilters((prev) => ({ ...prev, [key]: e.target.value })); setPage(1); };
+  const filtersActive = filters.search || filters.type !== 'all' || filters.from || filters.to;
+
+  const allRows = useMemo(
+    () => [...invoiceLogRows(invoices), ...queryLogRows(queryEntries, invoices, fySearch !== 'all')],
+    [invoices, queryEntries, fySearch],
+  );
+  const rows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / PAGE_SIZE)));
+  const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const openInvoice = (inv) => {
+    const item = inv.poItem !== undefined && inv.poItem !== '' ? `&item=${encodeURIComponent(inv.poItem)}` : '';
+    navigate(`/supplier/home?open=${encodeURIComponent(inv.no)}${item}`);
+  };
+
+  function exportCsv() {
+    const blob = new Blob(['﻿', logRowsToCsv(rows)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${code}-activity-log.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <>
-      <h1 className="page-title">Logs : {code}</h1>
-      <p className="page-sub">Review every invoice activity and closed payment record for this vendor code.</p>
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h3>Activity Log</h3>
+      <div className="card">
+        {/* The filters take the space left of the button and wrap among themselves, so Export
+            stays on the right instead of dropping onto its own line. */}
+        <div className="toolbar" style={{ flexWrap: 'nowrap', alignItems: 'flex-start', gap: 12 }}>
+          <div className="toolbar-left" style={{ gap: 10, flex: '1 1 0', minWidth: 0 }}>
+            <input
+              className="search-box" style={{ flex: '1 1 200px', minWidth: 160, maxWidth: 280, width: 'auto' }} placeholder="Search invoice, PO or details..."
+              aria-label="Search the log" value={filters.search} onChange={setFilter('search')}
+            />
+            <select className="search-box" aria-label="Filter by type" value={filters.type} onChange={setFilter('type')} style={{ width: 150 }}>
+              <option value="all">All types</option>
+              {LOG_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <label className="filter-inline">
+              From <input type="date" className="search-box" style={{ width: 150 }} aria-label="From date" value={filters.from} max={filters.to || undefined} onChange={setFilter('from')} />
+            </label>
+            <label className="filter-inline">
+              To <input type="date" className="search-box" style={{ width: 150 }} aria-label="To date" value={filters.to} min={filters.from || undefined} onChange={setFilter('to')} />
+            </label>
+            {filtersActive && (
+              <button type="button" className="btn" onClick={() => { setFilters({ search: '', type: 'all', from: '', to: '' }); setPage(1); }}>Clear</button>
+            )}
+          </div>
+          <div className="toolbar-right" style={{ flex: '0 0 auto' }}>
+            <button type="button" className="btn" onClick={exportCsv} disabled={rows.length === 0}><Download />Export ({rows.length})</button>
+          </div>
+        </div>
+        {queryError && (
+          <p style={{ color: 'var(--text-muted)', fontSize: 12.5, margin: '0 0 10px' }}>Your query history couldn't be loaded right now. Invoice and payment activity is shown below.</p>
+        )}
         <div className="table-scroll">
           <table>
             <thead>
-              <tr><th>Date</th><th>Invoice No</th><th>PO No</th><th>Stage</th></tr>
+              <tr><th>Date</th><th>Invoice No</th><th>PO No</th><th>Type</th><th>Event</th><th>Details</th></tr>
             </thead>
             <tbody>
-              {activityRows.length ? activityRows.map(({ inv, stage }) => (
-                <tr key={`${inv.no}-${stage}`}>
-                  <td>{inv.date}</td>
-                  <td><button type="button" className="link-hero" onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no } }))}>{inv.no}</button></td>
-                  <td>{inv.po}</td>
-                  <td>{stage}</td>
+              {pageRows.length ? pageRows.map((row) => (
+                <tr key={row.key}>
+                  <td style={{ whiteSpace: 'nowrap' }}>{row.hasTime ? formatDayTime(row.when) : formatDay(row.when)}</td>
+                  <td>
+                    {row.type === 'Query' && row.ticketId
+                      ? <button type="button" className="link-hero" onClick={() => navigate(`/supplier/tickets/${row.ticketId}`)}>{row.invoiceNo}</button>
+                      : row.invoice
+                        ? <button type="button" className="link-hero" onClick={() => openInvoice(row.invoice)}>{row.invoiceNo}</button>
+                        : row.invoiceNo}
+                  </td>
+                  <td>{row.po}</td>
+                  <td><Badge tone={TYPE_TONE[row.type]}>{row.type}</Badge></td>
+                  <td>{row.event}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>{row.detail || '-'}</td>
                 </tr>
-              )) : <tr><td colSpan={4} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 20 }}>No activity yet on {code}.</td></tr>}
+              )) : (
+                <tr><td colSpan={6} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>
+                  {filtersActive ? 'No activity matches these filters.' : `No activity yet on ${code}.`}
+                </td></tr>
+              )}
             </tbody>
           </table>
         </div>
-      </div>
-
-      <div className="card">
-        <h3>Closed Invoices</h3>
-        <div className="table-scroll">
-          <table>
-            <thead><tr><th>Invoice No</th><th>Portal</th><th>PO No</th><th>Amount</th><th>Status</th><th>UTR No</th><th>Date</th></tr></thead>
-            <tbody>
-              {done.length ? done.map((inv, rowIndex) => (
-                <tr key={`${inv.no}-${rowIndex}`}>
-                  <td><button type="button" className="link-hero" onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no } }))}>{inv.no}</button></td>
-                  <td>{CHANNEL_LABEL[inv.channel]}</td><td>{inv.po}</td><td>{inv.amount}</td>
-                  <td><span className={`chip ${inv.status === 'Paid' ? 'green' : 'amber'}`}>{inv.status}</span></td>
-                  <td>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</td>
-                  <td>{inv.date}</td>
-                </tr>
-              )) : <tr><td colSpan={7} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 20 }}>Nothing closed out yet on {code}.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <PagerFoot total={rows.length} page={currentPage} pageSize={PAGE_SIZE} onPage={setPage} />
       </div>
     </>
   );
