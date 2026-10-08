@@ -7,7 +7,6 @@ et_xmlfile==2.0.0
 fastapi==0.141.1
 h11==0.16.0
 httptools==0.8.0
-httpx==0.28.1
 idna==3.19
 iniconfig==2.3.0
 MarkupSafe==3.0.3
@@ -29,9 +28,5 @@ websockets==17.1
 
 sqlalchemy
 pymysql
-passlib[bcrypt]==1.7.4
-bcrypt==4.1.2
+passlib[bcrypt]
 pyjwt
-email-validator
-alembic==1.20.0
-python-multipart==0.0.20

@@ -91,7 +91,8 @@ export default function LoginPage() {
   const notify = (msg) => dispatch(pushToast(msg));
 
   const forgotLink = (
-    <button type="button" className="lgn-link" onClick={() => navigate('/forgot-password')}>
+    <button type="button" className="lgn-link"
+      onClick={() => notify('Password help: contact the Mahindra IT service desk (x-4400).')}>
       Forgot password?
     </button>
   );

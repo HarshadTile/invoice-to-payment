@@ -1,9 +1,8 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { supplierForVendorCode, panFor, supplierEmailFor, synthPhone, posForVendorCode } from '../../utils/businessLogic';
+import { supplierForVendorCode, panFor, supplierEmailFor, synthPhone, posForVendorCode, ticketInvoice } from '../../utils/businessLogic';
 import { runtime } from '../../data/runtime';
 import { closeModal } from '../../features/ui/uiSlice';
-import { useGetTicketsQuery } from '../../features/tickets/ticketsApi';
 import ModalShell from './ModalShell.jsx';
 
 export default function VendorCodePreviewModal({ ctx }) {
@@ -14,8 +13,8 @@ export default function VendorCodePreviewModal({ ctx }) {
   const supplier = supplierForVendorCode(code);
   const invoices = runtime.invoices.filter((i) => i.vcode === code);
   const poCount = Object.keys(posForVendorCode(code)).length;
-  const { data: ticketPage } = useGetTicketsQuery({ vendor_code: code, page_size: 100 });
-  const openIssues = (ticketPage?.items || []).filter((t) => ['OPEN', 'IN_PROGRESS'].includes(t.status)).length;
+  const ticketItems = useSelector((s) => s.tickets.items);
+  const openIssues = ticketItems.filter((t) => ticketInvoice(t)?.vcode === code).filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
 
   return (
     <ModalShell

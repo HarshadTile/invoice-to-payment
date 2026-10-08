@@ -2,7 +2,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { setSearch, setTablePage, openModal } from '../../features/ui/uiSlice';
 import PagerFoot from '../common/PagerFoot.jsx';
 import Badge from './Badge.jsx';
-import { Download, Inbox, Mail } from './icons.jsx';
+import { Upload, Download, Plus, Inbox, Mail, Edit, Trash } from './icons.jsx';
 
 const PAGE_SIZE = 20;
 
@@ -15,12 +15,13 @@ function renderCell(v) {
 }
 
 /**
- * A generic read-only table over an array-of-arrays row store (tablesSlice): search,
- * pagination, optional export, optional statusCol (invoice/vendor-code quick links + notify).
- * Rows are derived from system data, never entered or edited by hand here.
+ * A generic, permission-aware CRUD table over an array-of-arrays row store (tablesSlice).
+ * Mirrors the reference app's renderTableBlock: search, pagination, add/edit/delete,
+ * optional import/export, optional statusCol (invoice/vendor-code quick links + notify).
  */
 export default function EditableTable({
-  tableKey, cols, rows, canImportExport = true, statusCol = false,
+  tableKey, cols, rows, canEdit = true, canImportExport = true,
+  allowAdd = true, addLabel = '+ Add Row', statusCol = false,
   onViewInvoice, onViewVendorCode, onNotify,
 }) {
   const dispatch = useDispatch();
@@ -42,7 +43,13 @@ export default function EditableTable({
         </div>
         <div className="toolbar-right">
           {canImportExport && (
-            <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'export', ctx: { tableKey, cols, rows, label: tableKey } }))}><Download />Export to Excel ({rows.length})</button>
+            <>
+              <button type="button" className="btn" disabled={!canEdit} title={!canEdit ? 'Not permitted for your role' : undefined} onClick={() => dispatch(openModal({ kind: 'import', ctx: { tableKey } }))}><Upload />Import</button>
+              <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'export', ctx: { tableKey, cols, rows, label: tableKey } }))}><Download />Export</button>
+            </>
+          )}
+          {allowAdd && (
+            <button type="button" className="btn primary" disabled={!canEdit} title={!canEdit ? 'Not permitted for your role' : undefined} onClick={() => dispatch(openModal({ kind: 'row', ctx: { tableKey, cols, rows, idx: null } }))}><Plus />{addLabel.replace(/^\+\s*/, '')}</button>
           )}
         </div>
       </div>
@@ -52,11 +59,12 @@ export default function EditableTable({
             <tr>
               {cols.map((c) => <th key={c}>{c}</th>)}
               {statusCol && <th>Notify</th>}
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {pageRows.length === 0 && (
-              <tr><td colSpan={cols.length + (statusCol ? 1 : 0)}>
+              <tr><td colSpan={cols.length + 1 + (statusCol ? 1 : 0)}>
                 <div className="empty-state">
                   <Inbox />
                   <b>Nothing to show</b>
@@ -74,6 +82,31 @@ export default function EditableTable({
                     return <td key={ci}>{renderCell(c)}</td>;
                   })}
                   {statusCol && <td><button type="button" className="kebab" title="Notify Supplier: preview To / CC" aria-label="Notify supplier" onClick={() => onNotify && onNotify(r[0])}><Mail /></button></td>}
+                  <td style={{ display: 'flex', gap: 4 }}>
+                    <button type="button" className="kebab" disabled={!canEdit} title="Edit" aria-label="Edit row" onClick={() => dispatch(openModal({ kind: 'row', ctx: { tableKey, cols, rows, idx: rowIdx } }))}><Edit /></button>
+                    <button
+                      type="button"
+                      className="kebab"
+                      disabled={!canEdit}
+                      title="Delete"
+                      aria-label="Delete row"
+                      onClick={() => dispatch(openModal({
+                        kind: 'confirm',
+                        ctx: {
+                          title: tableKey === 'settings-users' ? 'Remove User' : 'Delete Row',
+                          message: tableKey === 'settings-users'
+                            ? `Remove ${r[0] || 'this user'} from the user list? This change will be saved immediately.`
+                            : 'Delete this row? This change will be saved immediately.',
+                          confirmLabel: tableKey === 'settings-users' ? 'Remove User' : 'Delete Row',
+                          action: {
+                            type: 'deleteRow',
+                            payload: { key: tableKey, idx: rowIdx },
+                            success: tableKey === 'settings-users' ? 'User removed.' : 'Row deleted.',
+                          },
+                        },
+                      }))}
+                    ><Trash /></button>
+                  </td>
                 </tr>
               );
             })}

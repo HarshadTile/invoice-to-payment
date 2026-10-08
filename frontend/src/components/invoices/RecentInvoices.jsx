@@ -2,7 +2,7 @@ import { useDispatch } from 'react-redux';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
 import { openModal } from '../../features/ui/uiSlice';
 import Badge from '../common/Badge.jsx';
-import { Mail, Eye, Inbox } from '../common/icons.jsx';
+import { Mail, Flag, Eye, Inbox } from '../common/icons.jsx';
 
 /**
  * Compact, read-only "recent invoices" list for the dashboard.
@@ -11,9 +11,10 @@ import { Mail, Eye, Inbox } from '../common/icons.jsx';
  */
 export default function RecentInvoices({ rows = [] }) {
   const dispatch = useDispatch();
-  const openStage = (no, poItem) => dispatch(openModal({ kind: 'stageSimple', ctx: { no, poItem } }));
+  const openStage = (no) => dispatch(openModal({ kind: 'stageSimple', ctx: { no } }));
   const openVendorCode = (code) => dispatch(openModal({ kind: 'vendorCodePreview', ctx: { code } }));
-  const openNotify = (no, poItem) => dispatch(openModal({ kind: 'notifyPreview', ctx: { no, poItem } }));
+  const openRaiseTicket = (no) => dispatch(openModal({ kind: 'raiseTicket', ctx: { no } }));
+  const openNotify = (no) => dispatch(openModal({ kind: 'notifyPreview', ctx: { no } }));
 
   return (
     <div className="recent-invoices">
@@ -38,7 +39,7 @@ export default function RecentInvoices({ rows = [] }) {
             )}
             {rows.map((inv, rowIndex) => (
               <tr key={`${inv.no}-${rowIndex}`}>
-                <td><button type="button" className="link-hero" title="Open current stage" onClick={() => openStage(inv.no, inv.poItem)}>{inv.no}</button></td>
+                <td><button type="button" className="link-hero" title="Open current stage" onClick={() => openStage(inv.no)}>{inv.no}</button></td>
                 <td><button type="button" className="vcode-chip link-hero" title={`Preview ${inv.vcode}`} onClick={() => openVendorCode(inv.vcode)}>{inv.vcode}</button></td>
                 <td className="cell-muted">{CHANNEL_LABEL[inv.channel]}</td>
                 <td className="num mono">{inv.amount}</td>
@@ -46,8 +47,9 @@ export default function RecentInvoices({ rows = [] }) {
                 <td className="cell-muted">{inv.date}</td>
                 <td className="col-actions">
                   <div className="row-actions">
-                    <button type="button" className="kebab" title="Notify supplier: preview To / CC" aria-label="Notify supplier" onClick={() => openNotify(inv.no, inv.poItem)}><Mail /></button>
-                    <button type="button" className="kebab" title="Open current stage" aria-label="View invoice" onClick={() => openStage(inv.no, inv.poItem)}><Eye /></button>
+                    <button type="button" className="kebab" title="Notify supplier: preview To / CC" aria-label="Notify supplier" onClick={() => openNotify(inv.no)}><Mail /></button>
+                    <button type="button" className="kebab" title="Raise a query on this invoice" aria-label="Raise a query on this invoice" onClick={() => openRaiseTicket(inv.no)}><Flag /></button>
+                    <button type="button" className="kebab" title="Open current stage" aria-label="View invoice" onClick={() => openStage(inv.no)}><Eye /></button>
                   </div>
                 </td>
               </tr>

@@ -68,10 +68,5 @@ export const deleteRow = (payload) => async (dispatch) => {
 };
 export const toggleNotifRule = (idx) => async (dispatch) => {
   dispatch(toggleNotifRuleLocal(idx));
-  try {
-    await dispatch(persist('settings-notifications'));
-  } catch (err) {
-    dispatch(toggleNotifRuleLocal(idx)); // the server refused: undo
-    throw err;
-  }
+  await dispatch(persist('settings-notifications'));
 };

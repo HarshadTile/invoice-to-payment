@@ -4,17 +4,14 @@
    same role matrix, same status vocabulary. */
 
 export const ROLE_MATRIX = {
-  Admin: { importExport: true, createTrace: true, manageConfig: true, manageUsers: true, manageRoles: true, viewAuditLog: true },
-  'Invoice Team': { importExport: true, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
-  Approver: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
-  Accounts: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
-  Viewer: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
+  Admin: { importExport: true, editRows: true, createTrace: true, manageUsers: true, manageConfig: true },
+  'MDE Invoice Team': { importExport: true, editRows: true, createTrace: true, manageUsers: false, manageConfig: false },
+  Approver: { importExport: false, editRows: false, createTrace: true, manageUsers: false, manageConfig: false },
+  Accounts: { importExport: false, editRows: true, createTrace: true, manageUsers: false, manageConfig: false },
+  Viewer: { importExport: false, editRows: false, createTrace: true, manageUsers: false, manageConfig: false },
 };
 
-// Every channel the data model knows about. The Manual (e-mail) channel is kept here so
-// labels/stages for any invoice already on it still resolve, but it's hidden from the UI
-// (see CHANNELS below).
-const ALL_CHANNELS = [
+export const CHANNELS = [
   {
     key: 'msetuSrm', label: 'Msetu / SRM',
     desc: 'Supplier-facing portal. Supplier uploads invoices against each visible purchase order; ASN/IBD gets auto-created.',
@@ -37,10 +34,7 @@ const ALL_CHANNELS = [
   },
 ];
 
-// Channels offered in the UI: sidebar, filters, tabs, dashboards. Manual isn't one of them.
-export const CHANNELS = ALL_CHANNELS.filter((c) => c.key !== 'manual');
-
-export const CHANNEL_LABEL = Object.fromEntries(ALL_CHANNELS.map((c) => [c.key, c.label]));
+export const CHANNEL_LABEL = Object.fromEntries(CHANNELS.map((c) => [c.key, c.label]));
 
 export const CHANNEL_ROUTING_RULE = {
   msetuSrm: 'Standard PO, Indian supplier registered on SRM.',
@@ -49,7 +43,8 @@ export const CHANNEL_ROUTING_RULE = {
   mfoxPortal: 'Currency is not INR (USD, EUR, GBP): routed via MFOX Portal, with funds arranged by Corp Finance.',
 };
 
-export const LOGIN_CHANNELS = CHANNELS;
+// Manual/e-mail stays a real processing channel; it just isn't offered as its own team login.
+export const LOGIN_CHANNELS = CHANNELS.filter((c) => c.key !== 'manual');
 export const INTERNAL_TEAM_CHANNELS = LOGIN_CHANNELS.map((c) => c.key);
 
 export const VIEW_COLUMNS = {
@@ -124,17 +119,7 @@ export const VIEW_MILESTONE = {
 };
 
 
-export const TICKET_CATEGORIES = [
-  'Invoice Status Stuck',
-  'Payment Date Enquiry',
-  'Payment Not Received',
-  'Amount Mismatch',
-  'PO / GRN Issue',
-  'Invoice Rejected',
-  'Bank / GST Detail Change',
-  'Invoice Missing or Duplicate',
-  'Other',
-];
+export const TICKET_CATEGORIES = ['Payment Not Received', 'Short Payment', 'Invoice Not Visible', 'Debit Note Query', 'PO / Rate Mismatch'];
 export const TICKET_PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 export const PRIORITY_CHIP = { Low: 'gray', Medium: 'blue', High: 'amber', Urgent: 'red' };
 export const TICKET_STATUS_CHIP = { Open: 'red', 'In Progress': 'amber', Resolved: 'green', Closed: 'gray' };

@@ -136,11 +136,10 @@ def map_gcp_invoice_to_response(row: dict) -> InvoiceResponse:
 
 
 def get_gcp_invoice_response(
-    invoice_number: str,
-    po_item: int | None = None,
+    invoice_number: str
 ) -> InvoiceResponse | None:
 
-    row = get_invoice_by_number(invoice_number, po_item=po_item)
+    row = get_invoice_by_number(invoice_number)
 
     if row is None:
         return None

@@ -8,22 +8,6 @@ export function handlerFor(inv) {
   return { approver: '-', approverEmail: '-', accounts: '-', accountsEmail: '-' };
 }
 
-/** Invoice number alone is NOT unique in the real source data — the same INV_NO can
- *  cover several PO line items (different PO_ITEM), each a separate real row. Every
- *  "open this one invoice" action must disambiguate with poItem when it's available,
- *  or it silently resolves to whichever matching row happens to come first. `list`
- *  defaults to runtime.invoices but callers with an already-scoped/filtered array
- *  (e.g. selectScopedInvoices) should pass it explicitly. */
-export function findInvoice(no, poItem, list = runtime.invoices) {
-  const candidates = list.filter((i) => i.no === no);
-  if (candidates.length <= 1) return candidates[0];
-  if (poItem !== undefined && poItem !== null && poItem !== '') {
-    const match = candidates.find((i) => String(i.poItem) === String(poItem));
-    if (match) return match;
-  }
-  return candidates[0];
-}
-
 export function currentHandlerFor(inv) {
   return { name: '-', role: '-', email: '-' };
 }
@@ -55,9 +39,15 @@ export function supplierForVendorCode(code) {
   return code;
 }
 
-// No real phone number exists in the invoice source data yet, so this is still
-// a deterministic placeholder (see the PAN/vendor-code fixes above, which do use
-// real data now). Flagged for a future backend field, not fixed here.
+export function synthPAN(name) {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let s = '';
+  for (let i = 0; i < 5; i++) s += letters[hashIdx(name + 'L' + i, 26)];
+  for (let i = 0; i < 4; i++) s += hashIdx(name + 'D' + i, 10).toString();
+  s += letters[hashIdx(name + 'X', 26)];
+  return s;
+}
+
 export function synthPhone(name) {
   let s = '+91 ';
   for (let i = 0; i < 5; i++) s += hashIdx(name + 'P' + i, 10);
@@ -71,50 +61,16 @@ export function supplierEmailFor(vendor) {
   return `accounts@${slug || 'supplier'}.com`;
 }
 
-// PAN is the one reliable identity in the source data — the same legal entity can
-// appear under several vendor codes *and* several slightly different name spellings
-// (casing, extra spaces, truncation). Map every name spelling we've seen to the PAN
-// filed against it, so a lookup by any one spelling still finds every vendor code
-// that really belongs to that supplier.
-function panForSupplierName(supplier) {
-  for (const inv of runtime.invoices) {
-    if (inv.vendor === supplier && inv.pan) return inv.pan;
-  }
-  return null;
-}
-
-/** One row per real supplier identity (grouped by PAN, not the free-text name
- *  string) with a canonical display name — whichever spelling appears most often. */
-export function supplierDirectory() {
-  const panByName = new Map();
-  runtime.invoices.forEach((inv) => {
-    if (inv.vendor && inv.pan && !panByName.has(inv.vendor)) panByName.set(inv.vendor, inv.pan);
-  });
-  const groups = new Map();
-  runtime.invoices.forEach((inv) => {
-    if (!inv.vendor) return;
-    const key = panByName.get(inv.vendor) || inv.vendor;
-    if (!groups.has(key)) groups.set(key, { key, pan: panByName.get(inv.vendor) || null, names: new Map() });
-    const g = groups.get(key);
-    g.names.set(inv.vendor, (g.names.get(inv.vendor) || 0) + 1);
-  });
-  return [...groups.values()]
-    .map((g) => ({ key: g.key, pan: g.pan, name: [...g.names.entries()].sort((a, b) => b[1] - a[1])[0][0] }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
 export function vendorCodesFor(supplier) {
-  const pan = panForSupplierName(supplier);
-  const matching = runtime.invoices.filter((i) => (pan ? i.pan === pan : i.vendor === supplier));
-  const fromInvoices = [...new Set(matching.map((i) => i.vcode))];
-  if (fromInvoices.length) return fromInvoices;
-  // Fall back to the static reference map only for a supplier with no invoices yet.
-  return VENDOR_CODE_MAP.rows.filter((r) => r[1] === supplier).map((r) => r[0]);
+  const fromMap = VENDOR_CODE_MAP.rows.filter((r) => r[1] === supplier).map((r) => r[0]);
+  if (fromMap.length) return fromMap;
+  return [...new Set(runtime.invoices.filter((i) => i.vendor === supplier).map((i) => i.vcode))];
 }
 
-/** Real PAN, read off whichever of this supplier's invoices has one on file. */
+const PAN_MASTER = {};
 export function panFor(supplier) {
-  return panForSupplierName(supplier) || '-';
+  if (!PAN_MASTER[supplier]) PAN_MASTER[supplier] = synthPAN(supplier);
+  return PAN_MASTER[supplier];
 }
 
 export function posForVendorCode(code) {
@@ -134,22 +90,18 @@ export function stageProgress(channel, status) {
   return Math.max(1, Math.round(total * pct));
 }
 
-// The real data only ever tells us one of these 6 status values — there's no
-// granular SAP/ASN sub-step behind it. "Current Stage" used to invent one by
-// mapping status onto a percentage of CHANNEL_STAGES' 9-step breakdown (e.g.
-// showing "ASN/IBD created" for an invoice that's really just "Invoice
-// Uploaded"); now it shows the real status, same as the progress stepper does.
 export function currentStageName(inv) {
-  if (inv.status === 'Rejected') return 'Rejected';
-  if (inv.status === 'Deleted') return 'Deleted';
-  return inv.status || 'Invoice Uploaded';
+  const stages = CHANNEL_STAGES[inv.channel];
+  const done = stageProgress(inv.channel, inv.status);
+  if (inv.status === 'Rejected' || inv.status === 'Deleted') return 'Failed at: ' + stages[Math.max(0, done - 1)];
+  if (done >= stages.length) return stages[stages.length - 1];
+  return stages[done - 1];
 }
 
 
 export function combinedStatusFor(inv) {
   if (inv.status === 'Paid') return { label: 'Fully Paid', tone: 'green', reason: 'Settled in full. UTR and payment date are shown below.' };
   if (inv.status === 'Rejected' || inv.status === 'Deleted') return { label: inv.status, tone: 'red', reason: 'Blocked. See the current stage above for why.' };
-  if (inv.status === 'Approved') return { label: 'Approved', tone: 'blue', reason: 'Approved. Waiting for the invoice to be booked in SAP (MIRO).' };
   if (['Payment Due', 'Miro Booked'].includes(inv.status)) return { label: 'Unpaid', tone: 'blue', reason: 'Booked, not yet due for payment.' };
   return { label: 'In Approval', tone: 'amber', reason: 'Awaiting internal review or approver action.' };
 }
@@ -181,12 +133,10 @@ export function getInvoiceHistory(inv, tickets) {
       remarks: evStatus === 'Failed' ? (inv.shortPayReason || 'Process halted at this stage.') : '',
     });
   }
-  (tickets || []).filter((t) => (t.invoice_no || t.no) === inv.no).forEach((t) => {
-    const createdAt = t.created_at || t.raisedDate;
-    const source = t.source === 'SUPPLIER' || t.raisedBy === 'Supplier' ? 'Supplier' : 'Internal';
-    events.push({ date: createdAt, event: 'Query Raised', stage: `Category: ${t.category}`, status: t.status, person: source, role: source, email: '', remarks: t.description || t.desc });
-    if (t.resolved_at || t.resolvedDate) {
-      events.push({ date: t.resolved_at || t.resolvedDate, event: 'Query Resolved', stage: `Category: ${t.category}`, status: 'Resolved', person: '-', role: '-', email: '', remarks: '' });
+  (tickets || []).filter((t) => t.no === inv.no).forEach((t) => {
+    events.push({ date: t.raisedDate, event: 'Query Raised', stage: `Category: ${t.category}`, status: t.status, person: t.raisedBy, role: t.raisedBy === 'Supplier' ? 'Supplier' : 'Internal', email: '', remarks: t.desc });
+    if (t.resolvedDate) {
+      events.push({ date: t.resolvedDate, event: 'Query Resolved', stage: `Category: ${t.category}`, status: 'Resolved', person: '-', role: '-', email: '', remarks: '' });
     }
   });
   return events.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -211,23 +161,9 @@ export function activityLogRows(invoices, limit = 8) {
 }
 
 /* ===================== per-channel sub-view rows (Approver Assignment, MIRO, etc.) ===================== */
-// A real payment has actually happened for this invoice — either the status has
-// moved to Paid, or a UTR has been recorded (a UTR can land slightly ahead of the
-// status flip in real data). Anything else has nothing to show on a payment ledger.
-function hasPaymentActivity(inv) {
-  return inv.status === 'Paid' || (inv.utr && inv.utr !== '-');
-}
-
 export function channelViewRows(channelKey, view, invoices) {
   const milestone = (VIEW_MILESTONE[channelKey] || {})[view];
-  // Payment & UTR / Payment Status are ledgers of what has actually been paid —
-  // they used to list every single invoice (paid or not), burying the real
-  // payment rows under thousands of all-dash placeholders for invoices that
-  // haven't reached payment yet.
-  const source = (view === 'Payment & UTR (FBL1N)' || view === 'Payment Status')
-    ? invoices.filter(hasPaymentActivity)
-    : invoices;
-  return source.map((inv) => {
+  return invoices.map((inv) => {
     const done = stageProgress(inv.channel, inv.status);
     const failed = inv.status === 'Rejected' || inv.status === 'Deleted';
     const reached = milestone != null && done >= milestone && !failed;

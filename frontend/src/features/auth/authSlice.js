@@ -17,7 +17,7 @@ const initialState = {
   loggedIn: AUTH_BYPASS,
   authType: 'internal', // 'internal' | 'supplier'
   channelScope: 'all', // 'all' | 'msetuSrm' | 'poPortal' | 'mfoxPortal'
-  role: 'Admin', // 'Admin' | 'Invoice Team'
+  role: 'Admin', // 'Admin' | 'MDE Invoice Team'
   supplierQuery: null,
   supplierPAN: null,
   supplierLoginVcode: null,
@@ -25,13 +25,6 @@ const initialState = {
 };
 
 const CHANNEL_KEYS = new Set(['msetuSrm', 'poPortal', 'mfoxPortal']);
-
-/** Profile details for the signed-in internal user, from the auth payload the API returns. */
-function userFromAuth(auth) {
-  const name = auth.name || auth.username || '';
-  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
-  return { name, fullName: name, initials, title: auth.title || '', dept: auth.dept || '', email: auth.email || '' };
-}
 
 const authSlice = createSlice({
   name: 'auth',
@@ -49,7 +42,7 @@ const authSlice = createSlice({
       } else {
         state.authType = 'internal';
         state.channelScope = CHANNEL_KEYS.has(val) ? val : 'all';
-        state.role = state.channelScope === 'all' ? 'Admin' : 'Invoice Team';
+        state.role = state.channelScope === 'all' ? 'Admin' : 'MDE Invoice Team';
         state.supplierQuery = null;
         state.supplierPAN = null;
         state.supplierLoginVcode = null;
@@ -62,9 +55,6 @@ const authSlice = createSlice({
     // Apply the auth object returned by POST /api/login or GET /api/me.
     setAuthFromServer(state, action) {
       Object.assign(state, action.payload, { loggedIn: true });
-      if (state.authType === 'internal' && !action.payload.currentUser && (action.payload.name || action.payload.username)) {
-        state.currentUser = userFromAuth(action.payload);
-      }
       if (state.authType === 'supplier') {
         state.supplierLoginVcode = state.vcode;
         state.supplierQuery = state.company;
@@ -78,12 +68,8 @@ export const { switchIdentity, logout, setAuthFromServer } = authSlice.actions;
 export default authSlice.reducer;
 
 /* ---- selectors ---- */
-// What the signed-in role may do, from the saved matrix (Settings > Roles & Permissions, loaded
-// with the workspace) so edits there take effect in the UI; the built-in defaults are only the
-// fallback before it loads. The server enforces the same matrix on every protected endpoint.
 export const selectPerm = (state) => {
-  const { role } = state.auth;
-  return state.settings?.roleMatrix?.[role] || ROLE_MATRIX[role] || ROLE_MATRIX.Viewer || {};
+  return ROLE_MATRIX[state.auth.role] || ROLE_MATRIX.Viewer || {};
 };
 
 /** Is the current login locked to a single channel? */
