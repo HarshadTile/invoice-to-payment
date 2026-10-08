@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.v1.auth import get_current_user
+from app.api.v1.auth import get_ticket_user
 from app.core.database import get_db
 from app.schemas.common import UTCDateTime
 from app.models.ticket import Ticket
@@ -68,7 +68,7 @@ def list_notifications(
     unread: bool = False,
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_ticket_user),
     db: Session = Depends(get_db),
 ):
     query = _scoped_notifications(db, user)
@@ -84,14 +84,14 @@ def list_notifications(
 
 
 @router.get("/notifications/unread-count")
-def unread_notification_count(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def unread_notification_count(user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
     """Exact number of unread notifications, however many there are (the list is paged)."""
     count = _scoped_notifications(db, user).filter(Notification.read_at.is_(None)).count()
     return {"unread": count}
 
 
 @router.post("/notifications/read-all")
-def read_all_notifications(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def read_all_notifications(user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
     rows = _scoped_notifications(db, user).filter(Notification.read_at.is_(None)).all()
     now = datetime.utcnow()
     for notification in rows:
@@ -103,7 +103,7 @@ def read_all_notifications(user: dict = Depends(get_current_user), db: Session =
 @router.post("/notifications/{notification_id}/read")
 def read_notification(
     notification_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_ticket_user),
     db: Session = Depends(get_db),
 ):
     notification = _scoped_notifications(db, user).filter(Notification.id == notification_id).first()
@@ -117,7 +117,7 @@ def read_notification(
 @router.post("/notifications/ticket/{ticket_id}/read")
 def read_ticket_notifications(
     ticket_id: str,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_ticket_user),
     db: Session = Depends(get_db),
 ):
     """Opening a query clears this person's notifications about it."""
@@ -139,7 +139,7 @@ def _require_admin(user: dict):
 
 
 @router.get("/admin/sla-policies")
-def list_sla_policies(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_sla_policies(user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
     _require_admin(user)
     return db.query(SlaPolicy).order_by(SlaPolicy.channel, SlaPolicy.priority).all()
 
@@ -147,7 +147,7 @@ def list_sla_policies(user: dict = Depends(get_current_user), db: Session = Depe
 @router.put("/admin/sla-policies")
 def replace_sla_policies(
     policies: list[SlaPolicyIn],
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_ticket_user),
     db: Session = Depends(get_db),
 ):
     _require_admin(user)
