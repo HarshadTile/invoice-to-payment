@@ -3,21 +3,12 @@ import { useDispatch, useSelector } from 'react-redux';
 import { vendorCodesFor } from '../utils/businessLogic';
 import { runtime } from '../data/runtime';
 import { CHANNEL_LABEL } from '../data/constants';
-import { selectScopedInvoices } from '../features/invoices/selectors';
-import { toggleTwoFactor } from '../features/settings/settingsSlice';
 import { pushToast } from '../features/ui/uiSlice';
 import { authApi } from '../api/authApi';
-import { selectHasTicketAccess } from '../features/auth/authSlice';
-import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
 
 export default function ProfilePage() {
   const { authType, currentUser, supplierQuery, supplierPAN, supplierLoginVcode, channelScope, role } = useSelector((s) => s.auth);
   const dispatch = useDispatch();
-  const twoFactorOn = useSelector((s) => s.settings.twoFactorOn);
-  const scopedInvoices = useSelector(selectScopedInvoices);
-  const hasTicketAccess = useSelector(selectHasTicketAccess);
-  const { data: ticketPage } = useGetTicketsQuery({ page_size: 100 }, { skip: !hasTicketAccess });
-  const openQueries = (ticketPage?.items || []).filter((t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length;
   const [sendingReset, setSendingReset] = useState(false);
 
   async function requestPasswordReset() {
@@ -37,38 +28,35 @@ export default function ProfilePage() {
     const codes = vendorCodesFor(supplierQuery);
     return (
       <>
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
+        <div className="card" style={{ maxWidth: 960, margin: '0 auto', padding: 28 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 24, paddingBottom: 22, borderBottom: '1px solid var(--border-soft)' }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>
                 Supplier Account
               </div>
-              <h2 style={{ fontSize: 22, lineHeight: 1.2, margin: 0 }}>{supplierQuery}</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-                <span className="chip mono" style={{ background: 'var(--brand-tint)', color: 'var(--brand)' }}>{supplierLoginVcode}</span>
-                <span className="chip gray mono">PAN {pan}</span>
-              </div>
+              <h2 style={{ fontSize: 22, lineHeight: 1.4, margin: 0, overflowWrap: 'anywhere' }}>{supplierQuery}</h2>
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: 12, marginBottom: 20 }}>
-            <ProfileInfo label="Supplier Name" value={supplierQuery} />
+            <ProfileInfo label="Signed-in Vendor Code" value={supplierLoginVcode} mono />
             <ProfileInfo label="PAN" value={pan} mono />
           </div>
 
           <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
-              <h3 style={{ margin: 0 }}>All Vendor Codes Under This PAN</h3>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{codes.length} codes</span>
+              <h3 style={{ margin: 0 }}>Vendor codes</h3>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{codes.length} {codes.length === 1 ? 'code' : 'codes'}</span>
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <p style={{ margin: '0 0 14px', fontSize: 12.5, lineHeight: 1.6, color: 'var(--text-muted)' }}>Codes associated with your supplier account. Invoice access is limited to your signed-in vendor code.</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
               {codes.map((c) => (
                 <span
                   key={c}
                   className={`chip mono ${c === supplierLoginVcode ? '' : 'gray'}`}
                   style={c === supplierLoginVcode ? { background: 'var(--brand-tint)', color: 'var(--brand)' } : undefined}
                 >
-                  {c}{c === supplierLoginVcode ? ' (this login)' : ''}
+                  {c}{c === supplierLoginVcode ? ' · Current login' : ''}
                 </span>
               ))}
             </div>
@@ -87,29 +75,21 @@ export default function ProfilePage() {
           <div className="avatar" aria-hidden="true">{currentUser.initials}</div>
           <h2 className="profile-name">{currentUser.name}</h2>
           {(currentUser.title || role) && <p className="profile-title">{currentUser.title || role}</p>}
-          {currentUser.dept && <p className="profile-dept">{currentUser.dept} Department</p>}
-          <div className="profile-stats">
-            <div>
-              <div className="profile-stat-val">{scopedInvoices.length.toLocaleString()}</div>
-              <div className="profile-stat-lbl">Invoices in scope</div>
-            </div>
-            <div>
-              <div className="profile-stat-val">{openQueries}</div>
-              <div className="profile-stat-lbl">Open queries</div>
-            </div>
-          </div>
+          {currentUser.dept && <p className="profile-dept">{currentUser.dept}</p>}
+          <div style={{ marginTop: 18 }}><span className="chip gray">Internal account</span></div>
         </div>
 
         <div className="card">
           <section className="profile-section">
-            <h3>Personal information</h3>
-            <p>Your details are managed by an administrator.</p>
+            <h3>Account details</h3>
+            <p>Contact your administrator to update your details or portal access.</p>
             <div className="pf-grid">
               <ProfileField label="Full name" value={currentUser.fullName || currentUser.name} />
               <ProfileField label="Email" value={currentUser.email} />
               <ProfileField label="Job title" value={currentUser.title} />
+              <ProfileField label="Department" value={currentUser.dept} />
               <ProfileField label="Role" value={role} />
-              <ProfileField label="Access scope" value={accessScope} wide />
+              <ProfileField label="Portal access" value={accessScope} />
             </div>
           </section>
 
@@ -119,25 +99,11 @@ export default function ProfilePage() {
             <div className="pf-row">
               <div>
                 <div className="pf-row-title">Password</div>
-                <div className="pf-row-desc">Change it regularly and never share it.</div>
+                <div className="pf-row-desc">Send a password reset link to your registered email address.</div>
               </div>
-              <button type="button" className="btn" onClick={requestPasswordReset} disabled={sendingReset}>
-                {sendingReset ? 'Sending…' : 'Change password'}
+              <button type="button" className="btn" onClick={requestPasswordReset} disabled={sendingReset || !currentUser.email}>
+                {sendingReset ? 'Sending…' : 'Send reset link'}
               </button>
-            </div>
-            <div className="pf-row">
-              <div>
-                <div className="pf-row-title">Two-factor authentication</div>
-                <div className="pf-row-desc">{twoFactorOn ? 'On. A verification code is required at sign-in.' : 'Off. Add an extra verification step at sign-in.'}</div>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={twoFactorOn}
-                aria-label="Two-factor authentication"
-                className={`toggle${twoFactorOn ? ' on' : ''}`}
-                onClick={() => { dispatch(toggleTwoFactor()); dispatch(pushToast(!twoFactorOn ? 'Two-factor authentication enabled.' : 'Two-factor authentication disabled.')); }}
-              ><div className="dot" /></button>
             </div>
           </section>
         </div>

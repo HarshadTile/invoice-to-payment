@@ -46,10 +46,10 @@ function TopbarVendorDropdown({ scope, onUpdate }) {
   const vendors = useMemo(() => {
     const seen = new Map();
     runtime.invoices.forEach((inv) => {
-      if (!seen.has(inv.vendor)) seen.set(inv.vendor, inv.vcode);
+      if (!seen.has(inv.vcode)) seen.set(inv.vcode, inv.vendor);
     });
     return [...seen.entries()]
-      .map(([vendor, vcode]) => ({ vendor, vcode }))
+      .map(([vcode, vendor]) => ({ vendor, vcode }))
       .sort((a, b) => a.vendor.localeCompare(b.vendor));
   }, []);
 

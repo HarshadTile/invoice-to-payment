@@ -59,7 +59,7 @@ export default function InvoiceProgressCard({ inv }) {
           const dateStr = getStageDate(s);
           return (
             <div key={i} style={{ flex: 1, minWidth: 88, textAlign: 'center', position: 'relative' }}>
-              {i > 0 && <div style={{ position: 'absolute', top: 11, left: '-50%', width: '100%', height: 2, background: idx <= done ? 'var(--blue)' : '#E2E8F0', zIndex: 0 }} />}
+              {i > 0 && <div style={{ position: 'absolute', top: 11, left: '-50%', width: '100%', height: 2, background: st === 'done' ? 'var(--green)' : idx <= done ? 'var(--blue)' : '#E2E8F0', zIndex: 0 }} />}
               <div style={{ width: 22, height: 22, borderRadius: '50%', background: dotBg, color: dotFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, margin: '0 auto', position: 'relative', zIndex: 1 }}>{st === 'done' ? '✓' : idx}</div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.3 }}>{s}</div>
               {dateStr && <div style={{ fontSize: 9.5, color: 'var(--text)', fontWeight: 600, marginTop: 3 }}>{dateStr}</div>}

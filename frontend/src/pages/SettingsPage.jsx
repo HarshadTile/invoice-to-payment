@@ -55,6 +55,9 @@ function IntegrationsTab() {
             {rows.map((r, i) => (
               <tr key={i}><td>{r[0]}</td><td><Badge tone={r[1] === 'Connected' ? 'green' : 'red'}>{r[1]}</Badge></td><td>{r[2]}</td></tr>
             ))}
+            {!rows.length && (
+              <tr><td colSpan={3} style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)' }}>No integration status data available.</td></tr>
+            )}
           </tbody>
         </table>
       </div>
