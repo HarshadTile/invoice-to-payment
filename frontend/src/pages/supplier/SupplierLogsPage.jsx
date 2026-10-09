@@ -81,12 +81,14 @@ export default function SupplierLogsPage() {
               <option value="all">All types</option>
               {LOG_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
-            <label className="filter-inline">
-              From <input type="date" className="search-box" style={{ width: 150 }} aria-label="From date" value={filters.from} max={filters.to || undefined} onChange={setFilter('from')} />
-            </label>
-            <label className="filter-inline">
-              To <input type="date" className="search-box" style={{ width: 150 }} aria-label="To date" value={filters.to} min={filters.from || undefined} onChange={setFilter('to')} />
-            </label>
+            <div className="date-range">
+              <label className="filter-inline">
+              From <input type="date" className="search-box" style={{ width: 142 }} aria-label="From date" value={filters.from} max={filters.to || undefined} onChange={setFilter('from')} />
+              </label>
+              <label className="filter-inline">
+              To <input type="date" className="search-box" style={{ width: 142 }} aria-label="To date" value={filters.to} min={filters.from || undefined} onChange={setFilter('to')} />
+              </label>
+            </div>
             {filtersActive && (
               <button type="button" className="btn" onClick={() => { setFilters({ search: '', type: 'all', from: '', to: '' }); setPage(1); }}>Clear</button>
             )}

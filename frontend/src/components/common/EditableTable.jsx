@@ -23,7 +23,7 @@ function renderCell(v) {
  * Rows are derived from system data, never entered or edited by hand here.
  */
 export default function EditableTable({
-  tableKey, cols, rows, canImportExport = true, statusCol = false,
+  tableKey, cols, rows, canImportExport = true, statusCol = false, tableClass,
   onViewInvoice, onViewVendorCode, onNotify,
 }) {
   const dispatch = useDispatch();
@@ -61,7 +61,7 @@ export default function EditableTable({
         </div>
       </div>
       <div className="table-scroll">
-        <table>
+        <table className={tableClass}>
           <thead>
             <tr>
               {cols.map((c, ci) => (isDateCol(c)

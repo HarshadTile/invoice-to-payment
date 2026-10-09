@@ -1,17 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation } from 'react-router-dom';
 import { useParams } from 'react-router-dom';
-import { selectTable, setRowsLocal } from '../features/tables/tablesSlice';
 import { api } from '../api/client';
 import { CHANNEL_LABEL } from '../data/constants';
 import { togglePermission } from '../features/settings/settingsSlice';
 import { selectPerm } from '../features/auth/authSlice';
 import { pushToast } from '../features/ui/uiSlice';
 import { usersApi } from '../api/usersApi';
-import EditableTable from '../components/common/EditableTable.jsx';
 import Badge from '../components/common/Badge.jsx';
-import AutoNotifyRules from '../components/settings/AutoNotifyRules.jsx';
+import AuditLogsPanel from '../components/audit/AuditLogsPanel.jsx';
 import ModalShell from '../components/modals/ModalShell.jsx';
 import UserFormModal from '../components/modals/UserFormModal.jsx';
 import ResetPasswordModal from '../components/modals/ResetPasswordModal.jsx';
@@ -22,7 +20,7 @@ const ADMIN_LOCKED = ['manageUsers', 'manageConfig', 'manageRoles'];
 const CAPS = [
   ['createTrace', 'Search Invoice(s)'],
   ['importExport', 'Export Data'],
-  ['manageConfig', 'Manage Integration & Notification Settings'],
+  ['manageConfig', 'Manage Integration Settings'],
   ['manageUsers', 'Manage Users'],
   ['manageRoles', 'Manage Roles & Permissions'],
   ['viewAuditLog', 'View Audit Logs'],
@@ -36,8 +34,7 @@ export default function SettingsPage() {
   return (
     <>
       {sub === 'integrations' && <IntegrationsTab />}
-      {sub === 'notifications' && <AutoNotifyRules />}
-      {sub === 'auditLogs' && <AuditLogsTab />}
+      {sub === 'auditLogs' && <AuditLogsPanel />}
       {sub === 'users' && <UsersTab />}
       {sub === 'roles' && <RolesTab />}
     </>
@@ -61,47 +58,6 @@ function IntegrationsTab() {
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
-
-const AUDIT_POLL_MS = 5000;
-
-function AuditLogsTab() {
-  const dispatch = useDispatch();
-  const tableKey = 'settings-audit';
-  const stored = useSelector((s) => selectTable(s, tableKey));
-  // The server appends oldest-first; show the newest entry at the top.
-  const rows = useMemo(() => [...stored].reverse(), [stored]);
-
-  // Keep the log live: re-fetch every few seconds while this tab is open and visible,
-  // and once immediately on mount/refocus. Skip the store update when nothing changed
-  // so an idle log doesn't re-render (or reset the search box) on every tick.
-  useEffect(() => {
-    let cancelled = false;
-    let latest = JSON.stringify(stored);
-    const refresh = async () => {
-      if (document.hidden) return;
-      try {
-        const { rows: fresh } = await api.get(`/v1/tables/${tableKey}`);
-        const next = JSON.stringify(fresh);
-        if (!cancelled && next !== latest) {
-          latest = next;
-          dispatch(setRowsLocal({ key: tableKey, rows: fresh }));
-        }
-      } catch { /* transient failure — the next tick retries */ }
-    };
-    refresh();
-    const timer = setInterval(refresh, AUDIT_POLL_MS);
-    document.addEventListener('visibilitychange', refresh);
-    return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch]);
-
-  return (
-    <div className="card">
-      <p className="card-hint" style={{ margin: '0 0 10px' }}>Live: updates automatically every few seconds. Newest first.</p>
-      <EditableTable tableKey={tableKey} cols={['Timestamp', 'User', 'Action', 'Detail']} rows={rows} canImportExport={false} />
     </div>
   );
 }

@@ -12,7 +12,7 @@ import UserMenu from './UserMenu.jsx';
 import NotificationBell from './NotificationBell.jsx';
 
 const SETTINGS_LABEL = {
-  integrations: 'Integration Settings', notifications: 'Auto-Notify Rules', auditLogs: 'Audit Logs',
+  integrations: 'Integration Settings', auditLogs: 'Audit Logs',
   users: 'Users', roles: 'Roles & Permissions',
 };
 
@@ -29,7 +29,6 @@ function crumbFor(pathname, params, lockedChannelLabel) {
   if (pathname.startsWith('/supplier/tickets')) return 'My Queries';
   if (pathname.startsWith('/supplier/logs')) return 'Logs';
   if (pathname.startsWith('/app/outputs')) return 'Vendor Status Reports';
-  if (pathname.startsWith('/app/sync-log')) return 'Sync Log';
   if (pathname.startsWith('/app/settings/')) return `Settings / ${SETTINGS_LABEL[pathname.split('/').pop()] || ''}`;
   if (pathname === '/app/notifications' || pathname === '/supplier/notifications') return 'Notifications';
   if (pathname.startsWith('/app/profile') || pathname.startsWith('/supplier/profile')) return 'Profile';

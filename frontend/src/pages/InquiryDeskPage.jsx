@@ -45,9 +45,13 @@ export default function InquiryDeskPage() {
   );
   const { data: summary = {} } = useGetTicketSummaryQuery(filters, liveQueryOptions);
   const allowedStatuses = FILTER_STATUS[statusFilter];
-  const tickets = allowedStatuses
-    ? (page?.items || []).filter((ticket) => allowedStatuses.includes(ticket.status))
-    : (page?.items || []).filter((ticket) => ['OPEN', 'IN_PROGRESS'].includes(ticket.status));
+  const loaded = page?.items || [];
+  // The SLA Breached card shows the queries whose response is overdue; the others filter by status.
+  const tickets = statusFilter === 'SLA Breached'
+    ? loaded.filter((ticket) => ticket.sla?.breached)
+    : allowedStatuses
+      ? loaded.filter((ticket) => allowedStatuses.includes(ticket.status))
+      : loaded.filter((ticket) => ['OPEN', 'IN_PROGRESS'].includes(ticket.status));
   const categories = useMemo(() => {
     const all = view === 'board' ? Object.values(board).flat() : (page?.items || []);
     return [...new Set(all.map((ticket) => ticket.category).filter(Boolean))].sort();
@@ -64,13 +68,13 @@ export default function InquiryDeskPage() {
       <div className="row ticket-stats">
         <StatCard tone="bad" icon={<Inbox />} label="Open" value={summary.open || 0} sub="Waiting for assignment" onClick={() => dispatch(setTicketFilterStatus('Open'))} active={statusFilter === 'Open'} />
         <StatCard tone="warn" icon={<Clock />} label="In Progress" value={summary.in_progress || 0} sub="Owned and active" onClick={() => dispatch(setTicketFilterStatus('In Progress'))} active={statusFilter === 'In Progress'} />
-        <StatCard tone="bad" icon={<Clock />} label="SLA Breached" value={summary.sla_breached || 0} sub="Response overdue" />
+        <StatCard tone="bad" icon={<Clock />} label="SLA Breached" value={summary.sla_breached || 0} sub="Response overdue" onClick={() => dispatch(setTicketFilterStatus('SLA Breached'))} active={statusFilter === 'SLA Breached'} />
         <StatCard icon={<CheckCircle />} label="Resolved / Closed" value={summary.resolved_closed || 0} onClick={() => dispatch(setTicketFilterStatus('Resolved'))} active={statusFilter === 'Resolved'} />
       </div>
 
       <div className="ticket-toolbar" style={{ flexWrap: 'wrap' }}>
         <span className="ticket-toolbar-hint">
-          {view === 'list' ? `${shownTickets.length} quer${shownTickets.length === 1 ? 'y' : 'ies'} · ${statusFilter && FILTER_STATUS[statusFilter] ? statusFilter : 'Open + In Progress'}` : 'All queries by status'}
+          {view === 'list' ? `${shownTickets.length} quer${shownTickets.length === 1 ? 'y' : 'ies'} · ${statusFilter && (FILTER_STATUS[statusFilter] || statusFilter === 'SLA Breached') ? statusFilter : 'Open + In Progress'}` : 'All queries by status'}
         </span>
         <label className="ticket-search">
           <Search />

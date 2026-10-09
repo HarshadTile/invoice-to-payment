@@ -26,16 +26,13 @@ const settingsSlice = createSlice({
       const { role, cap } = action.payload;
       state.roleMatrix[role][cap] = !state.roleMatrix[role][cap];
     },
-    setSenderEmailLocal(state, action) {
-      state.senderEmail = action.payload;
-    },
     toggleTwoFactorLocal(state) {
       state.twoFactorOn = !state.twoFactorOn;
     },
   },
 });
 
-export const { hydrateSettings, togglePermissionLocal, toggleTwoFactorLocal, setSenderEmailLocal } = settingsSlice.actions;
+export const { hydrateSettings, togglePermissionLocal, toggleTwoFactorLocal } = settingsSlice.actions;
 export default settingsSlice.reducer;
 
 /* ---- write-through thunks ---- */
@@ -49,12 +46,6 @@ export const togglePermission = (payload) => async (dispatch, getState) => {
     dispatch(togglePermissionLocal(payload));
     throw err;
   }
-};
-
-// Saved only once the server accepts it, so the field never shows an address that wasn't stored.
-export const saveSenderEmail = (email) => async (dispatch) => {
-  await api.put('/v1/settings', { senderEmail: email });
-  dispatch(setSenderEmailLocal(email));
 };
 
 export const toggleTwoFactor = () => async (dispatch, getState) => {

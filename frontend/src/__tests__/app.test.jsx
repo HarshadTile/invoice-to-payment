@@ -108,7 +108,7 @@ describe('Internal admin - full navigation', () => {
     const { user } = await loginAdmin();
     const destinations = [
       'Search Invoice(s)', 'Supplier Visibility', 'Inquiry Desk',
-      'Vendor Status Reports', 'Logs / History', 'Sync Log', 'Profile',
+      'Vendor Status Reports', 'Logs / History', 'Profile',
     ];
     for (const label of destinations) {
       await user.click(screen.getAllByText(label)[0]);
@@ -234,6 +234,18 @@ describe('Internal admin - full navigation', () => {
     expect((await screen.findAllByText('Resolved')).length).toBeGreaterThan(0);
   });
 
+  it('Inquiry Desk: the SLA Breached card is clickable and filters the list', async () => {
+    const { user } = await loginAdmin();
+    await user.click(screen.getAllByText('Inquiry Desk')[0]);
+    const card = () => [...document.querySelectorAll('button.stat-card')].find((b) => b.querySelector('.lbl')?.textContent === 'SLA Breached');
+    await waitFor(() => expect(card()).toBeTruthy());
+    await user.click(card());
+    expect(await screen.findByText(/· SLA Breached/)).toBeInTheDocument();
+    expect(card()).toHaveAttribute('aria-pressed', 'true');
+    await user.click(card()); // click again to go back to the default view
+    expect(await screen.findByText(/· Open \+ In Progress/)).toBeInTheDocument();
+  });
+
   it('toggles Kanban board view on Inquiry Desk', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Inquiry Desk')[0]);
@@ -287,6 +299,16 @@ describe('Internal admin - full navigation', () => {
       await user.click(screen.getByRole('button', { name: 'Mark all read' }));
       expect(await screen.findByText('You are all caught up')).toBeInTheDocument();
       await waitFor(() => expect(document.querySelector('.notification-button')).toHaveAttribute('aria-label', 'Notifications'));
+    });
+
+    it('Notifications page: search narrows the list', async () => {
+      seed();
+      const { user } = await loginAdmin();
+      await user.click(document.querySelector('.nav-item[aria-label="Notifications"]'));
+      await waitFor(() => expect(document.querySelectorAll('.inbox-row').length).toBe(3));
+      fireEvent.change(screen.getByLabelText('Search notifications'), { target: { value: 'third' } });
+      await waitFor(() => expect(document.querySelectorAll('.inbox-row').length).toBe(1));
+      expect(screen.getByText('QRY-000003 - Third')).toBeInTheDocument();
     });
 
     it('shows an empty state when there is nothing', async () => {
@@ -422,38 +444,38 @@ describe('Internal admin - full navigation', () => {
     expect(screen.getByText('In progress')).toBeInTheDocument();
   });
 
-  it('Settings: toggles an auto-notify rule', async () => {
-    const { user } = await loginAdmin();
-    await user.click(screen.getAllByText('Settings')[0]);
-    await user.click(screen.getAllByText('Auto-Notify Rules')[0]);
-    const toggle = document.querySelector('.rule-row .toggle');
-    const wasOn = toggle.className.includes(' on');
-    await user.click(toggle);
-    await waitFor(() => expect(toggle.className.includes(' on')).toBe(!wasOn));
+  it('Vendor Status Reports: the cards switch lists and a supplier filters the invoices', async () => {
+    const { store, user } = await loginAdmin();
+    store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+    await user.click(document.querySelector('.nav-item[aria-label="Vendor Status Reports"]'));
+    const card = (label) => [...document.querySelectorAll('button.stat-card')].find((b) => b.querySelector('.lbl')?.textContent === label);
+    await waitFor(() => expect(card('Completed Invoices')).toBeTruthy());
+
+    await user.click(card('Suppliers Covered'));
+    expect(await screen.findByText('Completed invoices')).toBeInTheDocument(); // the suppliers table
+    await user.click(screen.getByRole('button', { name: 'Bosch Auto Components' }));
+
+    expect(await screen.findByText('Supplier: Bosch Auto Components')).toBeInTheDocument();
+    expect(screen.getByText('INV-MS-1004')).toBeInTheDocument();
+    expect(screen.queryByText('INV-MS-1001')).toBeNull(); // another supplier's paid invoice
+
+    await user.click(screen.getByRole('button', { name: 'Remove supplier filter' }));
+    expect(await screen.findByText('INV-MS-1001')).toBeInTheDocument();
   });
 
-  it('Settings: removes and re-adds an auto-notify rule', async () => {
+  it('Settings has no email notification rules page', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Settings')[0]);
-    await user.click(screen.getAllByText('Auto-Notify Rules')[0]);
-    const before = document.querySelectorAll('.rule-row').length;
-    await user.click(screen.getByRole('button', { name: 'Remove Payment Completed rule' }));
-    await user.click(within(document.querySelector('.modal')).getByRole('button', { name: 'Remove rule' }));
-    await waitFor(() => expect(document.querySelectorAll('.rule-row').length).toBe(before - 1));
-
-    await user.click(screen.getByRole('button', { name: 'Add rule' }));
-    await user.click(within(document.querySelector('.modal')).getByRole('button', { name: 'Add rule' }));
-    expect(await screen.findByText('Choose the event this rule reacts to.')).toBeInTheDocument();
-    fireEvent.change(document.querySelector('#rule-event'), { target: { value: 'Payment Completed' } });
-    fireEvent.change(document.querySelector('#rule-to'), { target: { value: 'Supplier, Accounts' } });
-    await user.click(within(document.querySelector('.modal')).getByRole('button', { name: 'Add rule' }));
-    await waitFor(() => expect(document.querySelectorAll('.rule-row').length).toBe(before));
+    expect(await screen.findByText('Integration Settings')).toBeInTheDocument();
+    expect(document.querySelector('.nav-item[aria-label="Auto-Notify Rules"]')).toBeNull();
   });
 
-  it('Audit Logs table is read-only (edit/delete disabled)', async () => {
+  it('Audit Logs is its own page under Settings and is read-only; Sync Log is gone', async () => {
     const { user } = await loginAdmin();
+    expect(document.querySelector('.nav-item[aria-label="Sync Log"]')).toBeNull();
     await user.click(screen.getAllByText('Settings')[0]);
-    await user.click(screen.getAllByText('Audit Logs')[0]);
+    await user.click(document.querySelector('.nav-item[aria-label="Audit Logs"]'));
+    expect(await screen.findByText(/Newest first/)).toBeInTheDocument();
     expect(screen.queryAllByTitle('Edit')).toHaveLength(0);
     expect(screen.queryAllByTitle('Delete')).toHaveLength(0);
   });
@@ -466,13 +488,13 @@ describe('Internal admin - full navigation', () => {
     expect(exportButton).toBeInTheDocument();
   });
 
-  it('Global Logs: filters by channel and searches', async () => {
+  it('Global Logs: has no channel filter of its own (the top bar owns it) and searches', async () => {
     const { user } = await loginAdmin();
-    await user.click(screen.getAllByText('Logs / History')[0]);
+    await user.click(document.querySelector('.nav-item[aria-label="Logs / History"]'));
     expect(await screen.findByRole('heading', { name: 'Logs / History' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { name: 'Logs / History' })).toHaveLength(1);
-    fireEvent.change(await screen.findByLabelText('Filter by channel'), { target: { value: 'msetuSrm' } });
-    expect(document.querySelectorAll('tbody tr').length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText('Filter by channel')).toBeNull();
+    expect(screen.getByLabelText('Filter by type')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Search the log'), { target: { value: 'zzz-no-such-entry' } });
     expect(await screen.findByText('No log entries match your filters.')).toBeInTheDocument();
   });

@@ -47,7 +47,7 @@ export function RequireTicketAccess() {
   return <Outlet />;
 }
 
-/** HQ-only pages (Outputs, Sync Log, Logs/History, Settings, Supplier Visibility) are hidden
+/** HQ-only pages (Outputs, Logs, Settings, Supplier Visibility) are hidden
  * from an Internal Team (channel-scoped) login, same rule the sidebar itself enforces. */
 export function RequireHQ() {
   const { channelScope } = useSelector((s) => s.auth);

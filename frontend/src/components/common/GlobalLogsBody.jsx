@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDispatch } from 'react-redux';
-import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
+import { CHANNEL_LABEL } from '../../data/constants';
 import { openModal } from '../../features/ui/uiSlice';
 import { api } from '../../api/client';
 import {
@@ -14,7 +14,8 @@ import { Download } from './icons.jsx';
 
 const PAGE_SIZE = 20;
 const TYPE_TONE = { Invoice: 'blue', Payment: 'green', Query: 'amber' };
-const NO_FILTERS = { search: '', type: 'all', channel: '', from: '', to: '' };
+// The channel comes from the top-bar filter, which already narrows the invoices (and their queries) shown here
+const NO_FILTERS = { search: '', type: 'all', from: '', to: '' };
 
 /**
  * Logs / History for the internal team: one chronological list of what actually happened,
@@ -66,24 +67,22 @@ export default function GlobalLogsBody({ invoiceList }) {
       <div className="toolbar" style={{ flexWrap: 'nowrap', alignItems: 'flex-start', gap: 12 }}>
         <div className="toolbar-left" style={{ gap: 10, flex: '1 1 0', minWidth: 0 }}>
           <input
-            className="search-box" style={{ flex: '1 1 200px', minWidth: 160, maxWidth: 280, width: 'auto' }}
-            placeholder="Search invoice, vendor code, PO or details..." aria-label="Search the log"
+            className="search-box" style={{ flex: '1 1 240px', minWidth: 220, maxWidth: 340, width: 'auto', textOverflow: 'ellipsis' }}
+            placeholder="Search invoice, vendor, PO or details" title="Search by invoice no, vendor code, PO no or the event details" aria-label="Search the log"
             value={filters.search} onChange={setFilter('search')}
           />
-          <select className="search-box" aria-label="Filter by type" value={filters.type} onChange={setFilter('type')} style={{ width: 150 }}>
+          <select className="search-box" aria-label="Filter by type" value={filters.type} onChange={setFilter('type')} style={{ width: 140 }}>
             <option value="all">All types</option>
             {LOG_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          <select className="search-box" aria-label="Filter by channel" value={filters.channel} onChange={setFilter('channel')} style={{ width: 170 }}>
-            <option value="">All channels</option>
-            {CHANNELS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
-          <label className="filter-inline">
-            From <input type="date" className="search-box" style={{ width: 150 }} aria-label="From date" value={filters.from} max={filters.to || undefined} onChange={setFilter('from')} />
-          </label>
-          <label className="filter-inline">
-            To <input type="date" className="search-box" style={{ width: 150 }} aria-label="To date" value={filters.to} min={filters.from || undefined} onChange={setFilter('to')} />
-          </label>
+          <div className="date-range">
+            <label className="filter-inline">
+            From <input type="date" className="search-box" style={{ width: 142 }} aria-label="From date" value={filters.from} max={filters.to || undefined} onChange={setFilter('from')} />
+            </label>
+            <label className="filter-inline">
+            To <input type="date" className="search-box" style={{ width: 142 }} aria-label="To date" value={filters.to} min={filters.from || undefined} onChange={setFilter('to')} />
+            </label>
+          </div>
           {filtersActive && (
             <button type="button" className="btn" onClick={() => { setFilters(NO_FILTERS); setPage(1); }}>Clear</button>
           )}
