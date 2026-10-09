@@ -6,12 +6,7 @@ import { api } from '../../api/client';
 // by hydrateSettings once the API responds.
 const initialState = {
   roleMatrix: JSON.parse(JSON.stringify(ROLE_MATRIX)),
-  integrations: [
-    ['Msetu / SRM', 'Connected', '06 Aug 2026, 07:00 AM'],
-    ['PO Portal', 'Connected', '06 Aug 2026, 07:02 AM'],
-    ['SAP (MIRO / ML81N / FBL1N)', 'Connected', '06 Aug 2026, 07:05 AM'],
-    ['MFOX Portal', 'Connection Error', '06 Aug 2026, 07:08 AM'],
-  ],
+  integrations: [],
   senderEmail: 'i2ptracker@company.com',
   twoFactorOn: false,
 };

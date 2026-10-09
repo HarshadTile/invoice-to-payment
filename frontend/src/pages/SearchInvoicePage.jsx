@@ -265,13 +265,13 @@ export default function SearchInvoicePage() {
           </div>
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 160px' }}>
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Date From</span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date From</span>
             <input type="date" className="search-box" style={{ width: '100%' }} value={dateFrom} max={dateTo || undefined}
               onChange={(e) => handleDateFrom(e.target.value)} />
           </label>
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 160px' }}>
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Date To</span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date To</span>
             <input type="date" className="search-box" style={{ width: '100%' }} value={dateTo} min={dateFrom || undefined}
               onChange={(e) => handleDateTo(e.target.value)} />
           </label>

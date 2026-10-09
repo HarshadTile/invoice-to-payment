@@ -8,7 +8,7 @@ vi.mock('../api/client', async () => {
   return { api: installApiMock() };
 });
 
-import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
@@ -191,7 +191,8 @@ describe('Internal admin - full navigation', () => {
     await user.click(screen.getAllByText('DIT00388AC')[0]);
     expect(await screen.findByText('Purchase Orders')).toBeInTheDocument();
     await user.click(screen.getAllByText('Open Full View →')[0]);
-    expect(await screen.findByText(/Other Codes for Tata Communications Ltd \(\d+\) : separate scope, not shown here/)).toBeInTheDocument();
+    expect(await screen.findByLabelText('Vendor Code')).toHaveValue('DIT00388AC');
+    expect(screen.getByRole('heading', { name: 'Invoice Status : Tata Communications Ltd' })).toBeInTheDocument();
   });
 
   it('the internal team has no Raise a Query option anywhere on the invoice lists', async () => {
@@ -463,28 +464,32 @@ describe('Internal admin - full navigation', () => {
     expect(store.getState().ui.scope.vcode).toBe('');
   });
 
-  it('Supplier Visibility follows the top-bar vendor, and picking another supplier moves it', async () => {
+  it('Supplier Visibility updates its detailed view when the navbar vendor changes', async () => {
     const { store, user } = await loginAdmin();
     store.dispatch(setScopeFilter({ key: 'vcode', value: 'DIT00388AC' })); // a Tata Communications code
     store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
     await user.click(screen.getAllByText('Supplier Visibility')[0]);
-    await screen.findAllByText(/^Vendor Codes?( \(\d+\))?$/);
-    const picker = () => document.querySelector('#sv-supplier');
-    expect(picker()).toHaveValue('Tata Communications Ltd');
-    await user.selectOptions(picker(), 'Bharat Forge Ltd');
-    expect(store.getState().ui.scope.vcode).toBe('BFL00456');
-    expect(picker()).toHaveValue('Bharat Forge Ltd');
+    expect(await screen.findByLabelText('Supplier Name')).toHaveValue('Tata Communications Ltd');
+    expect(screen.getByLabelText('Vendor Code')).toHaveValue('DIT00388AC');
+    act(() => store.dispatch(setScopeFilter({ key: 'vcode', value: 'BFL00456' })));
+    expect(screen.getByLabelText('Supplier Name')).toHaveValue('Bharat Forge Ltd');
+    expect(screen.getByLabelText('Vendor Code')).toHaveValue('BFL00456');
+    expect(screen.getByRole('heading', { name: 'Invoice Status : Bharat Forge Ltd' })).toBeInTheDocument();
+    const rows = document.querySelectorAll('.table-scroll tbody tr');
+    expect(rows.length).toBeGreaterThan(0);
+    rows.forEach((row) => expect(row).toHaveTextContent('BFL00456'));
   });
 
-  it('Supplier Visibility: a vendor code is a button that opens its full details', async () => {
+  it('Supplier Visibility opens the detailed view directly without duplicate navigation', async () => {
     const { store, user } = await loginAdmin();
     store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
     await user.click(screen.getAllByText('Supplier Visibility')[0]);
-    await screen.findAllByText(/^Vendor Codes?( \(\d+\))?$/);
-    const code = document.querySelector('.sv-code');
-    expect(code).toHaveAttribute('title', 'Click here to see all details');
-    await user.click(code);
-    expect(await screen.findByText('Total POs')).toBeInTheDocument(); // the vendor code page
+    expect(await screen.findByText('Total POs')).toBeInTheDocument();
+    expect(screen.getByLabelText('Vendor Code').value).toContain('All Vendors');
+    expect(screen.getByRole('heading', { name: 'Invoice Status : All Suppliers' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Invoice Log' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open full Supplier Visibility/ })).not.toBeInTheDocument();
   });
 
   it('Search Invoice(s) returns matching results', async () => {
@@ -586,7 +591,9 @@ describe('Supplier session', () => {
   it('views its own profile with PAN and vendor code list', async () => {
     const { user } = await loginSupplier();
     await user.click(screen.getAllByText('My Profile')[0]);
-    expect(await screen.findByText(/All Vendor Codes Under This PAN/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Vendor codes' })).toBeInTheDocument();
+    expect(screen.getAllByText('PAN', { exact: true })).toHaveLength(1);
+    expect(screen.getByText('Signed-in Vendor Code')).toBeInTheDocument();
   });
 
   it('cannot reach internal-only routes directly (route guard redirects)', async () => {

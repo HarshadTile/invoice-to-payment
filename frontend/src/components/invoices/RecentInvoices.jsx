@@ -4,6 +4,7 @@ import { openModal } from '../../features/ui/uiSlice';
 import Badge from '../common/Badge.jsx';
 import SortDateTh from '../common/SortDateTh.jsx';
 import { useDateSort } from '../../utils/dateSort';
+import { invoiceDateLabel } from '../../utils/invoiceDates';
 import { Mail, Eye, Inbox } from '../common/icons.jsx';
 
 /**
@@ -25,23 +26,25 @@ export default function RecentInvoices({ rows = [] }) {
           <thead>
             <tr>
               <th scope="col">Invoice No</th>
+              <th scope="col">Invoice Date</th>
               <th scope="col">Vendor Code</th>
               <th scope="col">Channel</th>
               <th scope="col" className="num">Amount</th>
               <th scope="col">Status</th>
-              <SortDateTh dir={dir} onToggle={toggle} />
+              <SortDateTh label="Status Date" dir={dir} onToggle={toggle} />
               <th scope="col" className="col-actions">Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={7}>
+              <tr><td colSpan={8}>
                 <div className="empty-state"><Inbox /><b>No invoices yet</b><span>New invoices will appear here.</span></div>
               </td></tr>
             )}
             {sorted.map((inv, rowIndex) => (
               <tr key={`${inv.no}-${rowIndex}`}>
                 <td><button type="button" className="link-hero" title="Open current stage" onClick={() => openStage(inv.no, inv.poItem)}>{inv.no}</button></td>
+                <td className="cell-muted" style={{ whiteSpace: 'nowrap' }}>{invoiceDateLabel(inv)}</td>
                 <td><button type="button" className="vcode-chip link-hero" title={`Preview ${inv.vcode}`} onClick={() => openVendorCode(inv.vcode)}>{inv.vcode}</button></td>
                 <td className="cell-muted">{CHANNEL_LABEL[inv.channel]}</td>
                 <td className="num mono">{inv.amount}</td>

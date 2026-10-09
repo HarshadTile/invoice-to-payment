@@ -5,6 +5,7 @@ import { useGetTicketBoardQuery, useGetTicketsQuery, useGetTicketSummaryQuery } 
 import StatCard from '../components/common/StatCard.jsx';
 import TicketTable from '../components/tickets/TicketTable.jsx';
 import TicketBoard from '../components/tickets/TicketBoard.jsx';
+import TicketExportButton from '../components/tickets/TicketExportButton.jsx';
 import { CheckCircle, Clock, Columns, Inbox, List, Search } from '../components/common/icons.jsx';
 import { useScope } from '../features/ui/scope';
 
@@ -67,7 +68,7 @@ export default function InquiryDeskPage() {
         <StatCard icon={<CheckCircle />} label="Resolved / Closed" value={summary.resolved_closed || 0} onClick={() => dispatch(setTicketFilterStatus('Resolved'))} active={statusFilter === 'Resolved'} />
       </div>
 
-      <div className="ticket-toolbar">
+      <div className="ticket-toolbar" style={{ flexWrap: 'wrap' }}>
         <span className="ticket-toolbar-hint">
           {view === 'list' ? `${shownTickets.length} quer${shownTickets.length === 1 ? 'y' : 'ies'} · ${statusFilter && FILTER_STATUS[statusFilter] ? statusFilter : 'Open + In Progress'}` : 'All queries by status'}
         </span>
@@ -82,6 +83,10 @@ export default function InquiryDeskPage() {
           <option value="">All categories</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
+        <TicketExportButton
+          tickets={view === 'list' ? shownTickets : ['open', 'in_progress', 'resolved', 'closed'].flatMap((key) => shownBoard[key] || [])}
+          loading={view === 'list' ? isLoading : boardLoading}
+        />
         <div className="view-switch" role="group" aria-label="Query view">
           <button type="button" className={view === 'list' ? 'active' : ''} onClick={() => dispatch(setInquiryViewMode('list'))} title="List view"><List /> <span>List</span></button>
           <button type="button" className={view === 'board' ? 'active' : ''} onClick={() => dispatch(setInquiryViewMode('board'))} title="Board view"><Columns /> <span>Board</span></button>

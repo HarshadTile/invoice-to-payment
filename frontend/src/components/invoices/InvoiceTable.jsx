@@ -9,6 +9,7 @@ import Badge from '../common/Badge.jsx';
 import PagerFoot from '../common/PagerFoot.jsx';
 import SortDateTh from '../common/SortDateTh.jsx';
 import { useDateSort } from '../../utils/dateSort';
+import { invoiceDateLabel } from '../../utils/invoiceDates';
 import { Mail, Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
 
 const PAGE_SIZE = 10;
@@ -73,17 +74,17 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
 
   // Suppliers see one vendor code, so vendor columns are noise; owner and "notify" are internal-only.
   const supplierView = mode === 'supplierSafe' && isSupplierUser;
-  const colCount = (bulk ? 1 : 0) + (supplierView ? 9 : 12);
+  const colCount = (bulk ? 1 : 0) + (supplierView ? 10 : 13);
   const exportCount = filteredCount ?? filtered.length;
   const exportLabel = `Export to Excel (${exportCount})`;
 
   const exportCols = supplierView
-    ? ['Invoice No', 'Channel', 'PO No', 'Amount', 'Status', 'Current Stage', 'UTR No', 'Date']
-    : ['Invoice No', 'Vendor', 'Vendor Code', 'Channel', 'PO No', 'Amount', 'Status', 'Current Stage', 'Owner', 'UTR No', 'Date'];
+    ? ['Invoice No', 'Channel', 'PO No', 'Invoice Date', 'Amount', 'Status', 'Current Stage', 'UTR No', 'Status Date']
+    : ['Invoice No', 'Vendor', 'Vendor Code', 'Channel', 'PO No', 'Invoice Date', 'Amount', 'Status', 'Current Stage', 'Owner', 'UTR No', 'Status Date'];
   const toExportRow = (inv) => {
-    if (supplierView) return [inv.no, CHANNEL_LABEL[inv.channel], inv.po, inv.amount, inv.status, currentStageName(inv), inv.utr, inv.date];
+    if (supplierView) return [inv.no, CHANNEL_LABEL[inv.channel], inv.po, invoiceDateLabel(inv), inv.amount, inv.status, currentStageName(inv), inv.utr, inv.date];
     const owner = currentHandlerFor(inv);
-    return [inv.no, inv.vendor, inv.vcode, CHANNEL_LABEL[inv.channel], inv.po, inv.amount, inv.status, currentStageName(inv), owner.name, inv.utr, inv.date];
+    return [inv.no, inv.vendor, inv.vcode, CHANNEL_LABEL[inv.channel], inv.po, invoiceDateLabel(inv), inv.amount, inv.status, currentStageName(inv), owner.name, inv.utr, inv.date];
   };
   const exportInvoices = (list, filenameLabel) => {
     downloadCSV(filenameLabel, exportCols, list.map(toExportRow));
@@ -172,13 +173,14 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               {!supplierView && <th scope="col">Vendor Code</th>}
               <th scope="col">Channel</th>
               <th scope="col">PO No</th>
+              <th scope="col" title="Source invoice date used by the date filters">Invoice Date</th>
               <th scope="col" className="num">Amount</th>
               <th scope="col">Status</th>
               <th scope="col">Current Stage</th>
               {/* Renamed from "Handled By" which was truncating */}
               {!supplierView && <th scope="col">Owner</th>}
               <th scope="col">UTR No</th>
-              <SortDateTh dir={dateDir} onToggle={toggleDate} />
+              <SortDateTh label="Status Date" dir={dateDir} onToggle={toggleDate} />
               <th scope="col" className="col-actions">Actions</th>
             </tr>
           </thead>
@@ -229,6 +231,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
                   )}
                   <td>{CHANNEL_LABEL[inv.channel]}</td>
                   <td>{inv.po}</td>
+                  <td className="cell-muted" style={{ whiteSpace: 'nowrap' }}>{invoiceDateLabel(inv)}</td>
                   <td className="num mono">{inv.amount}</td>
                   <td><Badge tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge></td>
                   <td className="cell-muted" style={{ whiteSpace: 'normal', minWidth: 150 }}>{currentStageName(inv)}</td>
