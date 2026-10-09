@@ -18,22 +18,22 @@ const ALL_CHANNELS = [
   {
     key: 'msetuSrm', label: 'Msetu / SRM',
     desc: 'Supplier-facing portal. Supplier uploads invoices against each visible purchase order; ASN/IBD gets auto-created.',
-    views: ['Invoice Log', 'Approver Assignment', 'SAP Booking (MIRO)', 'Payment & UTR (FBL1N)', 'Queries', 'History'],
+    views: ['Invoice Log', 'Approver Assignment', 'SAP Booking (MIRO)', 'Payment & UTR (FBL1N)', 'History'],
   },
   {
     key: 'poPortal', label: 'PO Portal',
     desc: 'Service invoices for certain plant codes get processed through the PO Portal.',
-    views: ['Invoice Log', 'Approver Assignment', 'Service Entry (ML81N)', 'Payment Status', 'Queries', 'History'],
+    views: ['Invoice Log', 'Approver Assignment', 'Service Entry (ML81N)', 'Payment Status', 'History'],
   },
   {
     key: 'manual', label: 'Manual',
     desc: 'Certain document-type purchase order invoices need to be processed manually, e.g. Capex service.',
-    views: ['Invoice Log', 'Email Approval Trail', 'Service Entry (ML81N)', 'Payment Status', 'Queries', 'History'],
+    views: ['Invoice Log', 'Email Approval Trail', 'Service Entry (ML81N)', 'Payment Status', 'History'],
   },
   {
     key: 'mfoxPortal', label: 'MFOX Portal',
     desc: 'Invoices which are received in foreign currency.',
-    views: ['Invoice Log', 'Approver Assignment', 'Corp Finance Routing', 'Service Entry & Payment', 'Queries', 'History'],
+    views: ['Invoice Log', 'Approver Assignment', 'Corp Finance Routing', 'Service Entry & Payment', 'History'],
   },
 ];
 
@@ -62,17 +62,6 @@ export const VIEW_COLUMNS = {
   'Email Approval Trail': ['Invoice No', 'Approval Email Date', 'Subject', 'Status'],
   'Corp Finance Routing': ['Invoice No', 'Routed Date', 'Fund Arrangement Status', 'Corp Finance Approver'],
   'Service Entry & Payment': ['Invoice No', 'Service Entry No', 'Currency', 'Payment Due Date', 'Payment Status', 'UTR No'],
-};
-
-// Real vendor-code list: every one of these maps to Tata Communications Ltd -- the
-// "multiple vendor codes, one supplier" pain point. Internal data only, powers Supplier Visibility.
-export const VENDOR_CODE_MAP = {
-  cols: ['Vendor Code', 'Supplier Name', 'Status'],
-  rows: [
-    'DIT00388AC', 'DIT00388AA', 'DIT00388AP', 'DIT00388AE', 'DIT00388AM', 'DIT00388AB',
-    'DIT00388AS', 'DIT00388AH', 'DIT00388AJ', 'V123', 'TCLW15', 'TCLB15', 'TCLT15',
-    'DIT00388AR', 'DIT00388AL',
-  ].map((code) => [code, 'Tata Communications Ltd', 'Active']),
 };
 
 export const STATUS_CHIP = {

@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { setSearch, setTablePage, openModal } from '../../features/ui/uiSlice';
 import PagerFoot from '../common/PagerFoot.jsx';
 import Badge from './Badge.jsx';
+import SortDateTh from './SortDateTh.jsx';
+import { dateValue } from '../../utils/dateSort';
 import { Download, Inbox, Mail } from './icons.jsx';
 
 const PAGE_SIZE = 20;
@@ -28,7 +31,18 @@ export default function EditableTable({
   const page = useSelector((s) => s.ui.tablePage[tableKey] || 1);
 
   const q = search.toLowerCase();
-  const filtered = rows.filter((r) => !q || r.some((c) => String(c).toLowerCase().includes(q)));
+  const matched = rows.filter((r) => !q || r.some((c) => String(c).toLowerCase().includes(q)));
+  // Any column called "... Date" sorts on click; one date column is active at a time.
+  const [sort, setSort] = useState({ col: null, dir: null });
+  const isDateCol = (c) => /\bdate\b/i.test(c);
+  const toggleSort = (ci) => setSort((cur) => ({ col: ci, dir: cur.col === ci && cur.dir === 'desc' ? 'asc' : 'desc' }));
+  const filtered = sort.col === null ? matched : matched
+    .map((r, index) => ({ r, index, ms: dateValue(r[sort.col]) }))
+    .sort((a, b) => {
+      if (a.ms === null || b.ms === null) return (a.ms === null) - (b.ms === null) || a.index - b.index;
+      return (a.ms - b.ms) * (sort.dir === 'asc' ? 1 : -1) || a.index - b.index;
+    })
+    .map((x) => x.r);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -50,7 +64,9 @@ export default function EditableTable({
         <table>
           <thead>
             <tr>
-              {cols.map((c) => <th key={c}>{c}</th>)}
+              {cols.map((c, ci) => (isDateCol(c)
+                ? <SortDateTh key={c} label={c} dir={sort.col === ci ? sort.dir : null} onToggle={() => toggleSort(ci)} />
+                : <th key={c}>{c}</th>))}
               {statusCol && <th>Notify</th>}
             </tr>
           </thead>

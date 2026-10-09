@@ -5,6 +5,7 @@ import settingsReducer from '../features/settings/settingsSlice';
 import uiReducer from '../features/ui/uiSlice';
 
 import { ticketsApi } from '../features/tickets/ticketsApi';
+import { notificationsApi } from '../features/notifications/notificationsApi';
 
 export const store = configureStore({
   reducer: {
@@ -13,7 +14,8 @@ export const store = configureStore({
     settings: settingsReducer,
     ui: uiReducer,
     [ticketsApi.reducerPath]: ticketsApi.reducer,
+    [notificationsApi.reducerPath]: notificationsApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware().concat(ticketsApi.middleware),
+    getDefaultMiddleware().concat(ticketsApi.middleware, notificationsApi.middleware),
 });

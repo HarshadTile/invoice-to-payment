@@ -2,7 +2,6 @@ import {
   CHANNEL_STAGES, VIEW_MILESTONE, APP_NOW,
 } from '../data/constants';
 import { runtime } from '../data/runtime';
-import { VENDOR_CODE_MAP } from '../data/constants';
 
 export function handlerFor(inv) {
   return { approver: '-', approverEmail: '-', accounts: '-', accountsEmail: '-' };
@@ -50,25 +49,7 @@ export function addDays(dateStr, days) {
 export function supplierForVendorCode(code) {
   const fromInvoice = runtime.invoices.find((i) => i.vcode === code);
   if (fromInvoice) return fromInvoice.vendor;
-  const fromMap = VENDOR_CODE_MAP.rows.find((r) => r[0] === code);
-  if (fromMap) return fromMap[1];
   return code;
-}
-
-// No real phone number exists in the invoice source data yet, so this is still
-// a deterministic placeholder (see the PAN/vendor-code fixes above, which do use
-// real data now). Flagged for a future backend field, not fixed here.
-export function synthPhone(name) {
-  let s = '+91 ';
-  for (let i = 0; i < 5; i++) s += hashIdx(name + 'P' + i, 10);
-  s += ' ';
-  for (let i = 5; i < 10; i++) s += hashIdx(name + 'P' + i, 10);
-  return s;
-}
-
-export function supplierEmailFor(vendor) {
-  const slug = vendor.toLowerCase().replace(/\b(ltd|pvt|inc|group|india|components|auto)\b/g, '').trim().split(/\s+/).filter(Boolean).join('');
-  return `accounts@${slug || 'supplier'}.com`;
 }
 
 // PAN is the one reliable identity in the source data — the same legal entity can
@@ -107,9 +88,7 @@ export function vendorCodesFor(supplier) {
   const pan = panForSupplierName(supplier);
   const matching = runtime.invoices.filter((i) => (pan ? i.pan === pan : i.vendor === supplier));
   const fromInvoices = [...new Set(matching.map((i) => i.vcode))];
-  if (fromInvoices.length) return fromInvoices;
-  // Fall back to the static reference map only for a supplier with no invoices yet.
-  return VENDOR_CODE_MAP.rows.filter((r) => r[1] === supplier).map((r) => r[0]);
+  return fromInvoices;
 }
 
 /** Real PAN, read off whichever of this supplier's invoices has one on file. */

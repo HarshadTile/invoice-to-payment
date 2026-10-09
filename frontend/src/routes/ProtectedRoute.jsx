@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Navigate, Outlet } from 'react-router-dom';
-import { AUTH_BYPASS, selectPerm } from '../features/auth/authSlice';
+import { AUTH_BYPASS, selectHasTicketAccess, selectPerm } from '../features/auth/authSlice';
 import { pushToast } from '../features/ui/uiSlice';
 
 function PortalRedirect({ to, message }) {
@@ -37,6 +37,13 @@ export function RequireSupplier() {
     to="/app/invoices"
     message="You're signed in to the internal portal. You've been redirected to Invoices. Log out to sign in as a supplier."
   />;
+  return <Outlet />;
+}
+
+/** Inquiry Desk and Notifications: staff need a ticket role (see selectHasTicketAccess). */
+export function RequireTicketAccess() {
+  const allowed = useSelector(selectHasTicketAccess);
+  if (!allowed) return <Navigate to="/app/invoices" replace />;
   return <Outlet />;
 }
 

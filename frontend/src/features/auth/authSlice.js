@@ -86,6 +86,18 @@ export const selectPerm = (state) => {
   return state.settings?.roleMatrix?.[role] || ROLE_MATRIX[role] || ROLE_MATRIX.Viewer || {};
 };
 
+const TICKET_ROLES_WITH_ACCESS = new Set(['ADMIN', 'CHANNEL_LEAD', 'ASSIGNEE']);
+
+/** May this login use the Inquiry Desk (queries and notifications)? Suppliers always can; staff need
+ *  a ticket role, whatever their application role. The server enforces the same rule on every
+ *  ticket endpoint; this only keeps the menu, pages and polling from offering what it would refuse.
+ *  A login with no ticket role in its payload (dev bypass) is not blocked here. */
+export const selectHasTicketAccess = (state) => {
+  const { authType, ticketRole } = state.auth;
+  if (authType === 'supplier') return true;
+  return ticketRole == null || TICKET_ROLES_WITH_ACCESS.has(String(ticketRole).toUpperCase());
+};
+
 /** Is the current login locked to a single channel? */
 export const selectIsChannelLocked = (state) => state.auth.channelScope !== 'all' && state.auth.authType === 'internal';
 

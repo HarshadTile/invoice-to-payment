@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { vendorCodesFor, panFor, supplierDirectory, supplierForVendorCode } from '../utils/businessLogic';
@@ -7,13 +7,13 @@ import { selectFilteredInvoicesAnyVendor } from '../features/invoices/selectors'
 import { setScopeFilter, setSupplierVisibilityQuery } from '../features/ui/uiSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import StatCard from '../components/common/StatCard.jsx';
+import { selectHasTicketAccess } from '../features/auth/authSlice';
 import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
 
 export default function SupplierVisibilityPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [activeKpi, setActiveKpi] = useState('total');
-  const [activeCode, setActiveCode] = useState('all'); // 'all' or one vendor code of this supplier
   const directory = supplierDirectory(); // one row per real supplier identity (grouped by PAN)
   const savedQuery = useSelector((s) => s.ui.supplierVisibilityQuery);
   // When a vendor is chosen in the top bar, this page shows that vendor's supplier (all of its
@@ -39,16 +39,11 @@ export default function SupplierVisibilityPage() {
   // Match by PAN (the real identity) when known, so every name spelling / vendor
   // code that belongs to this supplier is included, not just the exact string picked.
   const isSameSupplier = (i) => (pan !== '-' ? i.pan === pan : i.vendor === supplier);
-  const supplierInvoices = scoped.filter(isSameSupplier);
-  // Switching supplier starts again from "all codes"; a code that no longer exists falls back to it too.
-  useEffect(() => { setActiveCode('all'); }, [supplier]);
-  const codeInUse = activeCode !== 'all' && codes.includes(activeCode) ? activeCode : 'all';
-  const invoices = codeInUse === 'all' ? supplierInvoices : supplierInvoices.filter((i) => i.vcode === codeInUse);
-  const countFor = (c) => supplierInvoices.filter((i) => i.vcode === c).length;
-  const { data: ticketPage } = useGetTicketsQuery({ include_closed: true, page_size: 100 });
+  const invoices = scoped.filter(isSameSupplier);
+  const hasTicketAccess = useSelector(selectHasTicketAccess);
+  const { data: ticketPage } = useGetTicketsQuery({ include_closed: true, page_size: 100 }, { skip: !hasTicketAccess });
   const ticketItems = ticketPage?.items || [];
-  const relevantCodes = codeInUse === 'all' ? codes : [codeInUse];
-  const openIssues = ticketItems.filter((t) => relevantCodes.includes(t.vendor_code) && ['OPEN', 'IN_PROGRESS'].includes(t.status)).length;
+  const openIssues = ticketItems.filter((t) => codes.includes(t.vendor_code) && ['OPEN', 'IN_PROGRESS'].includes(t.status)).length;
   const paid = invoices.filter((i) => i.status === 'Paid').length;
   const due = invoices.filter((i) => i.status === 'Payment Due').length;
   const inProgress = invoices.filter((i) => !['Paid', 'Rejected', 'Deleted'].includes(i.status));
@@ -65,42 +60,33 @@ export default function SupplierVisibilityPage() {
 
   return (
     <>
-      <div className="card" style={{ marginBottom: 18 }}>
-        <div className="form-field" style={{ maxWidth: 340 }}>
-          <label>Supplier</label>
-          <select value={supplier} onChange={(e) => pickSupplier(e.target.value)}>
+      <div className="card sv-head">
+        <div className="sv-field sv-supplier">
+          <label htmlFor="sv-supplier">Supplier</label>
+          <select id="sv-supplier" value={supplier} onChange={(e) => pickSupplier(e.target.value)}>
             {directory.map((g) => <option key={g.key} value={g.name}>{g.name}</option>)}
           </select>
         </div>
-        <div className="row" style={{ marginTop: 10 }}>
-          <div className="form-field" style={{ flex: 1 }}><label>PAN</label><input value={pan} readOnly /></div>
+        <div className="sv-field">
+          <span className="sv-label">PAN</span>
+          <span className="sv-pan mono">{pan}</span>
         </div>
-        <div className="code-tabs-head">
-          <span className="code-tabs-label">Vendor Codes ({codes.length})</span>
-          {codeInUse !== 'all' && (
-            <button type="button" className="btn code-tabs-open" onClick={() => navigate(`/app/vendor-code/${codeInUse}`)}>
-              Open full view of {codeInUse} →
-            </button>
-          )}
-        </div>
-        <div className="code-tabs" role="tablist" aria-label="Vendor codes">
-          <button
-            type="button" role="tab" aria-selected={codeInUse === 'all'}
-            className={`code-tab${codeInUse === 'all' ? ' active' : ''}`}
-            onClick={() => setActiveCode('all')}
-          >All codes <span className="code-tab-count">{supplierInvoices.length}</span></button>
-          {codes.map((c) => (
-            <button
-              key={c} type="button" role="tab" aria-selected={codeInUse === c}
-              className={`code-tab mono${codeInUse === c ? ' active' : ''}`}
-              onClick={() => setActiveCode(c)}
-            >{c} <span className="code-tab-count">{countFor(c)}</span></button>
-          ))}
+        <div className="sv-field sv-codes">
+          <span className="sv-label">{codes.length === 1 ? 'Vendor Code' : `Vendor Codes (${codes.length})`}</span>
+          <div className="sv-code-list">
+            {codes.map((c) => (
+              <button
+                key={c} type="button" className="sv-code mono"
+                title="Click here to see all details"
+                onClick={() => navigate(`/app/vendor-code/${c}`)}
+              >{c}</button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="row" style={{ marginBottom: 18 }}>
-        <StatCard label={codeInUse === 'all' ? 'All Codes : Total Invoices' : `${codeInUse} : Total Invoices`} value={invoices.length} onClick={() => setActiveKpi('total')} active={activeKpi === 'total'} />
+      <div className="sv-kpis">
+        <StatCard label="Total Invoices" value={invoices.length} onClick={() => setActiveKpi('total')} active={activeKpi === 'total'} />
         <StatCard label="Paid" value={paid} onClick={() => selectKpi('paid')} active={activeKpi === 'paid'} />
         <StatCard tone="warn" label="Payment Due" value={due} onClick={() => selectKpi('due')} active={activeKpi === 'due'} />
         <StatCard label="In Progress" value={inProgress.length} onClick={() => selectKpi('progress')} active={activeKpi === 'progress'} />
@@ -108,8 +94,8 @@ export default function SupplierVisibilityPage() {
       </div>
 
       <div className="card">
-        <h3>{codeInUse === 'all' ? 'Consolidated Invoice Status' : 'Invoice Status'} : {supplier}{codeInUse !== 'all' && <span className="mono"> · {codeInUse}</span>} <span className="card-hint">{filteredInvoices.length} invoice{filteredInvoices.length === 1 ? '' : 's'}</span></h3>
-        <InvoiceTable invoices={filteredInvoices} tableKey={`supplierVisibility-${activeKpi}-${codeInUse}`} mode="supplierSafe" />
+        <h3>Invoice Status : {supplier} <span className="card-hint">{filteredInvoices.length} invoice{filteredInvoices.length === 1 ? '' : 's'}</span></h3>
+        <InvoiceTable invoices={filteredInvoices} tableKey={`supplierVisibility-${activeKpi}`} mode="supplierSafe" />
       </div>
     </>
   );

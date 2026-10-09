@@ -9,6 +9,8 @@ import {
   LOG_TYPES, filterLogRows, formatDay, formatDayTime, invoiceLogRows, logRowsToCsv, queryLogRows,
 } from '../../utils/supplierLog';
 import PagerFoot from '../../components/common/PagerFoot.jsx';
+import SortDateTh from '../../components/common/SortDateTh.jsx';
+import { useDateSort } from '../../utils/dateSort';
 import Badge from '../../components/common/Badge.jsx';
 import { Download } from '../../components/common/icons.jsx';
 
@@ -44,7 +46,8 @@ export default function SupplierLogsPage() {
     () => [...invoiceLogRows(invoices), ...queryLogRows(queryEntries, invoices, fySearch !== 'all')],
     [invoices, queryEntries, fySearch],
   );
-  const rows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
+  const filteredRows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
+  const { sorted: rows, dir: dateDir, toggle: toggleDate } = useDateSort(filteredRows, (row) => row.when, 'desc');
   const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / PAGE_SIZE)));
   const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
@@ -98,7 +101,7 @@ export default function SupplierLogsPage() {
         <div className="table-scroll">
           <table>
             <thead>
-              <tr><th>Date</th><th>Invoice No</th><th>PO No</th><th>Type</th><th>Event</th><th>Details</th></tr>
+              <tr><SortDateTh dir={dateDir} onToggle={toggleDate} /><th>Invoice No</th><th>PO No</th><th>Type</th><th>Event</th><th>Details</th></tr>
             </thead>
             <tbody>
               {pageRows.length ? pageRows.map((row) => (

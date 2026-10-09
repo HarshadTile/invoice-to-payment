@@ -5,6 +5,7 @@ import {
   RequireSupplier,
   RequireHQ,
   RequireCapability,
+  RequireTicketAccess,
   SettingsIndexRedirect,
   RedirectIfLoggedIn,
 } from './ProtectedRoute.jsx';
@@ -27,6 +28,7 @@ import SupplierHomePage from '../pages/supplier/SupplierHomePage.jsx';
 import SupplierLogsPage from '../pages/supplier/SupplierLogsPage.jsx';
 import SupplierTicketsPage from '../pages/supplier/SupplierTicketsPage.jsx';
 import TicketDetailPage from '../pages/TicketDetailPage.jsx';
+import NotificationsPage from '../pages/NotificationsPage.jsx';
 
 export default function AppRoutes() {
   return (
@@ -45,8 +47,11 @@ export default function AppRoutes() {
           <Route path="/app/search" element={<SearchInvoicePage />} />
           <Route path="/app/channel/:key" element={<ChannelPage />} />
           <Route path="/app/vendor-code/:code" element={<VendorCodePage />} />
-          <Route path="/app/inquiry-desk" element={<InquiryDeskPage />} />
-          <Route path="/app/inquiry-desk/:id" element={<TicketDetailPage />} />
+          <Route element={<RequireTicketAccess />}>
+            <Route path="/app/inquiry-desk" element={<InquiryDeskPage />} />
+            <Route path="/app/inquiry-desk/:id" element={<TicketDetailPage />} />
+            <Route path="/app/notifications" element={<NotificationsPage />} />
+          </Route>
           <Route path="/app/profile" element={<ProfilePage />} />
 
           <Route element={<RequireHQ />}>
@@ -82,6 +87,7 @@ export default function AppRoutes() {
           <Route path="/supplier/tickets" element={<SupplierTicketsPage />} />
           <Route path="/supplier/tickets/:id" element={<TicketDetailPage />} />
           <Route path="/supplier/profile" element={<ProfilePage />} />
+          <Route path="/supplier/notifications" element={<NotificationsPage />} />
         </Route>
       </Route>
 

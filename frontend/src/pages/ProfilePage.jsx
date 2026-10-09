@@ -7,6 +7,7 @@ import { selectScopedInvoices } from '../features/invoices/selectors';
 import { toggleTwoFactor } from '../features/settings/settingsSlice';
 import { pushToast } from '../features/ui/uiSlice';
 import { authApi } from '../api/authApi';
+import { selectHasTicketAccess } from '../features/auth/authSlice';
 import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
 
 export default function ProfilePage() {
@@ -14,7 +15,8 @@ export default function ProfilePage() {
   const dispatch = useDispatch();
   const twoFactorOn = useSelector((s) => s.settings.twoFactorOn);
   const scopedInvoices = useSelector(selectScopedInvoices);
-  const { data: ticketPage } = useGetTicketsQuery({ page_size: 100 });
+  const hasTicketAccess = useSelector(selectHasTicketAccess);
+  const { data: ticketPage } = useGetTicketsQuery({ page_size: 100 }, { skip: !hasTicketAccess });
   const openQueries = (ticketPage?.items || []).filter((t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length;
   const [sendingReset, setSendingReset] = useState(false);
 

@@ -53,7 +53,7 @@ export default function InvoiceProgressCard({ inv }) {
       <div style={{ display: 'flex', alignItems: 'flex-start', margin: '10px 0 4px', overflowX: 'auto' }}>
         {stages.map((s, i) => {
           const idx = i + 1;
-          const st = idx < done ? 'done' : idx === done ? 'current' : 'todo';
+          const st = idx < done || (idx === done && inv.status === 'Paid') ? 'done' : idx === done ? 'current' : 'todo';
           const dotBg = st === 'done' ? 'var(--green)' : st === 'current' ? 'var(--blue)' : '#E2E8F0';
           const dotFg = st === 'todo' ? 'var(--text-muted)' : '#fff';
           const dateStr = getStageDate(s);
