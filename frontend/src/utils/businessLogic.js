@@ -249,7 +249,8 @@ export function downloadCSV(filename, cols, rows) {
   const csv = [cols.join(',')].concat(
     rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')),
   ).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
+  // The leading BOM tells Excel the file is UTF-8, so symbols such as the rupee sign (₹) open correctly
+  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename.replace(/\s+/g, '_') + '.csv';
