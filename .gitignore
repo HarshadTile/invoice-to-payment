@@ -1,2 +1,4 @@
 ~$*.xlsx
 backend/data/attachments/
+backend/data/local-supplier-invoices.xlsx
+backend/data/local-supplier-mobiles.xlsx

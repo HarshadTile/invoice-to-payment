@@ -512,3 +512,14 @@
   .lgn-card { animation: none; }
   .lgn-spinner { animation-duration: 1.4s; }
 }
+.lgn-otp-popup {
+  border: 0;
+  border-radius: 16px;
+  padding: 32px;
+  width: min(420px, calc(100vw - 48px));
+  color: var(--text, #222);
+  box-shadow: 0 16px 64px #0004;
+}
+.lgn-otp-popup::backdrop { background: #0007; }
+.lgn-otp-popup input { padding: 12px; font-size: 20px; letter-spacing: 6px; }
+.lgn-otp-popup button:disabled { opacity: .5; cursor: default; }

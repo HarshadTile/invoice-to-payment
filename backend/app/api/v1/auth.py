@@ -2,10 +2,10 @@ from datetime import datetime
 from typing import Optional
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError as JWTError
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.audit import write_audit
@@ -14,6 +14,8 @@ from app.core.password_reset import issue_password_reset
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.user import PasswordResetToken, User
 from app.repositories.gcp_invoice import get_all_cached_invoices
+from app.services.supplier_mobile import registered_mobile
+from app.services import supplier_otp
 
 router = APIRouter()
 security = HTTPBearer()
@@ -40,12 +42,14 @@ class SupplierLoginRequest(BaseModel):
 
 
 @router.post("/supplier/login")
-def supplier_login(request: SupplierLoginRequest, db: Session = Depends(get_db)):
+def supplier_login(request: SupplierLoginRequest, http_request: Request, db: Session = Depends(get_db)):
+    enabled = supplier_otp.mobile_auth_enabled()
     vcode = request.vcode.strip()
+    rows = get_all_cached_invoices()
     match = next(
         (
             row
-            for row in get_all_cached_invoices()
+            for row in rows
             if str(row.get("SUPPLIER", "")).strip().lower() == vcode.lower()
         ),
         None,
@@ -56,7 +60,25 @@ def supplier_login(request: SupplierLoginRequest, db: Session = Depends(get_db))
 
     company = str(match.get("SUPPLIER_NAME") or request.company or "Vendor").strip()
     pan = str(match.get("PAN_NO") or "-").strip() or "-"
+    # Use the source's canonical code for invoice/ticket access scope.
+    vcode = str(match["SUPPLIER"]).strip()
     supplier_info = {"company": company, "pan": pan, "vcode": vcode}
+    if enabled:
+        phone = registered_mobile(vcode, rows)
+        return supplier_otp.send_code(db, supplier_info, phone, _client_ip(http_request))
+    return _supplier_session(db, supplier_info)
+
+
+def _client_ip(request: Request):
+    # Do not trust user-supplied forwarding headers. Configure trusted proxy IPs in Uvicorn.
+    return request.client.host if request.client else "unknown"
+
+
+def _supplier_session(db, supplier_info, otp_verified=False):
+    vcode = supplier_info["vcode"]
+    company = supplier_info["company"]
+    pan = supplier_info["pan"]
+    supplier_info = {**supplier_info, "mobile_otp_verified": otp_verified}
     token = create_access_token(subject=vcode, auth_type="supplier", scope=supplier_info)
     write_audit(db, f"Supplier {vcode}", "Logged in", f"{company}, supplier portal")
     return {
@@ -68,6 +90,45 @@ def supplier_login(request: SupplierLoginRequest, db: Session = Depends(get_db))
             "pan": pan,
         },
     }
+
+
+class SupplierOtpRequest(BaseModel):
+    challenge_id: str = Field(min_length=1, max_length=64)
+
+
+class SupplierOtpVerifyRequest(SupplierOtpRequest):
+    code: str = Field(max_length=6)
+
+
+def _require_mobile_auth():
+    if not supplier_otp.mobile_auth_enabled():
+        raise HTTPException(400, "Mobile authentication is disabled. Please start login again.")
+
+
+@router.post("/supplier/otp/verify")
+def supplier_otp_verify(request: SupplierOtpVerifyRequest, http_request: Request, db: Session = Depends(get_db)):
+    _require_mobile_auth()
+    identity = supplier_otp.challenge_identity(db, request.challenge_id)
+    phone = registered_mobile(identity["vcode"], get_all_cached_invoices())
+    identity = supplier_otp.verify_code(db, request.challenge_id, request.code, _client_ip(http_request), phone)
+    return _supplier_session(db, identity, otp_verified=True)
+
+
+@router.post("/supplier/otp/resend")
+def supplier_otp_resend(request: SupplierOtpRequest, http_request: Request, db: Session = Depends(get_db)):
+    _require_mobile_auth()
+    identity = supplier_otp.challenge_identity(db, request.challenge_id)
+    phone = registered_mobile(identity["vcode"], get_all_cached_invoices())
+    return supplier_otp.send_code(db, identity, phone, _client_ip(http_request), previous=request.challenge_id)
+
+
+@router.post("/supplier/otp/cancel")
+def supplier_otp_cancel(request: SupplierOtpRequest, db: Session = Depends(get_db)):
+    from app.models.supplier_otp import SupplierOtpState
+    from sqlalchemy import update
+    db.execute(update(SupplierOtpState).where(SupplierOtpState.challenge == request.challenge_id).values(digest=None))
+    db.commit()
+    return {"msg": "Login cancelled"}
 
 
 class InternalLoginRequest(BaseModel):
@@ -158,9 +219,13 @@ def get_current_user_token(
     from app.core.security import ALGORITHM, SECRET_KEY
 
     try:
-        return jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    if payload.get("auth_type") == "supplier" and supplier_otp.mobile_auth_enabled():
+        if (payload.get("scope") or {}).get("mobile_otp_verified") is not True:
+            raise HTTPException(401, "Please sign in again using mobile verification.")
+    return payload
 
 
 def get_current_user(

@@ -32,6 +32,26 @@ beforeEach(() => {
 });
 
 describe('loginThunk', () => {
+  it('waits for supplier OTP without saving a token or loading protected data', async () => {
+    const challenge = { otp_required: true, challenge_id: 'challenge', phone_last4: '0123' };
+    mockApi.post.mockResolvedValue(challenge);
+    const store = makeStore();
+    expect(await store.dispatch(loginThunk({ mode: 'supplier', vcode: 'V1' }))).toEqual(challenge);
+    expect(mockApi.setToken).not.toHaveBeenCalled();
+    expect(mockApi.get).not.toHaveBeenCalled();
+    expect(store.getState().auth.loggedIn).toBe(false);
+  });
+
+  it('verifies supplier OTP before saving the token and loading data', async () => {
+    mockApi.post.mockResolvedValue({ token: 'verified', auth: { authType: 'supplier', vcode: 'V1' } });
+    mockApi.get.mockResolvedValue(BOOTSTRAP);
+    const store = makeStore();
+    await store.dispatch(loginThunk({ mode: 'supplier', challenge_id: 'challenge', code: '123456' }, { remember: false }));
+    expect(mockApi.post).toHaveBeenCalledWith('/v1/auth/supplier/otp/verify', { challenge_id: 'challenge', code: '123456' });
+    expect(mockApi.setToken).toHaveBeenCalledWith('verified', { persist: false });
+    expect(store.getState().auth.loggedIn).toBe(true);
+  });
+
   it('has the data loaded before the app counts as logged in', async () => {
     let releaseBootstrap;
     mockApi.post.mockResolvedValue({ token: 't', auth: AUTH });

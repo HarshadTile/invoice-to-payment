@@ -12,6 +12,7 @@ import WorkspaceSelector from '../components/login/WorkspaceSelector.jsx';
 import FormField from '../components/login/FormField.jsx';
 import PasswordField from '../components/login/PasswordField.jsx';
 import PrimaryButton from '../components/login/PrimaryButton.jsx';
+import SupplierOtpPopup from '../components/login/SupplierOtpPopup.jsx';
 import { IdIcon, HashIcon, AlertIcon, CheckIcon } from '../components/login/icons.jsx';
 import './login.css';
 
@@ -29,9 +30,7 @@ export default function LoginPage() {
   const [channelScope, setChannelScope] = useState('all');
   const [empId, setEmpId] = useState('');
   const [vcode, setVcode] = useState('');
-  const [mobile, setMobile] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
+  const [challenge, setChallenge] = useState(null);
   const [password, setPassword] = useState('');
 
   const busy = status === 'busy';
@@ -50,7 +49,12 @@ export default function LoginPage() {
     setError('');
     setStatus('busy');
     try {
-      await dispatch(loginThunk(form, { remember }));
+      const result = await dispatch(loginThunk(form, { remember }));
+      if (result?.otp_required) {
+        setChallenge(result);
+        setStatus('idle');
+        return;
+      }
       setStatus('success');
       dispatch(pushToast('Signed in.'));
       navigate(dest);
@@ -131,6 +135,10 @@ export default function LoginPage() {
 
   return (
     <div className="lgn-page">
+      {challenge && <SupplierOtpPopup challenge={challenge}
+        onChallenge={(next) => { setError(''); setChallenge(next); }}
+        onVerify={(code) => runLogin({ mode: 'supplier', challenge_id: challenge.challenge_id, code }, '/supplier/home')}
+        onCancel={() => { setChallenge(null); setError(''); }} busy={busy} error={error} />}
       <AppHeader onNotify={notify} />
 
       <div className="lgn-hero">
@@ -142,7 +150,7 @@ export default function LoginPage() {
             subtitle={tab === 'supplier' ? 'Use your vendor code to continue.' : 'Sign in to continue.'}
           >
             <AccountTypeSelector value={tab} onChange={switchTab} />
-            {alerts}
+            {!challenge && alerts}
 
             {tab === 'internal' ? (
               <form className="lgn-form" onSubmit={submitInternal} noValidate>

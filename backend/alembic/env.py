@@ -17,7 +17,7 @@ from app.core.database import Base, DATABASE_URL  # noqa: E402
 
 # Import every model module so its tables register on Base.metadata before
 # autogenerate compares against it. Add new model files here as they're added.
-from app.models import settings, sync_log, ticket, ticket_activity, user  # noqa: E402,F401
+from app.models import settings, supplier_otp, sync_log, ticket, ticket_activity, user  # noqa: E402,F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

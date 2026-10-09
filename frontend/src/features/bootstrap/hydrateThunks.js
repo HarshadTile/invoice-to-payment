@@ -37,7 +37,10 @@ export const loadBootstrap = (auth) => async (dispatch) => {
 export const loginThunk = (form, opts = {}) => async (dispatch) => {
   let token, auth;
   if (form.mode === 'supplier') {
-    const res = await api.post('/v1/auth/supplier/login', form);
+    const res = form.challenge_id
+      ? await api.post('/v1/auth/supplier/otp/verify', { challenge_id: form.challenge_id, code: form.code })
+      : await api.post('/v1/auth/supplier/login', form);
+    if (res.otp_required) return res;
     token = res.token;
     auth = res.auth;
   } else {
@@ -57,6 +60,7 @@ export const loginThunk = (form, opts = {}) => async (dispatch) => {
     throw err;
   }
   dispatch(setAuthFromServer(auth));
+  return { auth };
 };
 
 /** On app start: if a token is present, revalidate it and hydrate. */

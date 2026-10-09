@@ -1,16 +1,38 @@
 from pathlib import Path
+import os
+from threading import Lock
 from openpyxl import load_workbook
 
-EXCEL_FILE = Path("data/gcp_invoice_data.xlsx")
+EXCEL_FILE = Path(os.getenv("SUPPLIER_INVOICE_EXCEL_FILE", "data/gcp_invoice_data.xlsx"))
 SHEET_NAME = "in"
 
 _cached_invoices = None
+_cached_excel_signature = None
+_excel_cache_lock = Lock()
+
+
+def _excel_signature():
+    path = EXCEL_FILE.resolve()
+    stat = path.stat()
+    return (str(path), SHEET_NAME, stat.st_mtime_ns, stat.st_size)
 
 def _load_excel_data():
-    global _cached_invoices
-    if _cached_invoices is not None:
-        return _cached_invoices
-        
+    global _cached_invoices, _cached_excel_signature
+    with _excel_cache_lock:
+        for _ in range(2):
+            signature = _excel_signature()
+            if _cached_invoices is not None and signature == _cached_excel_signature:
+                return _cached_invoices
+            records = _read_excel_data()
+            if signature == _excel_signature():
+                _cached_invoices = records
+                _cached_excel_signature = signature
+                return records
+        # Do not publish a partial snapshot or send to a stale phone during a save.
+        raise OSError("Invoice workbook changed while reading. Please try again.")
+
+
+def _read_excel_data():
     workbook = load_workbook(
         EXCEL_FILE,
         read_only=True,
@@ -41,8 +63,7 @@ def _load_excel_data():
                 
             records.append(record)
             
-        _cached_invoices = records
-        return _cached_invoices
+        return records
     finally:
         workbook.close()
 
