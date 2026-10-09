@@ -20,7 +20,6 @@ import SupplierVisibilityPage from '../pages/SupplierVisibilityPage.jsx';
 import VendorCodePage from '../pages/VendorCodePage.jsx';
 import InquiryDeskPage from '../pages/InquiryDeskPage.jsx';
 import OutputsPage from '../pages/OutputsPage.jsx';
-import SyncLogPage from '../pages/SyncLogPage.jsx';
 import GlobalLogsPage from '../pages/GlobalLogsPage.jsx';
 import SettingsPage from '../pages/SettingsPage.jsx';
 import ProfilePage from '../pages/ProfilePage.jsx';
@@ -57,11 +56,12 @@ export default function AppRoutes() {
           <Route element={<RequireHQ />}>
             <Route path="/app/supplier-visibility" element={<SupplierVisibilityPage />} />
             <Route path="/app/outputs" element={<OutputsPage />} />
-            <Route path="/app/sync-log" element={<SyncLogPage />} />
             <Route path="/app/logs" element={<GlobalLogsPage />} />
+            {/* the Sync Log page was removed (nothing ever filled it) */}
+            <Route path="/app/sync-log" element={<Navigate to="/app/logs" replace />} />
             <Route element={<RequireCapability cap="manageConfig" />}>
               <Route path="/app/settings/integrations" element={<SettingsPage />} />
-              <Route path="/app/settings/notifications" element={<SettingsPage />} />
+              <Route path="/app/settings/notifications" element={<Navigate to="/app/settings/integrations" replace />} />
             </Route>
             <Route element={<RequireCapability cap="viewAuditLog" />}>
               <Route path="/app/settings/auditLogs" element={<SettingsPage />} />

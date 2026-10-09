@@ -6,7 +6,7 @@ import { askLogout } from '../../features/auth/logoutPrompt';
 import { selectHasTicketAccess, selectPerm } from '../../features/auth/authSlice';
 import {
   FileText, Search, Layers, Building, MessageSquare, BarChart3, History,
-  RefreshCw, Settings, Sliders, Users, Shield, Bell, User, LogOut, ChevronRight,
+  Settings, Sliders, Users, Shield, Bell, User, LogOut, ChevronRight,
 } from '../common/icons.jsx';
 import logo from '../../assets/mahindra-logo.png';
 
@@ -154,7 +154,6 @@ export default function Sidebar() {
               <p className="nav-section">Reports &amp; admin</p>
               <NavItem icon={<BarChart3 />} label="Vendor Status Reports" active={isActive('/app/outputs')} onClick={() => navigate('/app/outputs')} />
               <NavItem icon={<History />} label="Logs / History" active={isActive('/app/logs')} onClick={() => navigate('/app/logs')} />
-              <NavItem icon={<RefreshCw />} label="Sync Log" active={isActive('/app/sync-log')} onClick={() => navigate('/app/sync-log')} />
               {canUseSettings && (
                 <NavItem
                   icon={<Settings />}
@@ -167,7 +166,6 @@ export default function Sidebar() {
               {canUseSettings && isOpen('settings') && (
                 <div className="nav-children lvl1">
                   {perm.manageConfig && <NavItem icon={<Sliders />} label="Integration Settings" active={isActive('/app/settings/integrations')} onClick={() => navigate('/app/settings/integrations')} />}
-                  {perm.manageConfig && <NavItem icon={<Bell />} label="Auto-Notify Rules" active={isActive('/app/settings/notifications')} onClick={() => navigate('/app/settings/notifications')} />}
                   {perm.viewAuditLog && <NavItem icon={<History />} label="Audit Logs" active={isActive('/app/settings/auditLogs')} onClick={() => navigate('/app/settings/auditLogs')} />}
                   {perm.manageUsers && <NavItem icon={<Users />} label="Users" active={isActive('/app/settings/users')} onClick={() => navigate('/app/settings/users')} />}
                   {perm.manageRoles && <NavItem icon={<Shield />} label="Roles & Permissions" active={isActive('/app/settings/roles')} onClick={() => navigate('/app/settings/roles')} />}
