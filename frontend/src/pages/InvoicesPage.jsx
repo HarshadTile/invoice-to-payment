@@ -70,7 +70,8 @@ export default function InvoicesPage() {
 
   /** Open Search Invoice(s) showing only this status, across all dates so the list matches the number clicked. */
   const openSearchByStatus = (status) => {
-    const next = new URLSearchParams({ status, date_from: '', date_to: '' });
+    // `from` lets the Search page offer a way back to this dashboard
+    const next = new URLSearchParams({ status, date_from: '', date_to: '', from: 'tracking' });
     navigate(`/app/search?${next.toString()}`);
   };
 

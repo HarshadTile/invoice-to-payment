@@ -1,14 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectFilteredInvoices } from '../features/invoices/selectors';
 import { useScope } from '../features/ui/scope';
 import { clearScopeFilters, setPageFilters, setScopeFilter } from '../features/ui/uiSlice';
 import { CHANNELS, STATUS_CHIP, APP_NOW } from '../data/constants';
-import { parseInvoiceQuery } from '../utils/invoiceQuery';
+import { matchesInvoiceQuery, parseInvoiceQuery } from '../utils/invoiceQuery';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import Dropdown from '../components/common/Dropdown.jsx';
-import { Search, X } from '../components/common/icons.jsx';
+import { ArrowLeft, Search, X } from '../components/common/icons.jsx';
 
 const ALL_STATUSES = Object.keys(STATUS_CHIP);
 
@@ -95,6 +95,9 @@ export default function SearchInvoicePage() {
   const { fy, channel, vcode: vendor } = useScope();
   const savedFilters = useSelector((s) => s.ui.pageFilters[PAGE_FILTER_KEY]);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  // Arrived by clicking a KPI card on Invoice Tracking: offer the way back
+  const fromTracking = searchParams.get('from') === 'tracking';
 
   // The sidebar always links here with a bare URL, so a fresh visit (no filter
   // params at all) restores the last filters this session set, instead of
@@ -166,9 +169,7 @@ export default function SearchInvoicePage() {
   const parsed = parseInvoiceQuery(query);
 
   const matches = (inv, skipStatus) => {
-    if (parsed.invoice && !inv.no.toLowerCase().includes(parsed.invoice.toLowerCase())) return false;
-    if (parsed.po      && !inv.po.toLowerCase().includes(parsed.po.toLowerCase()))      return false;
-    if (parsed.item    && String(inv.poItem) !== parsed.item)                           return false;
+    if (!matchesInvoiceQuery(inv, query)) return false; // one term = any field; commas = invoice, PO, item, UTR
     if (vendor  && inv.vcode   !== vendor)  return false;
     if (channel && inv.channel !== channel) return false;
     if (!skipStatus && status && inv.status !== status) return false;
@@ -203,10 +204,19 @@ export default function SearchInvoicePage() {
 
   // Comma hint
   const tokenCount = query.split(',').filter((s) => s.trim()).length;
-  const nextHint   = tokenCount === 1 ? '+ PO with comma' : tokenCount === 2 ? '+ PO item with comma' : null;
+  const nextHint = parsed.mode === 'any'
+    ? (parsed.any ? 'Searches invoice, PO, item, UTR and vendor · commas match invoice, PO, item, UTR in order' : null)
+    : tokenCount === 1 ? '+ PO with comma' : tokenCount === 2 ? '+ PO item with comma' : tokenCount === 3 ? '+ UTR with comma' : null;
 
   return (
     <>
+      {fromTracking && (
+        <nav className="back-banner" aria-label="Breadcrumb">
+          <button type="button" aria-label="Back to Invoice Tracking" onClick={() => navigate('/app/invoices')}><ArrowLeft size={15} />Invoice Tracking</button>
+          <span className="back-sep" aria-hidden="true">/</span>
+          <span className="back-here">{status ? `${status} invoices` : 'Search invoices'}</span>
+        </nav>
+      )}
       {/* ── Filter card ─────────────────────────────────────────── */}
       <div className="card" style={{ marginBottom: 20 }}>
 
@@ -220,11 +230,11 @@ export default function SearchInvoicePage() {
             ref={inputRef}
             className="search-box"
             style={{ width: '100%', height: 44, paddingLeft: 40, paddingRight: query ? 36 : 14, fontSize: 14 }}
-            placeholder="Invoice no, PO no, PO item...  (comma-separated)"
+            placeholder="Invoice no, PO no, PO item, UTR or vendor"
             value={query}
             onChange={(e) => handleQuery(e.target.value)}
-            autoFocus
-            aria-label="Search - comma-separated: invoice, PO, item"
+            autoFocus={!fromTracking}
+            aria-label="Search invoice, PO, item, UTR or vendor - or comma-separated by position"
           />
           {query && (
             <button
@@ -237,14 +247,18 @@ export default function SearchInvoicePage() {
         </div>
 
         {/* ── Active scope chips (search tokens, vendor, channel, financial year) ── */}
-        {(parsed.invoice || parsed.po || parsed.item || vendorLabel || channelLabel || nextHint) && (
+        {(parsed.any || parsed.invoice || parsed.po || parsed.item || parsed.utr || vendorLabel || channelLabel || nextHint) && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+            {parsed.any && <FilterChip label="Search" value={parsed.any} tone="brand"
+              onRemove={() => handleQuery('')} />}
             {parsed.invoice && <FilterChip label="Invoice" value={parsed.invoice} tone="brand"
               onRemove={() => { const parts = query.split(','); parts[0] = ''; handleQuery(parts.join(',').replace(/^,+/, '')); }} />}
             {parsed.po      && <FilterChip label="PO"      value={parsed.po}      tone="brand"
               onRemove={() => { const parts = query.split(','); parts[1] = ''; handleQuery(parts.join(',')); }} />}
             {parsed.item    && <FilterChip label="Item"    value={parsed.item}    tone="brand"
               onRemove={() => { const parts = query.split(','); parts[2] = ''; handleQuery(parts.join(',')); }} />}
+            {parsed.utr     && <FilterChip label="UTR"     value={parsed.utr}     tone="brand"
+              onRemove={() => { const parts = query.split(','); parts[3] = ''; handleQuery(parts.join(',')); }} />}
 
             {vendorLabel  && <FilterChip label="Vendor"  value={vendorLabel}  tone="blue"
               onRemove={() => dispatch(setScopeFilter({ key: 'vcode', value: '' }))} />}
@@ -288,19 +302,19 @@ export default function SearchInvoicePage() {
       </div>
 
       {/* ── Results table — always shown, never empty-first ── */}
-      <div className="card">
-        <h3>
-          {results.length.toLocaleString()} invoice{results.length === 1 ? '' : 's'}
-          <span className="card-hint">
-            {!dateFrom && !dateTo ? 'all dates' : (isDefaultDate ? 'last 90 days' : `${fmtDate(dateFrom) || 'earliest'} to ${fmtDate(dateTo) || 'latest'}`)}
-          </span>
-        </h3>
+      <div className="card search-results">
         <InvoiceTable
           invoices={results}
           tableKey="searchInvoice"
           mode="full"
           hideSearch
           filteredCount={results.length}
+          lead={(
+            <div className="results-title">
+              <b>{results.length.toLocaleString()} invoice{results.length === 1 ? '' : 's'}</b>
+              <span>{!dateFrom && !dateTo ? 'all dates' : (isDefaultDate ? 'last 90 days' : `${fmtDate(dateFrom) || 'earliest'} to ${fmtDate(dateTo) || 'latest'}`)}</span>
+            </div>
+          )}
         />
       </div>
     </>

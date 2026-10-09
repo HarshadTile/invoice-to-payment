@@ -392,6 +392,35 @@ describe('Internal admin - full navigation', () => {
     expect(user).toBeTruthy();
   });
 
+  it('a dashboard KPI opens Search Invoice(s) with a way back to Invoice Tracking', async () => {
+    const { user } = await loginAdmin();
+    await screen.findByRole('heading', { name: 'Invoice Tracking' });
+    const paidCard = [...document.querySelectorAll('button.stat-card')].find((b) => b.querySelector('.lbl')?.textContent === 'Paid');
+    await user.click(paidCard);
+    expect(await screen.findByText('Paid invoices')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back to Invoice Tracking' }));
+    expect(await screen.findByRole('heading', { name: 'Invoice Tracking' })).toBeInTheDocument();
+    // opening Search from the sidebar has no back link
+    await user.click(document.querySelector('.nav-item[aria-label="Search Invoice(s)"]'));
+    await screen.findByPlaceholderText(/Invoice no, PO no/);
+    expect(screen.queryByRole('button', { name: 'Back to Invoice Tracking' })).toBeNull();
+  });
+
+  it('invoice progress: a Paid invoice is complete, not "In progress"', async () => {
+    const { user } = await loginAdmin();
+    await user.click(document.querySelector('.nav-item[aria-label="Search Invoice(s)"]'));
+    await user.click(await screen.findByRole('button', { name: 'All dates' }));
+    const open = async (no) => {
+      await user.click(await screen.findByRole('button', { name: no }));
+      await screen.findByText('Invoice Progress');
+    };
+    await open('INV-MS-1001'); // Paid
+    expect(screen.queryByText('In progress')).toBeNull();
+    await user.click(within(document.querySelector('.modal-foot')).getByRole('button', { name: 'Close' }));
+    await open('INV-MS-1002'); // Payment Due: still moving
+    expect(screen.getByText('In progress')).toBeInTheDocument();
+  });
+
   it('Settings: toggles an auto-notify rule', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Settings')[0]);

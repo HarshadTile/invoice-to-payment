@@ -35,8 +35,9 @@ const stickyCell = (left, isHead = false) => ({
  * 'supplierSafe' (opens the supplier-facing Invoice Detail modal)
  * hideSearch: suppress the in-table search box (used by SearchInvoicePage which has its own)
  * filteredCount: pass current filtered count to label the Export button accurately
+ * lead: optional heading shown on the left of the toolbar (the Export button stays on the right)
  */
-export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount }) {
+export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount, lead }) {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const [searchParams] = useSearchParams();
@@ -94,6 +95,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
     <div>
       <div className="toolbar">
         <div className="toolbar-left">
+          {lead}
           {!hideSearch && (
             <div style={{ position: 'relative', width: 'clamp(260px, 34vw, 420px)' }}>
               <Search
@@ -103,9 +105,9 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               <input
                 className="search-box"
                 style={{ width: '100%', paddingLeft: 32, paddingRight: search ? 30 : 12, fontSize: 13 }}
-                placeholder="Invoice no, PO no, PO item… (comma-separated)"
-                title="Comma-separated: invoice no, PO no, PO item"
-                aria-label="Search - comma-separated: invoice, PO, item"
+                placeholder="Invoice no, PO no, PO item, UTR or vendor…"
+                title="Type one thing to search invoice, PO, item and UTR, or use commas to match each in order: invoice, PO, item, UTR"
+                aria-label="Search invoice, PO, item, UTR or vendor - or comma-separated by position"
                 value={search}
                 onChange={(e) => dispatch(setSearch({ key: tableKey, value: e.target.value }))}
               />
