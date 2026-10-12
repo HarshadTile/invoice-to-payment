@@ -52,7 +52,6 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
 
   const matched = useMemo(() => (search ? invoices.filter((inv) => matchesInvoiceQuery(inv, search)) : invoices), [invoices, search]);
   const { sorted: filtered, toggle: toggleDate, dirFor } = useDateColumnSort(matched, DATE_COLUMNS);
-  const { sorted: filtered, dir: dateDir, toggle: toggleDate } = useDateSort(matched, (inv) => inv.date);
   const amountSummary = useMemo(() => {
     if (!showFilteredAmount) return null;
     const totals = totalsByCurrency(filtered);
