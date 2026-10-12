@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { supplierForVendorCode, panFor } from '../utils/businessLogic';
@@ -8,6 +9,8 @@ import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
 import { selectHasTicketAccess } from '../features/auth/authSlice';
 import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
+import { api } from '../api/client';
+import StatCard from '../components/common/StatCard.jsx';
 
 export default function VendorCodePage() {
   const { code: routeCode } = useParams();
@@ -18,11 +21,30 @@ export default function VendorCodePage() {
   const supplier = code ? supplierForVendorCode(code) : 'All Suppliers';
   const codes = [...new Set(invoices.map((i) => i.vcode))];
   const hasTicketAccess = useSelector(selectHasTicketAccess);
-  const { data: ticketPage } = useGetTicketsQuery({ ...(code ? { vendor_code: code } : {}), page_size: 100 }, { skip: !hasTicketAccess });
-  const openIssues = (ticketPage?.items || []).filter((t) =>
-    ['OPEN', 'IN_PROGRESS'].includes(t.status)
-    && invoices.some((i) => i.vcode === t.vendor_code && i.no === t.invoice_no && i.channel === t.channel),
-  ).length;
+  const { currentData: ticketPage, isError: ticketError } = useGetTicketsQuery({ ...(code ? { vendor_code: code } : {}), page_size: 100 }, { skip: !hasTicketAccess });
+  const [extraTickets, setExtraTickets] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!ticketPage || ticketPage.total <= ticketPage.items.length) return;
+    const pageSize = ticketPage.page_size || 100;
+    const params = new URLSearchParams({ page_size: String(pageSize) });
+    if (code) params.set('vendor_code', code);
+    const pages = Math.ceil(ticketPage.total / pageSize);
+    Promise.all(Array.from({ length: pages - 1 }, (_, index) => {
+      const next = new URLSearchParams(params);
+      next.set('page', String(index + 2));
+      return api.get(`/v1/tickets?${next}`);
+    })).then((results) => {
+      if (!cancelled) setExtraTickets({ source: ticketPage, items: results.flatMap((page) => page.items) });
+    }).catch(() => {
+      if (!cancelled) setExtraTickets({ source: ticketPage, error: true });
+    });
+    return () => { cancelled = true; };
+  }, [ticketPage, code]);
+  const needsMore = ticketPage && ticketPage.total > ticketPage.items.length;
+  const queryReady = hasTicketAccess && !ticketError && !!ticketPage
+    && (!needsMore || (extraTickets?.source === ticketPage && !extraTickets.error));
+  const ticketItems = [...(ticketPage?.items || []), ...(needsMore && extraTickets?.source === ticketPage ? extraTickets.items || [] : [])];
   const [searchParams, setSearchParams] = useSearchParams();
   const range = scope.fyChosen ? { from: '', to: '' } : defaultInvoiceRange();
   const status = searchParams.get('status') || '';
@@ -37,18 +59,17 @@ export default function VendorCodePage() {
     const ymd = invoiceYMD(i);
     return (!dateFrom || ymd >= dateFrom) && (!dateTo || ymd <= dateTo);
   });
-  const shown = inRange.filter((i) => !status || i.status === status);
+  const openTickets = ticketItems.filter((t) => ['OPEN', 'IN_PROGRESS'].includes(t.status)
+    && inRange.some((i) => i.vcode === t.vendor_code && i.no === t.invoice_no && i.channel === t.channel));
+  const hasOpenQuery = (invoice) => openTickets.some((t) => t.vendor_code === invoice.vcode
+    && t.invoice_no === invoice.no && t.channel === invoice.channel);
+  const activeKpi = searchParams.get('kpi') === 'queries' ? 'queries' : status === 'Paid' ? 'paid' : 'total';
+  const shown = inRange.filter((i) => (!status || i.status === status)
+    && (activeKpi !== 'queries' || (queryReady && hasOpenQuery(i))));
   const rangeLabel = !dateFrom && !dateTo ? 'all dates' : `${dateFrom || 'earliest'} to ${dateTo || 'latest'}`;
-  const byCurrency = totalsByCurrency(invoices);
-  const stats = [
-    ['Total Invoices', invoices.length],
-    ['Total POs', new Set(invoices.map((i) => i.po).filter((po) => po && po !== '-')).size],
-    ['Total Amount', Object.entries(byCurrency).map(([c, v]) => `${c}${v.toLocaleString('en-IN')}`).join(' + ') || '-'],
-    ['Paid', invoices.filter((i) => i.status === 'Paid').length],
-    ['Payment Due', invoices.filter((i) => i.status === 'Payment Due').length],
-    ['In Progress', invoices.filter((i) => !['Paid', 'Payment Due', 'Rejected', 'Deleted'].includes(i.status)).length],
-    ['Open Issues', openIssues],
-  ];
+  const byCurrency = totalsByCurrency(inRange);
+  const knownAmounts = inRange.filter((invoice) => Object.keys(totalsByCurrency([invoice])).length > 0).length;
+  const amount = Object.entries(byCurrency).map(([currency, value]) => `${currency}${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`).join(' + ') || '-';
   return (
     <>
       <div className="card" style={{ marginBottom: 12, padding: '12px 18px' }}>
@@ -60,30 +81,34 @@ export default function VendorCodePage() {
           ))}
         </div>
       </div>
-      <div className="row" style={{ marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
-        {stats.map(([label, value]) => (
-          <div key={label} className={`stat-card${label === 'Payment Due' ? ' warn' : label === 'Open Issues' && openIssues ? ' bad' : ''}`} style={{ minWidth: 0, flex: '1 1 140px' }}>
-            <div className="lbl">{label}</div><div className="val" style={label === 'Total Amount' ? { fontSize: 15 } : undefined}>{value}</div>
-          </div>
-        ))}
+      <div className="supplier-visibility-kpis">
+        <StatCard label="Total Invoices" value={inRange.length} active={activeKpi === 'total' && !status}
+          onClick={() => update({ kpi: null, status: null })} />
+        <StatCard label="Paid" value={inRange.filter((i) => i.status === 'Paid').length} tone="good" active={activeKpi === 'paid'}
+          onClick={() => update({ kpi: null, status: activeKpi === 'paid' ? null : 'Paid' })} />
+        <StatCard label="Open Queries" value={queryReady ? openTickets.length : '-'} tone={queryReady && openTickets.length ? 'warn' : undefined}
+          sub={!hasTicketAccess ? 'Query access unavailable' : !queryReady ? ticketError || extraTickets?.error ? 'Unable to load queries' : 'Loading queries…' : 'Unresolved queries linked to these invoices'}
+          active={activeKpi === 'queries'} onClick={queryReady ? () => update({ status: null, kpi: activeKpi === 'queries' ? null : 'queries' }) : undefined} />
+        <StatCard label="Total Invoice Amount" value={amount}
+          sub={knownAmounts < inRange.length ? `Amount available for ${knownAmounts} of ${inRange.length} invoices` : 'Total of available invoice amounts'} />
       </div>
       <div style={{ margin: '20px 0 14px' }}>
         <h3 style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 600, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
           Invoice Status : <span style={{ color: 'var(--brand-dark)', fontWeight: 700 }}>{supplier}</span>
         </h3>
         <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          Summary based on the selected year, channel and vendor. Refine the invoice list by status or date below.
+          Summary based on the selected year, channel, vendor and invoice dates. Select a card to filter the invoice list.
         </p>
       </div>
       <InvoiceFilterBar status={status} dateFrom={dateFrom} dateTo={dateTo}
-        onStatusChange={(v) => update({ status: v || null })}
+        onStatusChange={(v) => update({ status: v || null, kpi: null })}
         onDateFrom={(v) => update({ date_from: v })} onDateTo={(v) => update({ date_to: v })}
         onLast90Days={() => { const last90 = defaultInvoiceRange(); update({ date_from: last90.from, date_to: last90.to }); }}
         onAllDates={() => update({ date_from: '', date_to: '' })}
-        onClear={() => update({ status: null, date_from: '', date_to: '' })}
+        onClear={() => update({ status: null, kpi: null, date_from: '', date_to: '' })}
         statusCountBase={inRange} resultCount={shown.length} rangeLabel={rangeLabel}
       />
-      <div className="card"><InvoiceTable invoices={shown} tableKey={`vendorCodePage-${code || 'all'}`} mode="supplierSafe" /></div>
+      <div className="card"><InvoiceTable invoices={shown} tableKey={`vendorCodePage-${code || 'all'}`} mode="supplierSafe" showFilteredAmount /></div>
     </>
   );
 }
