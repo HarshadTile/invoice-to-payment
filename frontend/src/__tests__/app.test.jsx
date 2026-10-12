@@ -535,12 +535,57 @@ describe('Internal admin - full navigation', () => {
     const { store, user } = await loginAdmin();
     store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
     await user.click(screen.getAllByText('Supplier Visibility')[0]);
-    expect(await screen.findByText('Total POs')).toBeInTheDocument();
+    expect(await screen.findByText('Total Invoice Amount')).toBeInTheDocument();
     expect(screen.getByLabelText('Vendor Code').value).toContain('All Vendors');
     expect(screen.getByRole('heading', { name: 'Invoice Status : All Suppliers' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Invoice Log' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Open full Supplier Visibility/ })).not.toBeInTheDocument();
+  });
+
+  it('Supplier Visibility KPI cards filter invoices and follow invoice dates', async () => {
+    const { store, user } = await loginAdmin();
+    act(() => {
+      store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+      store.dispatch(setScopeFilter({ key: 'vcode', value: '' }));
+    });
+    await user.click(screen.getAllByText('Supplier Visibility')[0]);
+    await user.click(screen.getByRole('button', { name: 'All dates' }));
+    const kpis = document.querySelector('.supplier-visibility-kpis');
+    expect(kpis.querySelectorAll('.stat-card')).toHaveLength(4);
+    expect(within(kpis).queryByText('Total POs')).not.toBeInTheDocument();
+    const paid = within(kpis).getByRole('button', { name: /^Paid/ });
+    await user.click(paid);
+    expect(paid).toHaveAttribute('aria-pressed', 'true');
+    const paidRows = document.querySelectorAll('.data-table tbody tr');
+    expect(paidRows.length).toBeGreaterThan(0);
+    paidRows.forEach((row) => expect(row.querySelector('.chip')).toHaveTextContent(/^Paid$/));
+    const summary = screen.getByRole('status', { name: 'Filtered invoice amount' });
+    expect(summary).toHaveTextContent('across all pages');
+    const search = screen.getByPlaceholderText('Invoice no, PO no, PO item, UTR or vendor…');
+    await user.type(search, 'INV-MS-1001');
+    expect(summary).toHaveTextContent('1 matching invoice across all pages');
+    expect(summary).toHaveTextContent('₹1,24,500.00');
+    await user.clear(search);
+    await user.click(within(kpis).getByRole('button', { name: /^Total Invoices/ }));
+    expect(paid).toHaveAttribute('aria-pressed', 'false');
+    const queries = await within(kpis).findByRole('button', { name: /^Open Queries/ });
+    await user.click(queries);
+    expect(queries).toHaveAttribute('aria-pressed', 'true');
+    const { items } = await mockApi.get('/v1/tickets?include_closed=true');
+    const queriedInvoices = items.filter((ticket) => ['OPEN', 'IN_PROGRESS'].includes(ticket.status)).map((ticket) => ticket.invoice_no);
+    document.querySelectorAll('.data-table tbody tr').forEach((row) => {
+      const invoice = row.querySelector('td button');
+      if (invoice) expect(queriedInvoices).toContain(invoice.textContent);
+    });
+    await user.click(within(kpis).getByRole('button', { name: /^Total Invoices/ }));
+    fireEvent.change(screen.getByLabelText('Invoice Date From'), { target: { value: '2099-01-01' } });
+    expect(within(kpis).getByRole('button', { name: /^Total Invoices/ })).toHaveTextContent('0');
+    expect(within(kpis).getByRole('button', { name: /^Paid/ })).toHaveTextContent('0');
+    expect(within(kpis).getByText('Total Invoice Amount').parentElement).toHaveTextContent('-');
+    expect(screen.getByText('No invoices match')).toBeInTheDocument();
+    expect(summary).toHaveTextContent('0 matching invoices');
+    expect(summary).toHaveTextContent('—');
   });
 
   it('Search Invoice(s) returns matching results', async () => {

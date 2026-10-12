@@ -542,6 +542,13 @@ input[type="date"].search-box::-webkit-calendar-picker-indicator:hover{opacity:.
 @media (max-width:520px){.kv-row{grid-template-columns:1fr;gap:2px;}}
 
 /* ── Profile page ── */
+.supplier-visibility-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px;}
+.filtered-invoice-amount{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding:16px;margin-top:12px;border:1px solid var(--border-soft);border-radius:9px;background:var(--gray-bg);}
+.supplier-visibility-kpis .stat-card{min-width:0;text-align:left;}
+.supplier-visibility-kpis .stat-card.good{--accent:var(--green);--accent-bg:var(--green-bg);}
+.supplier-visibility-kpis .stat-card:last-child .val{font-size:20px;overflow-wrap:anywhere;}
+@media(max-width:1100px){.supplier-visibility-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:600px){.supplier-visibility-kpis{grid-template-columns:1fr;}}
 .profile-grid{display:grid;grid-template-columns:290px minmax(0,1fr);gap:20px;align-items:start;}
 @media (max-width:900px){.profile-grid{grid-template-columns:1fr;}}
 .profile-hero{text-align:center;padding:28px 22px 22px;}
