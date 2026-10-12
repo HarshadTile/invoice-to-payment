@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
@@ -6,10 +7,15 @@ import { matchesInvoiceQuery } from '../../utils/invoiceQuery';
 import { setSearch, setTablePage, toggleSelectRow, setSelectAll, clearSelection, openModal, pushToast } from '../../features/ui/uiSlice';
 import Badge from '../common/Badge.jsx';
 import PagerFoot from '../common/PagerFoot.jsx';
+import SortDateTh from '../common/SortDateTh.jsx';
+import { useDateColumnSort } from '../../utils/dateSort';
+import { invoiceDateLabel } from '../../utils/invoiceDates';
 import { Mail, Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
 
 const PAGE_SIZE = 10;
 const EMPTY_SELECTION = Object.freeze([]);
+// The two sortable date columns: the invoice's own date, and the date that goes with its status
+const DATE_COLUMNS = { invoice: (inv) => inv.rawDate, status: (inv) => inv.date };
 
 // Pinned columns are given an exact width: the next pinned column's `left` offset is the sum of
 // the widths before it, so a column that grew or shrank with its content left a gap or an
@@ -32,8 +38,9 @@ const stickyCell = (left, isHead = false) => ({
  * 'supplierSafe' (opens the supplier-facing Invoice Detail modal)
  * hideSearch: suppress the in-table search box (used by SearchInvoicePage which has its own)
  * filteredCount: pass current filtered count to label the Export button accurately
+ * lead: optional heading shown on the left of the toolbar (the Export button stays on the right)
  */
-export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount }) {
+export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount, lead }) {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const [searchParams] = useSearchParams();
@@ -42,7 +49,8 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const selected  = useSelector((s) => s.ui.tableSelected[tableKey] || EMPTY_SELECTION);
   const isSupplierUser = useSelector((s) => s.auth.authType === 'supplier');
 
-  const filtered = search ? invoices.filter((inv) => matchesInvoiceQuery(inv, search)) : invoices;
+  const matched = useMemo(() => (search ? invoices.filter((inv) => matchesInvoiceQuery(inv, search)) : invoices), [invoices, search]);
+  const { sorted: filtered, toggle: toggleDate, dirFor } = useDateColumnSort(matched, DATE_COLUMNS);
 
   const totalPages   = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage  = Math.min(page, totalPages);
@@ -69,17 +77,17 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
 
   // Suppliers see one vendor code, so vendor columns are noise; owner and "notify" are internal-only.
   const supplierView = mode === 'supplierSafe' && isSupplierUser;
-  const colCount = (bulk ? 1 : 0) + (supplierView ? 9 : 12);
+  const colCount = (bulk ? 1 : 0) + (supplierView ? 10 : 13);
   const exportCount = filteredCount ?? filtered.length;
   const exportLabel = `Export to Excel (${exportCount})`;
 
   const exportCols = supplierView
-    ? ['Invoice No', 'Channel', 'PO No', 'Amount', 'Status', 'Current Stage', 'UTR No', 'Date']
-    : ['Invoice No', 'Vendor', 'Vendor Code', 'Channel', 'PO No', 'Amount', 'Status', 'Current Stage', 'Owner', 'UTR No', 'Date'];
+    ? ['Invoice No', 'Channel', 'PO No', 'Invoice Date', 'Amount', 'Status', 'Current Stage', 'UTR No', 'Status Date']
+    : ['Invoice No', 'Vendor', 'Vendor Code', 'Channel', 'PO No', 'Invoice Date', 'Amount', 'Status', 'Current Stage', 'Owner', 'UTR No', 'Status Date'];
   const toExportRow = (inv) => {
-    if (supplierView) return [inv.no, CHANNEL_LABEL[inv.channel], inv.po, inv.amount, inv.status, currentStageName(inv), inv.utr, inv.date];
+    if (supplierView) return [inv.no, CHANNEL_LABEL[inv.channel], inv.po, invoiceDateLabel(inv), inv.amount, inv.status, currentStageName(inv), inv.utr, inv.date];
     const owner = currentHandlerFor(inv);
-    return [inv.no, inv.vendor, inv.vcode, CHANNEL_LABEL[inv.channel], inv.po, inv.amount, inv.status, currentStageName(inv), owner.name, inv.utr, inv.date];
+    return [inv.no, inv.vendor, inv.vcode, CHANNEL_LABEL[inv.channel], inv.po, invoiceDateLabel(inv), inv.amount, inv.status, currentStageName(inv), owner.name, inv.utr, inv.date];
   };
   const exportInvoices = (list, filenameLabel) => {
     downloadCSV(filenameLabel, exportCols, list.map(toExportRow));
@@ -90,6 +98,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
     <div>
       <div className="toolbar">
         <div className="toolbar-left">
+          {lead}
           {!hideSearch && (
             <div style={{ position: 'relative', width: 'clamp(260px, 34vw, 420px)' }}>
               <Search
@@ -99,9 +108,9 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               <input
                 className="search-box"
                 style={{ width: '100%', paddingLeft: 32, paddingRight: search ? 30 : 12, fontSize: 13 }}
-                placeholder="Invoice no, PO no, PO item… (comma-separated)"
-                title="Comma-separated: invoice no, PO no, PO item"
-                aria-label="Search - comma-separated: invoice, PO, item"
+                placeholder="Invoice no, PO no, PO item, UTR or vendor…"
+                title="Type one thing to search invoice, PO, item and UTR, or use commas to match each in order: invoice, PO, item, UTR"
+                aria-label="Search invoice, PO, item, UTR or vendor - or comma-separated by position"
                 value={search}
                 onChange={(e) => dispatch(setSearch({ key: tableKey, value: e.target.value }))}
               />
@@ -168,13 +177,14 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               {!supplierView && <th scope="col">Vendor Code</th>}
               <th scope="col">Channel</th>
               <th scope="col">PO No</th>
+              <SortDateTh label="Invoice Date" dir={dirFor('invoice')} onToggle={() => toggleDate('invoice')} title="Source invoice date used by the date filters" />
               <th scope="col" className="num">Amount</th>
               <th scope="col">Status</th>
               <th scope="col">Current Stage</th>
               {/* Renamed from "Handled By" which was truncating */}
               {!supplierView && <th scope="col">Owner</th>}
               <th scope="col">UTR No</th>
-              <th scope="col">Date</th>
+              <SortDateTh label="Status Date" dir={dirFor('status')} onToggle={() => toggleDate('status')} />
               <th scope="col" className="col-actions">Actions</th>
             </tr>
           </thead>
@@ -225,6 +235,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
                   )}
                   <td>{CHANNEL_LABEL[inv.channel]}</td>
                   <td>{inv.po}</td>
+                  <td className="cell-muted" style={{ whiteSpace: 'nowrap' }}>{invoiceDateLabel(inv)}</td>
                   <td className="num mono">{inv.amount}</td>
                   <td><Badge tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge></td>
                   <td className="cell-muted" style={{ whiteSpace: 'normal', minWidth: 150 }}>{currentStageName(inv)}</td>

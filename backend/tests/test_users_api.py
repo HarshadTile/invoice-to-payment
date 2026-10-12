@@ -493,17 +493,23 @@ def test_a_ticket_role_can_be_granted_explicitly_to_any_application_role():
     _cleanup("temp_user_tr_9")
 
 
-def test_a_user_can_be_authorized_for_several_channels():
+def test_a_user_is_authorized_for_exactly_one_channel():
     _cleanup("temp_user_ch_1")
+    several = as_admin.post("/api/v1/users/", json={
+        "username": "temp_user_ch_1", "name": "Ch One", "email": "ch1@example.com",
+        "role": "Viewer", "channels": ["poPortal", "msetuSrm"],
+    })
+    assert several.status_code == 400
     created = as_admin.post("/api/v1/users/", json={
         "username": "temp_user_ch_1", "name": "Ch One", "email": "ch1@example.com",
-        "role": "Viewer", "channels": ["poPortal", "msetuSrm", "poPortal"],
+        "role": "Viewer", "channels": ["poPortal", "poPortal"],  # duplicates collapse to one
     })
     assert created.status_code == 200, created.text
     body = created.json()
-    assert body["channels"] == ["msetuSrm", "poPortal"]  # de-duplicated, sorted
-    assert body["channelScope"] == "poPortal"  # first one given is the primary
+    assert body["channels"] == ["poPortal"]
+    assert body["channelScope"] == "poPortal"
 
+    assert as_admin.patch(f"/api/v1/users/{body['id']}", json={"channels": ["msetuSrm", "mfoxPortal"]}).status_code == 400
     updated = as_admin.patch(f"/api/v1/users/{body['id']}", json={"channels": ["mfoxPortal"]})
     assert updated.json()["channels"] == ["mfoxPortal"]
     assert updated.json()["channelScope"] == "mfoxPortal"

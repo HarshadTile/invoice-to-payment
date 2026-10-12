@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Navigate, Outlet } from 'react-router-dom';
-import { AUTH_BYPASS, selectPerm } from '../features/auth/authSlice';
+import { AUTH_BYPASS, selectHasTicketAccess, selectPerm } from '../features/auth/authSlice';
 import { pushToast } from '../features/ui/uiSlice';
 
 function PortalRedirect({ to, message }) {
@@ -40,7 +40,14 @@ export function RequireSupplier() {
   return <Outlet />;
 }
 
-/** HQ-only pages (Outputs, Sync Log, Logs/History, Settings, Supplier Visibility) are hidden
+/** Inquiry Desk and Notifications: staff need a ticket role (see selectHasTicketAccess). */
+export function RequireTicketAccess() {
+  const allowed = useSelector(selectHasTicketAccess);
+  if (!allowed) return <Navigate to="/app/invoices" replace />;
+  return <Outlet />;
+}
+
+/** HQ-only pages (Outputs, Logs, Settings, Supplier Visibility) are hidden
  * from an Internal Team (channel-scoped) login, same rule the sidebar itself enforces. */
 export function RequireHQ() {
   const { channelScope } = useSelector((s) => s.auth);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
-import { handlerFor, supplierEmailFor, currentStageName, findInvoice } from '../../utils/businessLogic';
+import { handlerFor, currentStageName, findInvoice } from '../../utils/businessLogic';
 import { closeModal, pushToast } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
 import Badge from '../common/Badge.jsx';
@@ -27,7 +27,6 @@ export default function NotifyPreviewModal({ ctx }) {
     );
   }
   const h = handlerFor(inv);
-  const supplierEmail = supplierEmailFor(inv.vendor);
 
   const bodyRows = [
     ['Invoice No', inv.no],
@@ -63,7 +62,7 @@ export default function NotifyPreviewModal({ ctx }) {
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 14px' }}>This is what would go out. Nothing is sent until you confirm.</p>
       <div className="mail-preview">
         <div className="mail-head">
-          <div className="kv-row"><span className="kv-k">To</span><span className="kv-v">{inv.vendor}<span className="kv-sub">{supplierEmail}</span></span></div>
+          <div className="kv-row"><span className="kv-k">To</span><span className="kv-v">{inv.vendor}</span></div>
           <div className="kv-row"><span className="kv-k">CC (Approver)</span><span className="kv-v">{h.approver}<span className="kv-sub">{h.approverEmail}</span></span></div>
           <div className="kv-row"><span className="kv-k">CC (Accounts)</span><span className="kv-v">{h.accounts}<span className="kv-sub">{h.accountsEmail}</span></span></div>
           <div className="kv-row"><span className="kv-k">Subject</span><span className="kv-v">Status update: Invoice {inv.no}</span></div>

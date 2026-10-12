@@ -27,6 +27,7 @@ export default function ResetPasswordModal({ user, onClose, onReset }) {
     <ModalShell
       title={isInvite ? `Resend Invite: ${user.name}` : `Reset Password: ${user.name}`}
       width={440}
+      onClose={busy ? () => {} : onClose}
       foot={(
         <>
           <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>

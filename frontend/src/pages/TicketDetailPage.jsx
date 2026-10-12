@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   useAssignTicketMutation,
   useCloseTicketMutation,
@@ -14,10 +14,11 @@ import {
   useUpdateTicketMutation,
   useUploadAttachmentMutation,
 } from '../features/tickets/ticketsApi.js';
+import { useMarkTicketNotificationsReadMutation } from '../features/notifications/notificationsApi';
 import Badge from '../components/common/Badge.jsx';
 import { ArrowLeft, CheckCircle, Clock, Paperclip, RotateCcw, Send } from '../components/common/icons.jsx';
 import { TICKET_CATEGORIES } from '../data/constants.js';
-import { channelLabel, formatDate, messageSide, PRIORITY_TONE, STATUS_LABEL, STATUS_TONE } from '../utils/tickets.js';
+import { backTarget, channelLabel, formatDate, messageSide, PRIORITY_TONE, STATUS_LABEL, STATUS_TONE } from '../utils/tickets.js';
 import { api } from '../api/client.js';
 
 function mutationMessage(error) {
@@ -31,6 +32,7 @@ function activityLabel(event) {
 export default function TicketDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const supplier = useSelector((state) => state.auth.authType === 'supplier');
   const [tab, setTab] = useState('conversation');
   const [message, setMessage] = useState('');
@@ -60,6 +62,7 @@ export default function TicketDetailPage() {
   });
 
   const [markRead] = useMarkTicketReadMutation();
+  const [clearNotifications] = useMarkTicketNotificationsReadMutation();
   const [reply, replyState] = useReplyToTicketMutation();
   const [assign, assignState] = useAssignTicketMutation();
   const [updateTicket, updateState] = useUpdateTicketMutation();
@@ -72,6 +75,11 @@ export default function TicketDetailPage() {
   useEffect(() => {
     if (ticket?.unread && !supplier) markRead(ticket.id);
   }, [ticket?.id, ticket?.unread, supplier, markRead]);
+
+  // Opening a query clears this person's notifications about it, so the bell badge doesn't keep counting it.
+  useEffect(() => {
+    if (ticket?.id) clearNotifications({ ticketId: ticket.id });
+  }, [ticket?.id, clearNotifications]);
 
   async function run(request) {
     setError('');
@@ -132,12 +140,13 @@ export default function TicketDetailPage() {
   if (isLoading) return <div className="ticket-empty">Loading query...</div>;
   if (isError || !ticket) return <div className="ticket-error"><h1>Query unavailable</h1><p>It may be outside your workspace or no longer available.</p><button className="btn" type="button" onClick={() => navigate(-1)}>Go back</button></div>;
 
+  const back = backTarget(location.state?.from, supplier);
   const dueAt = ticket.sla?.response_due_at || ticket.sla?.reply_expected_by;
 
   return (
     <section className="ticket-detail-page">
       <header className="ticket-detail-head">
-        <button type="button" className="icon-btn" onClick={() => navigate(supplier ? '/supplier/tickets' : '/app/inquiry-desk')} title="Back to queries"><ArrowLeft /></button>
+        <button type="button" className="icon-btn" onClick={() => navigate(back.path)} title={back.label} aria-label={back.label}><ArrowLeft /></button>
         <div className="ticket-title-block">
           <div className="ticket-title-line">
             <span className="mono">{ticket.ticket_no}</span>

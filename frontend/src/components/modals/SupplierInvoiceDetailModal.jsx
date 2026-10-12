@@ -1,7 +1,7 @@
 import { useDispatch } from 'react-redux';
 import { runtime } from '../../data/runtime';
 import { CHANNEL_LABEL } from '../../data/constants';
-import { combinedStatusFor, currentHandlerFor, currentStageName, findInvoice } from '../../utils/businessLogic';
+import { combinedStatusFor, currentStageName, findInvoice } from '../../utils/businessLogic';
 import { closeModal } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
 import Badge from '../common/Badge.jsx';
@@ -11,7 +11,6 @@ export default function SupplierInvoiceDetailModal({ ctx }) {
   const inv = findInvoice(ctx.no, ctx.poItem);
   if (!inv) return null;
   const cs = combinedStatusFor(inv);
-  const contact = currentHandlerFor(inv);
   // Same invoice number can legitimately repeat as separate PO line items — exclude
   // this exact row (by no + poItem), not every row sharing just the invoice number.
   const siblingInvoices = runtime.invoices.filter((i) => i.po === inv.po && !(i.no === inv.no && i.poItem === inv.poItem));
@@ -35,13 +34,6 @@ export default function SupplierInvoiceDetailModal({ ctx }) {
       <div className="validation-row"><span>Amount</span><span>{inv.amount}</span></div>
       <div className="validation-row"><span>UTR No.</span><span>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</span></div>
       {inv.shortPayReason && <div className="validation-row"><span>Reason for Less Paid</span><span style={{ textAlign: 'right', maxWidth: 260 }}>{inv.shortPayReason}</span></div>}
-      <div className="validation-row">
-        <span>Contact for This Invoice</span>
-        <span style={{ textAlign: 'right' }}>
-          {contact.name}{contact.name !== 'MDE Invoice Team' ? ` (${contact.role})` : ''}<br />
-          <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{contact.email}</span>
-        </span>
-      </div>
       {siblingInvoices.length > 0 && (
         <>
           <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Other Invoices on PO {inv.po}</label>

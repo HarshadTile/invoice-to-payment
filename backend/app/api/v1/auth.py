@@ -224,6 +224,24 @@ def get_current_user(
     }
 
 
+TICKET_ACCESS_ROLES = ("ADMIN", "CHANNEL_LEAD", "ASSIGNEE")
+
+
+def ensure_ticket_access(user: dict) -> dict:
+    """Inquiry Desk (tickets and notifications) is for suppliers and for staff who were given a
+    ticket role. A staff account with 'No Ticket Access' is turned away, whatever its application role."""
+    if user["auth_type"] == "internal" and user["ticket_role"] not in TICKET_ACCESS_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": {"code": "FORBIDDEN", "message": "Your account has no Inquiry Desk access."}},
+        )
+    return user
+
+
+def get_ticket_user(user: dict = Depends(get_current_user)) -> dict:
+    return ensure_ticket_access(user)
+
+
 @router.get("/me")
 def get_me(user: dict = Depends(get_current_user)):
     if user["auth_type"] == "supplier":

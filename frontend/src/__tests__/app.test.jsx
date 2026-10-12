@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import '@testing-library/jest-dom';
 
 // The API is mocked in-memory; the suite exercises the real login → hydrate →
@@ -8,24 +8,26 @@ vi.mock('../api/client', async () => {
   return { api: installApiMock() };
 });
 
-import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
 import { api } from '../api/client';
-import authReducer from '../features/auth/authSlice';
+import authReducer, { setAuthFromServer } from '../features/auth/authSlice';
 import { ticketsApi } from '../features/tickets/ticketsApi';
+import { notificationsApi } from '../features/notifications/notificationsApi';
 import tablesReducer from '../features/tables/tablesSlice';
 import settingsReducer from '../features/settings/settingsSlice';
 import uiReducer, { setScopeFilter } from '../features/ui/uiSlice';
 import AppRoutes from '../routes/AppRoutes.jsx';
+import { api as mockApi } from '../api/client';
 import ToastStack from '../components/common/ToastStack.jsx';
 
 function freshStore() {
   return configureStore({
-    reducer: { auth: authReducer, tables: tablesReducer, settings: settingsReducer, ui: uiReducer, [ticketsApi.reducerPath]: ticketsApi.reducer },
-    middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(ticketsApi.middleware),
+    reducer: { auth: authReducer, tables: tablesReducer, settings: settingsReducer, ui: uiReducer, [ticketsApi.reducerPath]: ticketsApi.reducer, [notificationsApi.reducerPath]: notificationsApi.reducer },
+    middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(ticketsApi.middleware, notificationsApi.middleware),
   });
 }
 
@@ -106,7 +108,7 @@ describe('Internal admin - full navigation', () => {
     const { user } = await loginAdmin();
     const destinations = [
       'Search Invoice(s)', 'Supplier Visibility', 'Inquiry Desk',
-      'Vendor Status Reports', 'Logs / History', 'Sync Log', 'Profile',
+      'Vendor Status Reports', 'Logs / History', 'Profile',
     ];
     for (const label of destinations) {
       await user.click(screen.getAllByText(label)[0]);
@@ -189,7 +191,8 @@ describe('Internal admin - full navigation', () => {
     await user.click(screen.getAllByText('DIT00388AC')[0]);
     expect(await screen.findByText('Purchase Orders')).toBeInTheDocument();
     await user.click(screen.getAllByText('Open Full View →')[0]);
-    expect(await screen.findByText(/Other Codes for Tata Communications Ltd \(\d+\) : separate scope, not shown here/)).toBeInTheDocument();
+    expect(await screen.findByLabelText('Vendor Code')).toHaveValue('DIT00388AC');
+    expect(screen.getByRole('heading', { name: 'Invoice Status : Tata Communications Ltd' })).toBeInTheDocument();
   });
 
   it('the internal team has no Raise a Query option anywhere on the invoice lists', async () => {
@@ -231,11 +234,100 @@ describe('Internal admin - full navigation', () => {
     expect((await screen.findAllByText('Resolved')).length).toBeGreaterThan(0);
   });
 
+  it('Inquiry Desk: the SLA Breached card is clickable and filters the list', async () => {
+    const { user } = await loginAdmin();
+    await user.click(screen.getAllByText('Inquiry Desk')[0]);
+    const card = () => [...document.querySelectorAll('button.stat-card')].find((b) => b.querySelector('.lbl')?.textContent === 'SLA Breached');
+    await waitFor(() => expect(card()).toBeTruthy());
+    await user.click(card());
+    expect(await screen.findByText(/· SLA Breached/)).toBeInTheDocument();
+    expect(card()).toHaveAttribute('aria-pressed', 'true');
+    await user.click(card()); // click again to go back to the default view
+    expect(await screen.findByText(/· Open \+ In Progress/)).toBeInTheDocument();
+  });
+
   it('toggles Kanban board view on Inquiry Desk', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Inquiry Desk')[0]);
     await user.click(screen.getByRole('button', { name: 'Board' }));
     await waitFor(() => expect(document.querySelectorAll('.kanban-col').length).toBe(4));
+  });
+
+  describe('notifications', () => {
+    const seed = () => {
+      mockApi.notifications.length = 0;
+      mockApi.notifications.push(
+        { id: 3, ticket_id: null, type: 'SLA_BREACHED', ticket_no: 'QRY-000003', subject: 'Third', read_at: null, created_at: '2026-10-07T10:00:00Z' },
+        { id: 2, ticket_id: null, type: 'TICKET_ASSIGNED', ticket_no: 'QRY-000002', subject: 'Second', read_at: null, created_at: '2026-10-06T10:00:00Z' },
+        { id: 1, ticket_id: null, type: 'TICKET_RESOLVED', ticket_no: 'QRY-000001', subject: 'First', read_at: '2026-10-05T12:00:00Z', created_at: '2026-10-05T10:00:00Z' },
+      );
+    };
+    afterEach(() => { mockApi.notifications.length = 0; });
+
+    it('shows an exact unread count on the bell and lists them in the menu', async () => {
+      seed();
+      const { user } = await loginAdmin();
+      const bell = await screen.findByRole('button', { name: 'Notifications, 2 unread' });
+      await user.click(bell);
+      expect(await screen.findByText('Response SLA breached')).toBeInTheDocument();
+      expect(document.querySelectorAll('.notification-item.unread').length).toBe(2);
+    });
+
+    it('the bell menu links to the full Notifications page', async () => {
+      seed();
+      const { user } = await loginAdmin();
+      await user.click(await screen.findByRole('button', { name: 'Notifications, 2 unread' }));
+      await user.click(await screen.findByRole('button', { name: 'View all notifications' }));
+      await waitFor(() => expect(document.querySelectorAll('.inbox-row').length).toBe(3));
+      expect(document.querySelector('.notification-menu')).toBeNull();
+    });
+
+    it('opening one marks it read and lowers the badge', async () => {
+      seed();
+      const { user } = await loginAdmin();
+      await user.click(await screen.findByRole('button', { name: 'Notifications, 2 unread' }));
+      await user.click(await screen.findByText('QRY-000003 - Third'));
+      expect(await screen.findByRole('button', { name: 'Notifications, 1 unread' })).toBeInTheDocument();
+    });
+
+    it('Mark all read on the page clears the bell too', async () => {
+      seed();
+      const { user } = await loginAdmin();
+      await user.click(document.querySelector('.nav-item[aria-label="Notifications"]'));
+      expect(await screen.findByText('2 unread')).toBeInTheDocument();
+      expect(document.querySelectorAll('.inbox-row').length).toBe(3);
+      await user.click(screen.getByRole('button', { name: 'Mark all read' }));
+      expect(await screen.findByText('You are all caught up')).toBeInTheDocument();
+      await waitFor(() => expect(document.querySelector('.notification-button')).toHaveAttribute('aria-label', 'Notifications'));
+    });
+
+    it('Notifications page: search narrows the list', async () => {
+      seed();
+      const { user } = await loginAdmin();
+      await user.click(document.querySelector('.nav-item[aria-label="Notifications"]'));
+      await waitFor(() => expect(document.querySelectorAll('.inbox-row').length).toBe(3));
+      fireEvent.change(screen.getByLabelText('Search notifications'), { target: { value: 'third' } });
+      await waitFor(() => expect(document.querySelectorAll('.inbox-row').length).toBe(1));
+      expect(screen.getByText('QRY-000003')).toBeInTheDocument();
+      expect(screen.getByText('Third')).toBeInTheDocument();
+    });
+
+    it('a query opened from Notifications goes Back to Notifications, not the Inquiry Desk', async () => {
+      seed();
+      mockApi.notifications[0].ticket_id = 'TCK-1001';
+      const { user } = await loginAdmin();
+      await user.click(document.querySelector('.nav-item[aria-label="Notifications"]'));
+      await user.click(await screen.findByText('Third'));
+      await user.click(await screen.findByRole('button', { name: 'Back to notifications' }));
+      await waitFor(() => expect(document.querySelectorAll('.inbox-row').length).toBe(3));
+    });
+
+    it('shows an empty state when there is nothing', async () => {
+      const { user } = await loginAdmin();
+      await user.click(document.querySelector('.nav-item[aria-label="Notifications"]'));
+      expect(await screen.findByText('No notifications yet')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Mark all read' })).toBeDisabled();
+    });
   });
 
   it.skip('switches identity to Internal Team via topbar and back to All Channels', async () => {
@@ -258,7 +350,11 @@ describe('Internal admin - full navigation', () => {
     const { user } = await loginAdmin();
     const shell = document.querySelector('.app-shell');
     expect(shell).not.toHaveClass('sidebar-collapsed');
+    // the control is a normal button in the top bar, not a handle floating on the sidebar edge
+    expect(document.querySelector('.topbar .sidebar-toggle')).toBe(screen.getByRole('button', { name: 'Collapse menu' }));
+    expect(document.querySelector('.sidebar-edge-toggle')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Collapse menu' }));
+    expect(screen.getByRole('button', { name: 'Expand menu' })).toHaveAttribute('aria-expanded', 'false');
     expect(shell).toHaveClass('sidebar-collapsed');
     expect(window.localStorage.getItem('i2p.sidebarCollapsed')).toBe('1');
     // names stay available (tooltips / accessible names) while the labels are hidden by CSS
@@ -268,6 +364,16 @@ describe('Internal admin - full navigation', () => {
     expect(shell).not.toHaveClass('sidebar-collapsed');
     expect(window.localStorage.getItem('i2p.sidebarCollapsed')).toBe('0');
     window.localStorage.removeItem('i2p.sidebarCollapsed');
+  });
+
+  it('Settings: ticket roles reference is collapsed until opened', async () => {
+    const { user } = await loginAdmin();
+    await user.click(screen.getAllByText('Settings')[0]);
+    await user.click(screen.getAllByText('Roles & Permissions')[0]);
+    expect(document.querySelector('.tp-table')).toBeNull();
+    await user.click(screen.getByRole('button', { name: /Inquiry Desk ticket roles/ }));
+    await waitFor(() => expect(document.querySelector('.tp-table')).not.toBeNull());
+    expect(within(document.querySelector('.tp-table')).getByText('View ticket')).toBeInTheDocument();
   });
 
   it('Settings: toggles a role permission', async () => {
@@ -295,20 +401,96 @@ describe('Internal admin - full navigation', () => {
     expect(await screen.findByText('test.user@example.com')).toBeInTheDocument();
   });
 
-  it('Settings: toggles a notification rule', async () => {
+  it('Settings: a user is authorized for one channel at a time', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Settings')[0]);
-    await user.click(screen.getAllByText('Notifications')[0]);
-    const toggle = document.querySelector('.notif-row .toggle');
-    const wasOn = toggle.className.includes(' on');
-    await user.click(toggle);
-    expect(toggle.className.includes(' on')).toBe(!wasOn);
+    await user.click(screen.getAllByText('Users')[0]);
+    await screen.findByText('admin@company.com');
+    await user.click(screen.getByRole('button', { name: 'Add User' }));
+    fireEvent.change(document.querySelector('.modal-body select'), { target: { value: 'Viewer' } });
+    const radios = () => [...document.querySelectorAll('.modal-body input[type="radio"]')];
+    expect(radios().length).toBe(3);
+    expect(document.querySelectorAll('.modal-body input[type="checkbox"]').length).toBe(0);
+    await user.click(radios()[1]);
+    await user.click(radios()[0]);
+    expect(radios().map((r) => r.checked)).toEqual([true, false, false]);
   });
 
-  it('Audit Logs table is read-only (edit/delete disabled)', async () => {
+  it('staff without a ticket role do not get the Inquiry Desk, Notifications or the bell', async () => {
+    const { store, user } = await loginAdmin();
+    expect(document.querySelector('.nav-item[aria-label="Inquiry Desk"]')).not.toBeNull();
+    expect(document.querySelector('.notification-button')).not.toBeNull();
+
+    store.dispatch(setAuthFromServer({ ticketRole: 'NO_ACCESS' }));
+    await waitFor(() => expect(document.querySelector('.nav-item[aria-label="Inquiry Desk"]')).toBeNull());
+    expect(document.querySelector('.nav-item[aria-label="Notifications"]')).toBeNull();
+    expect(document.querySelector('.notification-button')).toBeNull();
+    // the rest of the app is still there
+    expect(document.querySelector('.nav-item[aria-label="Search Invoice(s)"]')).not.toBeNull();
+    expect(user).toBeTruthy();
+  });
+
+  it('a dashboard KPI opens Search Invoice(s) with a way back to Invoice Tracking', async () => {
+    const { user } = await loginAdmin();
+    await screen.findByRole('heading', { name: 'Invoice Tracking' });
+    const paidCard = [...document.querySelectorAll('button.stat-card')].find((b) => b.querySelector('.lbl')?.textContent === 'Paid');
+    await user.click(paidCard);
+    expect(await screen.findByText('Paid invoices')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back to Invoice Tracking' }));
+    expect(await screen.findByRole('heading', { name: 'Invoice Tracking' })).toBeInTheDocument();
+    // opening Search from the sidebar has no back link
+    await user.click(document.querySelector('.nav-item[aria-label="Search Invoice(s)"]'));
+    await screen.findByPlaceholderText(/Invoice no, PO no/);
+    expect(screen.queryByRole('button', { name: 'Back to Invoice Tracking' })).toBeNull();
+  });
+
+  it('invoice progress: a Paid invoice is complete, not "In progress"', async () => {
+    const { user } = await loginAdmin();
+    await user.click(document.querySelector('.nav-item[aria-label="Search Invoice(s)"]'));
+    await user.click(await screen.findByRole('button', { name: 'All dates' }));
+    const open = async (no) => {
+      await user.click(await screen.findByRole('button', { name: no }));
+      await screen.findByText('Invoice Progress');
+    };
+    await open('INV-MS-1001'); // Paid
+    expect(screen.queryByText('In progress')).toBeNull();
+    await user.click(within(document.querySelector('.modal-foot')).getByRole('button', { name: 'Close' }));
+    await open('INV-MS-1002'); // Payment Due: still moving
+    expect(screen.getByText('In progress')).toBeInTheDocument();
+  });
+
+  it('Vendor Status Reports: the cards switch lists and a supplier filters the invoices', async () => {
+    const { store, user } = await loginAdmin();
+    store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+    await user.click(document.querySelector('.nav-item[aria-label="Vendor Status Reports"]'));
+    const card = (label) => [...document.querySelectorAll('button.stat-card')].find((b) => b.querySelector('.lbl')?.textContent === label);
+    await waitFor(() => expect(card('Completed Invoices')).toBeTruthy());
+
+    await user.click(card('Suppliers Covered'));
+    expect(await screen.findByText('Completed invoices')).toBeInTheDocument(); // the suppliers table
+    await user.click(screen.getByRole('button', { name: 'Bosch Auto Components' }));
+
+    expect(await screen.findByText('Supplier: Bosch Auto Components')).toBeInTheDocument();
+    expect(screen.getByText('INV-MS-1004')).toBeInTheDocument();
+    expect(screen.queryByText('INV-MS-1001')).toBeNull(); // another supplier's paid invoice
+
+    await user.click(screen.getByRole('button', { name: 'Remove supplier filter' }));
+    expect(await screen.findByText('INV-MS-1001')).toBeInTheDocument();
+  });
+
+  it('Settings has no email notification rules page', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Settings')[0]);
-    await user.click(screen.getAllByText('Audit Logs')[0]);
+    expect(await screen.findByText('Integration Settings')).toBeInTheDocument();
+    expect(document.querySelector('.nav-item[aria-label="Auto-Notify Rules"]')).toBeNull();
+  });
+
+  it('Audit Logs is its own page under Settings and is read-only; Sync Log is gone', async () => {
+    const { user } = await loginAdmin();
+    expect(document.querySelector('.nav-item[aria-label="Sync Log"]')).toBeNull();
+    await user.click(screen.getAllByText('Settings')[0]);
+    await user.click(document.querySelector('.nav-item[aria-label="Audit Logs"]'));
+    expect(await screen.findByText(/Newest first/)).toBeInTheDocument();
     expect(screen.queryAllByTitle('Edit')).toHaveLength(0);
     expect(screen.queryAllByTitle('Delete')).toHaveLength(0);
   });
@@ -321,13 +503,13 @@ describe('Internal admin - full navigation', () => {
     expect(exportButton).toBeInTheDocument();
   });
 
-  it('Global Logs: filters by channel and searches', async () => {
+  it('Global Logs: has no channel filter of its own (the top bar owns it) and searches', async () => {
     const { user } = await loginAdmin();
-    await user.click(screen.getAllByText('Logs / History')[0]);
+    await user.click(document.querySelector('.nav-item[aria-label="Logs / History"]'));
     expect(await screen.findByRole('heading', { name: 'Logs / History' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { name: 'Logs / History' })).toHaveLength(1);
-    fireEvent.change(await screen.findByLabelText('Filter by channel'), { target: { value: 'msetuSrm' } });
-    expect(document.querySelectorAll('tbody tr').length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText('Filter by channel')).toBeNull();
+    expect(screen.getByLabelText('Filter by type')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Search the log'), { target: { value: 'zzz-no-such-entry' } });
     expect(await screen.findByText('No log entries match your filters.')).toBeInTheDocument();
   });
@@ -348,36 +530,32 @@ describe('Internal admin - full navigation', () => {
     expect(store.getState().ui.scope.vcode).toBe('');
   });
 
-  it('Supplier Visibility follows the top-bar vendor, and picking another supplier moves it', async () => {
+  it('Supplier Visibility updates its detailed view when the navbar vendor changes', async () => {
     const { store, user } = await loginAdmin();
     store.dispatch(setScopeFilter({ key: 'vcode', value: 'DIT00388AC' })); // a Tata Communications code
     store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
     await user.click(screen.getAllByText('Supplier Visibility')[0]);
-    await screen.findByText(/Vendor Codes \(\d+\)/);
-    const picker = () => document.querySelector('.form-field select');
-    expect(picker()).toHaveValue('Tata Communications Ltd');
-    await user.selectOptions(picker(), 'Bharat Forge Ltd');
-    expect(store.getState().ui.scope.vcode).toBe('BFL00456');
-    expect(picker()).toHaveValue('Bharat Forge Ltd');
+    expect(await screen.findByLabelText('Supplier Name')).toHaveValue('Tata Communications Ltd');
+    expect(screen.getByLabelText('Vendor Code')).toHaveValue('DIT00388AC');
+    act(() => store.dispatch(setScopeFilter({ key: 'vcode', value: 'BFL00456' })));
+    expect(screen.getByLabelText('Supplier Name')).toHaveValue('Bharat Forge Ltd');
+    expect(screen.getByLabelText('Vendor Code')).toHaveValue('BFL00456');
+    expect(screen.getByRole('heading', { name: 'Invoice Status : Bharat Forge Ltd' })).toBeInTheDocument();
+    const rows = document.querySelectorAll('.table-scroll tbody tr');
+    expect(rows.length).toBeGreaterThan(0);
+    rows.forEach((row) => expect(row).toHaveTextContent('BFL00456'));
   });
 
-  it('Supplier Visibility: vendor codes are tabs that narrow the page in place', async () => {
+  it('Supplier Visibility opens the detailed view directly without duplicate navigation', async () => {
     const { store, user } = await loginAdmin();
     store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
     await user.click(screen.getAllByText('Supplier Visibility')[0]);
-    await screen.findByText(/Vendor Codes \(\d+\)/);
-    const tabs = () => screen.getAllByRole('tab');
-    expect(tabs()[0]).toHaveAttribute('aria-selected', 'true'); // "All codes"
-    expect(screen.queryByRole('button', { name: /Open full view of/ })).not.toBeInTheDocument();
-    expect(tabs().length).toBeGreaterThan(1);
-    const firstCode = tabs()[1].textContent.split(' ')[0];
-    await user.click(tabs()[1]);
-    // the same page now shows just that code, with a way to open its own full view
-    expect(tabs()[1]).toHaveAttribute('aria-selected', 'true');
-    expect(await screen.findByText(new RegExp(`${firstCode} : Total Invoices`))).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: `Open full view of ${firstCode} →` })).toBeInTheDocument();
-    await user.click(tabs()[0]);
-    expect(screen.getByText('All Codes : Total Invoices')).toBeInTheDocument();
+    expect(await screen.findByText('Total POs')).toBeInTheDocument();
+    expect(screen.getByLabelText('Vendor Code').value).toContain('All Vendors');
+    expect(screen.getByRole('heading', { name: 'Invoice Status : All Suppliers' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Invoice Log' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open full Supplier Visibility/ })).not.toBeInTheDocument();
   });
 
   it('Search Invoice(s) returns matching results', async () => {
@@ -479,7 +657,9 @@ describe('Supplier session', () => {
   it('views its own profile with PAN and vendor code list', async () => {
     const { user } = await loginSupplier();
     await user.click(screen.getAllByText('My Profile')[0]);
-    expect(await screen.findByText(/All Vendor Codes Under This PAN/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Vendor codes' })).toBeInTheDocument();
+    expect(screen.getAllByText('PAN', { exact: true })).toHaveLength(1);
+    expect(screen.getByText('Signed-in Vendor Code')).toBeInTheDocument();
   });
 
   it('cannot reach internal-only routes directly (route guard redirects)', async () => {

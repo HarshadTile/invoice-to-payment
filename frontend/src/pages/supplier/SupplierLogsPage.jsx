@@ -6,11 +6,13 @@ import { getFiscalYear } from '../../utils/businessLogic';
 import { useScope } from '../../features/ui/scope';
 import { api } from '../../api/client';
 import {
-  LOG_TYPES, filterLogRows, formatDay, formatDayTime, invoiceLogRows, logRowsToCsv, queryLogRows,
+  filterLogRows, formatDay, formatDayTime, invoiceLogRows, withUniqueKeys, logRowsToCsv, queryLogRows,
 } from '../../utils/supplierLog';
+import LogFilterBar from '../../components/common/LogFilterBar.jsx';
 import PagerFoot from '../../components/common/PagerFoot.jsx';
+import SortDateTh from '../../components/common/SortDateTh.jsx';
+import { useDateSort } from '../../utils/dateSort';
 import Badge from '../../components/common/Badge.jsx';
-import { Download } from '../../components/common/icons.jsx';
 
 const PAGE_SIZE = 20;
 const TYPE_TONE = { Invoice: 'blue', Payment: 'green', Query: 'amber' };
@@ -41,10 +43,11 @@ export default function SupplierLogsPage() {
   const filtersActive = filters.search || filters.type !== 'all' || filters.from || filters.to;
 
   const allRows = useMemo(
-    () => [...invoiceLogRows(invoices), ...queryLogRows(queryEntries, invoices, fySearch !== 'all')],
+    () => withUniqueKeys([...invoiceLogRows(invoices), ...queryLogRows(queryEntries, invoices, fySearch !== 'all')]),
     [invoices, queryEntries, fySearch],
   );
-  const rows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
+  const filteredRows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
+  const { sorted: rows, dir: dateDir, toggle: toggleDate } = useDateSort(filteredRows, (row) => row.when, 'desc');
   const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / PAGE_SIZE)));
   const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
@@ -66,39 +69,18 @@ export default function SupplierLogsPage() {
   return (
     <>
       <div className="card">
-        {/* The filters take the space left of the button and wrap among themselves, so Export
-            stays on the right instead of dropping onto its own line. */}
-        <div className="toolbar" style={{ flexWrap: 'nowrap', alignItems: 'flex-start', gap: 12 }}>
-          <div className="toolbar-left" style={{ gap: 10, flex: '1 1 0', minWidth: 0 }}>
-            <input
-              className="search-box" style={{ flex: '1 1 200px', minWidth: 160, maxWidth: 280, width: 'auto' }} placeholder="Search invoice, PO or details..."
-              aria-label="Search the log" value={filters.search} onChange={setFilter('search')}
-            />
-            <select className="search-box" aria-label="Filter by type" value={filters.type} onChange={setFilter('type')} style={{ width: 150 }}>
-              <option value="all">All types</option>
-              {LOG_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <label className="filter-inline">
-              From <input type="date" className="search-box" style={{ width: 150 }} aria-label="From date" value={filters.from} max={filters.to || undefined} onChange={setFilter('from')} />
-            </label>
-            <label className="filter-inline">
-              To <input type="date" className="search-box" style={{ width: 150 }} aria-label="To date" value={filters.to} min={filters.from || undefined} onChange={setFilter('to')} />
-            </label>
-            {filtersActive && (
-              <button type="button" className="btn" onClick={() => { setFilters({ search: '', type: 'all', from: '', to: '' }); setPage(1); }}>Clear</button>
-            )}
-          </div>
-          <div className="toolbar-right" style={{ flex: '0 0 auto' }}>
-            <button type="button" className="btn" onClick={exportCsv} disabled={rows.length === 0}><Download />Export ({rows.length})</button>
-          </div>
-        </div>
+        <LogFilterBar
+          filters={filters} onChange={setFilter} filtersActive={filtersActive}
+          onClear={() => { setFilters({ search: '', type: 'all', from: '', to: '' }); setPage(1); }} onExport={exportCsv} exportCount={rows.length}
+          searchPlaceholder="Search invoice, PO or details"
+        />
         {queryError && (
           <p style={{ color: 'var(--text-muted)', fontSize: 12.5, margin: '0 0 10px' }}>Your query history couldn't be loaded right now. Invoice and payment activity is shown below.</p>
         )}
         <div className="table-scroll">
           <table>
             <thead>
-              <tr><th>Date</th><th>Invoice No</th><th>PO No</th><th>Type</th><th>Event</th><th>Details</th></tr>
+              <tr><SortDateTh dir={dateDir} onToggle={toggleDate} /><th>Invoice No</th><th>PO No</th><th>Type</th><th>Event</th><th>Details</th></tr>
             </thead>
             <tbody>
               {pageRows.length ? pageRows.map((row) => (

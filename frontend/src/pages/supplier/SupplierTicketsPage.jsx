@@ -3,6 +3,7 @@ import { setTicketFilterStatus } from '../../features/ui/uiSlice';
 import { useGetTicketsQuery, useGetTicketSummaryQuery } from '../../features/tickets/ticketsApi';
 import StatCard from '../../components/common/StatCard.jsx';
 import TicketTable from '../../components/tickets/TicketTable.jsx';
+import TicketExportButton from '../../components/tickets/TicketExportButton.jsx';
 import { CheckCircle, Clock, Inbox } from '../../components/common/icons.jsx';
 
 const FILTER_STATUS = {
@@ -28,6 +29,9 @@ export default function SupplierTicketsPage() {
         <StatCard tone="bad" icon={<Inbox />} label="Open" value={summary.open || 0} onClick={() => dispatch(setTicketFilterStatus('Open'))} active={statusFilter === 'Open'} />
         <StatCard tone="warn" icon={<Clock />} label="In Progress" value={summary.in_progress || 0} onClick={() => dispatch(setTicketFilterStatus('In Progress'))} active={statusFilter === 'In Progress'} />
         <StatCard icon={<CheckCircle />} label="Resolved / Closed" value={summary.resolved_closed || 0} onClick={() => dispatch(setTicketFilterStatus('Resolved'))} active={statusFilter === 'Resolved'} />
+      </div>
+      <div className="ticket-toolbar" style={{ justifyContent: 'flex-end' }}>
+        <TicketExportButton tickets={tickets} loading={isLoading} />
       </div>
       <TicketTable tickets={tickets} loading={isLoading} />
     </section>

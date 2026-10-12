@@ -1,5 +1,4 @@
-/* Sample invoice register spanning all 4 channels; several rows use the real Tata
-   Communications vendor codes so the Vendor Code Mapping master ties back to live records. */
+/* TEST FIXTURE ONLY -- never imported by the app. The real app reads invoices from the Excel file via the backend. */
 export const INVOICE_DATA = [
   { no: 'INV-MS-1001', vcode: 'DIT00388AC', vendor: 'Tata Communications Ltd', channel: 'msetuSrm', po: '4500123456', amount: '₹1,24,500', status: 'Paid', utr: 'UTR2607290012', date: '29 Jul 2026' },
   { no: 'INV-MS-1002', vcode: 'DIT00388AA', vendor: 'Tata Communications Ltd', channel: 'msetuSrm', po: '4500123789', amount: '₹58,200', status: 'Payment Due', utr: '-', date: '02 Aug 2026' },

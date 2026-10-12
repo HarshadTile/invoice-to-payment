@@ -1,11 +1,14 @@
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import Badge from '../common/Badge.jsx';
+import SortDateTh from '../common/SortDateTh.jsx';
+import { useDateSort } from '../../utils/dateSort';
 import { channelLabel, formatDate, PRIORITY_TONE, STATUS_LABEL, STATUS_TONE, ticketPath } from '../../utils/tickets.js';
 
 export default function TicketTable({ tickets = [], loading = false }) {
   const navigate = useNavigate();
   const supplier = useSelector((state) => state.auth.authType === 'supplier');
+  const { sorted: rows, dir, toggle } = useDateSort(tickets, (t) => t.updated_at, 'desc'); // newest first by default
 
   if (loading) return <div className="ticket-empty">Loading queries...</div>;
   if (!tickets.length) return <div className="ticket-empty">No queries match this view.</div>;
@@ -21,13 +24,13 @@ export default function TicketTable({ tickets = [], loading = false }) {
             <th>Category</th>
             <th>Priority</th>
             <th>Owner</th>
-            <th>Updated</th>
+            <SortDateTh label="Updated" dir={dir} onToggle={toggle} />
             <th>SLA</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody>
-          {tickets.map((ticket) => (
+          {rows.map((ticket) => (
             <tr key={ticket.id} className={ticket.unread ? 'ticket-unread' : ''}>
               <td>
                 <button type="button" className="link-hero" onClick={() => navigate(ticketPath(ticket, supplier))}>

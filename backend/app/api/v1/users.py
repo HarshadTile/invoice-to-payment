@@ -122,17 +122,21 @@ def _validate_status(status: Optional[str]):
         raise HTTPException(status_code=400, detail=f"Unknown status. Use one of: {', '.join(VALID_STATUSES)}")
 
 
-def _resolve_channels(role: str, requested: Optional[list[str]]) -> list[str]:
-    """The channels an account is authorized for. Admin always has every channel (stored as
-    scope "all", no per-channel rows); anyone else needs at least one specific channel."""
+def _resolve_channels(role: str, requested: Optional[list[str]], single: bool = True) -> list[str]:
+    """The channel an account is authorized for. Admin always has every channel (stored as
+    scope "all", no per-channel rows); anyone else works in exactly one specific channel.
+    `single=False` only for an edit that doesn't touch channels, so an older account that still
+    has several can be updated (status, name...) without being forced to pick one."""
     if role == "Admin":
         return []
     picked = list(dict.fromkeys(requested or []))
     if not picked or any(c not in SPECIFIC_CHANNELS for c in picked):
         raise HTTPException(
             status_code=400,
-            detail="Pick at least one authorized channel (Msetu / SRM, PO Portal or MFOX Portal) for this role.",
+            detail="Pick the authorized channel (Msetu / SRM, PO Portal or MFOX Portal) for this role.",
         )
+    if single and len(picked) > 1:
+        raise HTTPException(status_code=400, detail="A user can be authorized for only one channel.")
     return picked
 
 
@@ -226,7 +230,8 @@ def update_user(
         requested = [patch.channelScope]
     else:
         requested = current_channels or ([user.channel_scope] if user.channel_scope != "all" else [])
-    channels = _resolve_channels(effective_role, requested)
+    channels_given = patch.channels is not None or patch.channelScope is not None
+    channels = _resolve_channels(effective_role, requested, single=channels_given or effective_role != user.role)
     channel_scope = _primary_scope(effective_role, channels, user.channel_scope)
     stored_ticket_role = user.ticket_role
     if user.role == "Admin" and effective_role != "Admin" and patch.ticketRole is None:

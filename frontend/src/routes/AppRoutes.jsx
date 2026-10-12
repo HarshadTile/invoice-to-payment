@@ -5,6 +5,7 @@ import {
   RequireSupplier,
   RequireHQ,
   RequireCapability,
+  RequireTicketAccess,
   SettingsIndexRedirect,
   RedirectIfLoggedIn,
 } from './ProtectedRoute.jsx';
@@ -19,7 +20,6 @@ import SupplierVisibilityPage from '../pages/SupplierVisibilityPage.jsx';
 import VendorCodePage from '../pages/VendorCodePage.jsx';
 import InquiryDeskPage from '../pages/InquiryDeskPage.jsx';
 import OutputsPage from '../pages/OutputsPage.jsx';
-import SyncLogPage from '../pages/SyncLogPage.jsx';
 import GlobalLogsPage from '../pages/GlobalLogsPage.jsx';
 import SettingsPage from '../pages/SettingsPage.jsx';
 import ProfilePage from '../pages/ProfilePage.jsx';
@@ -27,6 +27,7 @@ import SupplierHomePage from '../pages/supplier/SupplierHomePage.jsx';
 import SupplierLogsPage from '../pages/supplier/SupplierLogsPage.jsx';
 import SupplierTicketsPage from '../pages/supplier/SupplierTicketsPage.jsx';
 import TicketDetailPage from '../pages/TicketDetailPage.jsx';
+import NotificationsPage from '../pages/NotificationsPage.jsx';
 
 export default function AppRoutes() {
   return (
@@ -45,18 +46,22 @@ export default function AppRoutes() {
           <Route path="/app/search" element={<SearchInvoicePage />} />
           <Route path="/app/channel/:key" element={<ChannelPage />} />
           <Route path="/app/vendor-code/:code" element={<VendorCodePage />} />
-          <Route path="/app/inquiry-desk" element={<InquiryDeskPage />} />
-          <Route path="/app/inquiry-desk/:id" element={<TicketDetailPage />} />
+          <Route element={<RequireTicketAccess />}>
+            <Route path="/app/inquiry-desk" element={<InquiryDeskPage />} />
+            <Route path="/app/inquiry-desk/:id" element={<TicketDetailPage />} />
+            <Route path="/app/notifications" element={<NotificationsPage />} />
+          </Route>
           <Route path="/app/profile" element={<ProfilePage />} />
 
           <Route element={<RequireHQ />}>
             <Route path="/app/supplier-visibility" element={<SupplierVisibilityPage />} />
             <Route path="/app/outputs" element={<OutputsPage />} />
-            <Route path="/app/sync-log" element={<SyncLogPage />} />
             <Route path="/app/logs" element={<GlobalLogsPage />} />
+            {/* the Sync Log page was removed (nothing ever filled it) */}
+            <Route path="/app/sync-log" element={<Navigate to="/app/logs" replace />} />
             <Route element={<RequireCapability cap="manageConfig" />}>
               <Route path="/app/settings/integrations" element={<SettingsPage />} />
-              <Route path="/app/settings/notifications" element={<SettingsPage />} />
+              <Route path="/app/settings/notifications" element={<Navigate to="/app/settings/integrations" replace />} />
             </Route>
             <Route element={<RequireCapability cap="viewAuditLog" />}>
               <Route path="/app/settings/auditLogs" element={<SettingsPage />} />
@@ -82,6 +87,7 @@ export default function AppRoutes() {
           <Route path="/supplier/tickets" element={<SupplierTicketsPage />} />
           <Route path="/supplier/tickets/:id" element={<TicketDetailPage />} />
           <Route path="/supplier/profile" element={<ProfilePage />} />
+          <Route path="/supplier/notifications" element={<NotificationsPage />} />
         </Route>
       </Route>
 

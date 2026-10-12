@@ -1,12 +1,12 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
-import { ensureNavExpanded, setSidebarCollapsed, toggleNavExpanded, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
+import { ensureNavExpanded, setSidebarCollapsed, toggleNavExpanded } from '../../features/ui/uiSlice';
 import { askLogout } from '../../features/auth/logoutPrompt';
-import { selectPerm } from '../../features/auth/authSlice';
+import { selectHasTicketAccess, selectPerm } from '../../features/auth/authSlice';
 import {
   FileText, Search, Layers, Building, MessageSquare, BarChart3, History,
-  RefreshCw, Settings, Sliders, Users, Shield, Bell, User, LogOut, ChevronRight,
+  Settings, Sliders, Users, Shield, Bell, User, LogOut, ChevronRight,
 } from '../common/icons.jsx';
 import logo from '../../assets/mahindra-logo.png';
 
@@ -33,6 +33,7 @@ export default function Sidebar() {
   const location = useLocation();
   const { authType, channelScope } = useSelector((s) => s.auth);
   const perm = useSelector(selectPerm);
+  const hasTicketAccess = useSelector(selectHasTicketAccess);
   const expandedNav = useSelector((s) => s.ui.expandedNav);
   const collapsed = useSelector((s) => s.ui.sidebarCollapsed);
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
@@ -43,32 +44,17 @@ export default function Sidebar() {
   const toggleGroup = (id) => () => {
     if (collapsed) { dispatch(setSidebarCollapsed(false)); dispatch(ensureNavExpanded(id)); } else dispatch(toggleNavExpanded(id));
   };
-  // Always visible (it sits on the sidebar's edge by the logo, not at the end of the scrolling
-  // list), so collapsing never needs a scroll.
-  const collapseToggle = (
-    <button
-      type="button"
-      className="sidebar-edge-toggle"
-      onClick={() => dispatch(toggleSidebarCollapsed())}
-      aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
-      title={collapsed ? 'Expand menu' : 'Collapse menu'}
-      aria-expanded={!collapsed}
-    >
-      <span style={{ display: 'flex', transform: collapsed ? 'none' : 'rotate(180deg)' }}><ChevronRight size={14} /></span>
-    </button>
-  );
-
   // ── Supplier sidebar ──
   if (authType === 'supplier') {
     return (
       <aside className="sidebar">
         <Brand />
-        {collapseToggle}
         <div className="sidebar-scroll">
           <nav className="nav-tree" aria-label="Primary">
             <NavItem icon={<FileText />} label="My Invoices" active={isActive('/supplier/home')} onClick={() => navigate('/supplier/home')} />
             <NavItem icon={<History />} label="Logs" active={isActive('/supplier/logs')} onClick={() => navigate('/supplier/logs')} />
             <NavItem icon={<MessageSquare />} label="My Queries" active={isActive('/supplier/tickets')} onClick={() => navigate('/supplier/tickets')} />
+            <NavItem icon={<Bell />} label="Notifications" active={isActive('/supplier/notifications')} onClick={() => navigate('/supplier/notifications')} />
           </nav>
           <div className="nav-bottom">
             <NavItem icon={<User />} label="My Profile" active={isActive('/supplier/profile')} onClick={() => navigate('/supplier/profile')} />
@@ -94,7 +80,6 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <Brand />
-      {collapseToggle}
       <div className="sidebar-scroll">
         <nav className="nav-tree" aria-label="Primary">
           <p className="nav-section">Overview</p>
@@ -138,7 +123,12 @@ export default function Sidebar() {
           {isHQ && (
             <NavItem icon={<Building />} label="Supplier Visibility" active={isActive('/app/supplier-visibility')} onClick={() => navigate('/app/supplier-visibility')} />
           )}
-          <NavItem icon={<MessageSquare />} label="Inquiry Desk" active={isActive('/app/inquiry-desk')} onClick={() => navigate('/app/inquiry-desk')} />
+          {hasTicketAccess && (
+            <>
+              <NavItem icon={<MessageSquare />} label="Inquiry Desk" active={isActive('/app/inquiry-desk')} onClick={() => navigate('/app/inquiry-desk')} />
+              <NavItem icon={<Bell />} label="Notifications" active={isActive('/app/notifications')} onClick={() => navigate('/app/notifications')} />
+            </>
+          )}
         </nav>
 
         <div className="nav-bottom">
@@ -147,7 +137,6 @@ export default function Sidebar() {
               <p className="nav-section">Reports &amp; admin</p>
               <NavItem icon={<BarChart3 />} label="Vendor Status Reports" active={isActive('/app/outputs')} onClick={() => navigate('/app/outputs')} />
               <NavItem icon={<History />} label="Logs / History" active={isActive('/app/logs')} onClick={() => navigate('/app/logs')} />
-              <NavItem icon={<RefreshCw />} label="Sync Log" active={isActive('/app/sync-log')} onClick={() => navigate('/app/sync-log')} />
               {canUseSettings && (
                 <NavItem
                   icon={<Settings />}
@@ -160,7 +149,6 @@ export default function Sidebar() {
               {canUseSettings && isOpen('settings') && (
                 <div className="nav-children lvl1">
                   {perm.manageConfig && <NavItem icon={<Sliders />} label="Integration Settings" active={isActive('/app/settings/integrations')} onClick={() => navigate('/app/settings/integrations')} />}
-                  {perm.manageConfig && <NavItem icon={<Bell />} label="Notifications" active={isActive('/app/settings/notifications')} onClick={() => navigate('/app/settings/notifications')} />}
                   {perm.viewAuditLog && <NavItem icon={<History />} label="Audit Logs" active={isActive('/app/settings/auditLogs')} onClick={() => navigate('/app/settings/auditLogs')} />}
                   {perm.manageUsers && <NavItem icon={<Users />} label="Users" active={isActive('/app/settings/users')} onClick={() => navigate('/app/settings/users')} />}
                   {perm.manageRoles && <NavItem icon={<Shield />} label="Roles & Permissions" active={isActive('/app/settings/roles')} onClick={() => navigate('/app/settings/roles')} />}
