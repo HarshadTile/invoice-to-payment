@@ -25,6 +25,18 @@ export function formatDayTime(date) {
   }).format(date);
 }
 
+/** Gives every row a key that is unique within the list. The source data can repeat an invoice and
+ *  PO item (the same line twice), which would otherwise give two rows the same key and leave stale
+ *  rows on screen when a filter changes. The repeat gets a numbered suffix; the first keeps its key. */
+export function withUniqueKeys(rows) {
+  const seen = new Map();
+  return rows.map((row) => {
+    const n = seen.get(row.key) || 0;
+    seen.set(row.key, n + 1);
+    return n === 0 ? row : { ...row, key: `${row.key}#${n}` };
+  });
+}
+
 function invoiceRow(inv, kind, event, rawDate, detail = '') {
   const when = dayStart(rawDate);
   if (!when) return null;

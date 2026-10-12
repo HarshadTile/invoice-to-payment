@@ -4,13 +4,13 @@ import { CHANNEL_LABEL } from '../../data/constants';
 import { openModal } from '../../features/ui/uiSlice';
 import { api } from '../../api/client';
 import {
-  LOG_TYPES, filterLogRows, formatDay, formatDayTime, invoiceLogRows, logRowsToCsv, staffQueryLogRows,
+  filterLogRows, formatDay, formatDayTime, invoiceLogRows, withUniqueKeys, logRowsToCsv, staffQueryLogRows,
 } from '../../utils/supplierLog';
+import LogFilterBar from './LogFilterBar.jsx';
 import PagerFoot from './PagerFoot.jsx';
 import SortDateTh from './SortDateTh.jsx';
 import { useDateSort } from '../../utils/dateSort';
 import Badge from './Badge.jsx';
-import { Download } from './icons.jsx';
 
 const PAGE_SIZE = 20;
 const TYPE_TONE = { Invoice: 'blue', Payment: 'green', Query: 'amber' };
@@ -42,7 +42,7 @@ export default function GlobalLogsBody({ invoiceList }) {
   const filtersActive = Object.keys(NO_FILTERS).some((key) => filters[key] !== NO_FILTERS[key]);
 
   const allRows = useMemo(
-    () => [...invoiceLogRows(invoiceList), ...staffQueryLogRows(entries, invoiceList, true)],
+    () => withUniqueKeys([...invoiceLogRows(invoiceList), ...staffQueryLogRows(entries, invoiceList, true)]),
     [invoiceList, entries],
   );
   const filteredRows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
@@ -62,35 +62,10 @@ export default function GlobalLogsBody({ invoiceList }) {
 
   return (
     <div className="card">
-      {/* The filters take the space left of the button and wrap among themselves, so Export
-          stays on the right instead of dropping onto its own line. */}
-      <div className="toolbar" style={{ flexWrap: 'nowrap', alignItems: 'flex-start', gap: 12 }}>
-        <div className="toolbar-left" style={{ gap: 10, flex: '1 1 0', minWidth: 0 }}>
-          <input
-            className="search-box" style={{ flex: '1 1 240px', minWidth: 220, maxWidth: 340, width: 'auto', textOverflow: 'ellipsis' }}
-            placeholder="Search invoice, vendor, PO or details" title="Search by invoice no, vendor code, PO no or the event details" aria-label="Search the log"
-            value={filters.search} onChange={setFilter('search')}
-          />
-          <select className="search-box" aria-label="Filter by type" value={filters.type} onChange={setFilter('type')} style={{ width: 140 }}>
-            <option value="all">All types</option>
-            {LOG_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <div className="date-range">
-            <label className="filter-inline">
-            From <input type="date" className="search-box" style={{ width: 142 }} aria-label="From date" value={filters.from} max={filters.to || undefined} onChange={setFilter('from')} />
-            </label>
-            <label className="filter-inline">
-            To <input type="date" className="search-box" style={{ width: 142 }} aria-label="To date" value={filters.to} min={filters.from || undefined} onChange={setFilter('to')} />
-            </label>
-          </div>
-          {filtersActive && (
-            <button type="button" className="btn" onClick={() => { setFilters(NO_FILTERS); setPage(1); }}>Clear</button>
-          )}
-        </div>
-        <div className="toolbar-right" style={{ flex: '0 0 auto' }}>
-          <button type="button" className="btn" onClick={exportCsv} disabled={rows.length === 0}><Download />Export ({rows.length})</button>
-        </div>
-      </div>
+      <LogFilterBar
+        filters={filters} onChange={setFilter} filtersActive={filtersActive}
+        onClear={() => { setFilters(NO_FILTERS); setPage(1); }} onExport={exportCsv} exportCount={rows.length}
+      />
       {queryError && (
         <p style={{ color: 'var(--text-muted)', fontSize: 12.5, margin: '0 0 10px' }}>Query activity couldn't be loaded right now. Invoice and payment activity is shown below.</p>
       )}

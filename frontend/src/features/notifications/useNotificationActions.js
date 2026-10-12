@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { pushToast } from '../ui/uiSlice';
 import { useMarkAllNotificationsReadMutation, useMarkNotificationReadMutation } from './notificationsApi';
 
@@ -17,6 +17,7 @@ export function useNotificationIdentity() {
 export function useNotificationActions() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const identity = useNotificationIdentity();
   const supplier = useSelector((s) => s.auth.authType === 'supplier');
   const [markRead] = useMarkNotificationReadMutation();
@@ -27,8 +28,9 @@ export function useNotificationActions() {
       markRead({ id: item.id, identity }).unwrap().catch(() => dispatch(pushToast("Couldn't mark that notification as read.")));
     }
     if (afterOpen) afterOpen();
-    if (item.ticket_id) navigate(supplier ? `/supplier/tickets/${item.ticket_id}` : `/app/inquiry-desk/${item.ticket_id}`);
-  }, [dispatch, identity, markRead, navigate, supplier]);
+    // `from` lets the query's Back button return to this page instead of the queries list
+    if (item.ticket_id) navigate(supplier ? `/supplier/tickets/${item.ticket_id}` : `/app/inquiry-desk/${item.ticket_id}`, { state: { from: location.pathname + location.search } });
+  }, [dispatch, identity, location.pathname, location.search, markRead, navigate, supplier]);
 
   const readAll = useCallback(
     () => markAll({ identity }).unwrap().catch(() => dispatch(pushToast("Couldn't mark notifications as read."))),
