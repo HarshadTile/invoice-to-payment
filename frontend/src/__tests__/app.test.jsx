@@ -308,7 +308,18 @@ describe('Internal admin - full navigation', () => {
       await waitFor(() => expect(document.querySelectorAll('.inbox-row').length).toBe(3));
       fireEvent.change(screen.getByLabelText('Search notifications'), { target: { value: 'third' } });
       await waitFor(() => expect(document.querySelectorAll('.inbox-row').length).toBe(1));
-      expect(screen.getByText('QRY-000003 - Third')).toBeInTheDocument();
+      expect(screen.getByText('QRY-000003')).toBeInTheDocument();
+      expect(screen.getByText('Third')).toBeInTheDocument();
+    });
+
+    it('a query opened from Notifications goes Back to Notifications, not the Inquiry Desk', async () => {
+      seed();
+      mockApi.notifications[0].ticket_id = 'TCK-1001';
+      const { user } = await loginAdmin();
+      await user.click(document.querySelector('.nav-item[aria-label="Notifications"]'));
+      await user.click(await screen.findByText('Third'));
+      await user.click(await screen.findByRole('button', { name: 'Back to notifications' }));
+      await waitFor(() => expect(document.querySelectorAll('.inbox-row').length).toBe(3));
     });
 
     it('shows an empty state when there is nothing', async () => {
@@ -339,7 +350,11 @@ describe('Internal admin - full navigation', () => {
     const { user } = await loginAdmin();
     const shell = document.querySelector('.app-shell');
     expect(shell).not.toHaveClass('sidebar-collapsed');
+    // the control is a normal button in the top bar, not a handle floating on the sidebar edge
+    expect(document.querySelector('.topbar .sidebar-toggle')).toBe(screen.getByRole('button', { name: 'Collapse menu' }));
+    expect(document.querySelector('.sidebar-edge-toggle')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Collapse menu' }));
+    expect(screen.getByRole('button', { name: 'Expand menu' })).toHaveAttribute('aria-expanded', 'false');
     expect(shell).toHaveClass('sidebar-collapsed');
     expect(window.localStorage.getItem('i2p.sidebarCollapsed')).toBe('1');
     // names stay available (tooltips / accessible names) while the labels are hidden by CSS
