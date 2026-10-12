@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useGetNotificationsQuery, useGetUnreadCountQuery, NOTIFICATION_LIVE } from '../features/notifications/notificationsApi';
 import { useNotificationActions } from '../features/notifications/useNotificationActions';
 import { Inbox, Search } from '../components/common/icons.jsx';
-import { notificationDate, notificationLabel } from '../utils/notifications';
+import { NOTIFICATION_DETAIL, dayLabel, notificationLabel, notificationTime } from '../utils/notifications';
 
 const PAGE = 50;
 const MAX = 200; // the server's cap per request
@@ -68,12 +68,24 @@ export default function NotificationsPage() {
               <span>{tab === 'unread' && !search ? 'Everything has been read.' : filtering ? 'Try clearing the filters.' : 'Updates on your queries will appear here.'}</span>
             </div>
           )}
+          {shown.length > 0 && (
+            <div className="inbox-cols" aria-hidden="true"><span /><span>Event</span><span>Query</span><span>Received</span></div>
+          )}
           {shown.map((n) => (
             <button type="button" className={`inbox-row${n.read_at ? '' : ' unread'}`} key={n.id} onClick={() => open(n)}>
               <span className="inbox-dot" aria-label={n.read_at ? undefined : 'Unread'} />
-              <b>{notificationLabel(n)}</b>
-              <span className="inbox-sub">{n.ticket_no || 'Query'}{n.subject ? ` - ${n.subject}` : ''}</span>
-              <time>{notificationDate(n.created_at)}</time>
+              <span className="inbox-event">
+                <b>{notificationLabel(n)}</b>
+                {NOTIFICATION_DETAIL[n.type] && <small>{NOTIFICATION_DETAIL[n.type]}</small>}
+              </span>
+              <span className="inbox-query">
+                <span className="inbox-ref">{n.ticket_no || 'Query'}</span>
+                {n.subject && <span className="inbox-subject">{n.subject}</span>}
+              </span>
+              <time className="inbox-when" dateTime={n.created_at}>
+                <span>{dayLabel(n.created_at)}</span>
+                <small>{notificationTime(n.created_at)}</small>
+              </time>
             </button>
           ))}
         </div>

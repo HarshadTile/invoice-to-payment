@@ -34,3 +34,28 @@ export function useDateSort(rows, getDate, initialDir = null) {
   const toggle = () => setDir((d) => (d === 'desc' ? 'asc' : 'desc'));
   return { sorted, dir, toggle };
 }
+
+/** Click-to-sort for a table with several date columns. `getters` maps a column key to the
+ *  function that reads that column's date, e.g. { invoice: (r) => r.rawDate, status: (r) => r.date }.
+ *  One column is active at a time; its first click shows newest first, then it flips. Rows without a
+ *  readable date always go last, and with no column chosen the source order is kept. */
+export function useDateColumnSort(rows, getters) {
+  const [sort, setSort] = useState({ key: null, dir: null });
+  const sorted = useMemo(() => {
+    const read = sort.key && getters[sort.key];
+    if (!read) return rows;
+    const factor = sort.dir === 'asc' ? 1 : -1;
+    return rows
+      .map((row, index) => ({ row, index, ms: dateValue(read(row)) }))
+      .sort((a, b) => {
+        if (a.ms === null || b.ms === null) return (a.ms === null) - (b.ms === null) || a.index - b.index;
+        return (a.ms - b.ms) * factor || a.index - b.index;
+      })
+      .map((item) => item.row);
+  // getters are stable accessors at every call site
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, sort]);
+  const toggle = (key) => setSort((cur) => ({ key, dir: cur.key === key && cur.dir === 'desc' ? 'asc' : 'desc' }));
+  const dirFor = (key) => (sort.key === key ? sort.dir : null);
+  return { sorted, toggle, dirFor };
+}

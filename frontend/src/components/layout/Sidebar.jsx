@@ -1,7 +1,7 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
-import { ensureNavExpanded, setSidebarCollapsed, toggleNavExpanded, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
+import { ensureNavExpanded, setSidebarCollapsed, toggleNavExpanded } from '../../features/ui/uiSlice';
 import { askLogout } from '../../features/auth/logoutPrompt';
 import { selectHasTicketAccess, selectPerm } from '../../features/auth/authSlice';
 import {
@@ -44,27 +44,11 @@ export default function Sidebar() {
   const toggleGroup = (id) => () => {
     if (collapsed) { dispatch(setSidebarCollapsed(false)); dispatch(ensureNavExpanded(id)); } else dispatch(toggleNavExpanded(id));
   };
-  // Always visible (it sits on the sidebar's edge by the logo, not at the end of the scrolling
-  // list), so collapsing never needs a scroll.
-  const collapseToggle = (
-    <button
-      type="button"
-      className="sidebar-edge-toggle"
-      onClick={() => dispatch(toggleSidebarCollapsed())}
-      aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
-      title={collapsed ? 'Expand menu' : 'Collapse menu'}
-      aria-expanded={!collapsed}
-    >
-      <span style={{ display: 'flex', transform: collapsed ? 'none' : 'rotate(180deg)' }}><ChevronRight size={14} /></span>
-    </button>
-  );
-
   // ── Supplier sidebar ──
   if (authType === 'supplier') {
     return (
       <aside className="sidebar">
         <Brand />
-        {collapseToggle}
         <div className="sidebar-scroll">
           <nav className="nav-tree" aria-label="Primary">
             <NavItem icon={<FileText />} label="My Invoices" active={isActive('/supplier/home')} onClick={() => navigate('/supplier/home')} />
@@ -96,7 +80,6 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <Brand />
-      {collapseToggle}
       <div className="sidebar-scroll">
         <nav className="nav-tree" aria-label="Primary">
           <p className="nav-section">Overview</p>

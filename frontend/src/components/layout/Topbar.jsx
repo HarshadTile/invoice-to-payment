@@ -5,7 +5,7 @@ import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
 import { runtime } from '../../data/runtime';
 import { getFiscalYear } from '../../utils/businessLogic';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
-import { pushToast, setScopeFilter, toggleSidebar } from '../../features/ui/uiSlice';
+import { pushToast, setScopeFilter, toggleSidebar, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
 import { useScope } from '../../features/ui/scope';
 import { Bell, HelpCircle, ChevronDown, Menu } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
@@ -291,6 +291,7 @@ export default function Topbar() {
   const location = useLocation();
   const params   = useParams();
   const { authType, channelScope } = useSelector((s) => s.auth);
+  const sidebarCollapsed = useSelector((s) => s.ui.sidebarCollapsed);
 
   const crumb = crumbFor(location.pathname, params, authType === 'internal' && channelScope !== 'all' ? (CHANNEL_LABEL[channelScope] || channelScope) : '');
   const isHQ = channelScope === 'all';
@@ -303,6 +304,14 @@ export default function Topbar() {
 
   return (
     <header className="topbar">
+      {/* Desktop: collapse / expand the sidebar. (The button below is the phone-width menu.) */}
+      <button
+        type="button" className="icon-btn sidebar-toggle"
+        aria-label={sidebarCollapsed ? 'Expand menu' : 'Collapse menu'} title={sidebarCollapsed ? 'Expand menu' : 'Collapse menu'}
+        aria-expanded={!sidebarCollapsed} onClick={() => dispatch(toggleSidebarCollapsed())}
+      >
+        <Menu size={18} />
+      </button>
       <button type="button" className="icon-btn menu-btn" aria-label="Open menu"
         onClick={() => dispatch(toggleSidebar())}>
         <Menu size={18} />
