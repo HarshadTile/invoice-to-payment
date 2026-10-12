@@ -103,7 +103,7 @@
   display:flex;align-items:center;justify-content:space-between;
   gap:16px;padding:0 clamp(16px,2.5vw,28px);
 }
-.crumb{font-size:13px;color:var(--text-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.crumb{flex:1 1 auto;font-size:13px;color:var(--text-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .crumb-title{margin:0;font:inherit;color:inherit;display:inline;}
 .crumb b{
   color:var(--ink);font-weight:700;font-size:15px;
