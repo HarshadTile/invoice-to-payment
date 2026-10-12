@@ -10,6 +10,7 @@ import PagerFoot from '../common/PagerFoot.jsx';
 import SortDateTh from '../common/SortDateTh.jsx';
 import { useDateSort } from '../../utils/dateSort';
 import { invoiceDateLabel } from '../../utils/invoiceDates';
+import { totalsByCurrency } from '../../utils/amounts';
 import { Mail, Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
 
 const PAGE_SIZE = 10;
@@ -38,7 +39,7 @@ const stickyCell = (left, isHead = false) => ({
  * filteredCount: pass current filtered count to label the Export button accurately
  * lead: optional heading shown on the left of the toolbar (the Export button stays on the right)
  */
-export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount, lead }) {
+export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount, lead, showFilteredAmount = false }) {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const [searchParams] = useSearchParams();
@@ -49,6 +50,13 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
 
   const matched = useMemo(() => (search ? invoices.filter((inv) => matchesInvoiceQuery(inv, search)) : invoices), [invoices, search]);
   const { sorted: filtered, dir: dateDir, toggle: toggleDate } = useDateSort(matched, (inv) => inv.date);
+  const amountSummary = useMemo(() => {
+    if (!showFilteredAmount) return null;
+    const totals = totalsByCurrency(filtered);
+    const known = filtered.filter((invoice) => Object.keys(totalsByCurrency([invoice])).length > 0).length;
+    const value = Object.entries(totals).map(([currency, amount]) => `${currency}${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`).join(' + ');
+    return { known, value: value || (filtered.length ? 'Not available' : '—') };
+  }, [filtered, showFilteredAmount]);
 
   const totalPages   = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage  = Math.min(page, totalPages);
@@ -279,6 +287,18 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
         </table>
       </div>
 
+      {amountSummary && (
+        <div role="status" aria-label="Filtered invoice amount" className="filtered-invoice-amount">
+          <div>
+            <div style={{ fontWeight: 600 }}>Filtered Invoice Amount</div>
+            <div className="cell-muted" style={{ fontSize: 12, marginTop: 4 }}>
+              {filtered.length.toLocaleString()} matching invoice{filtered.length === 1 ? '' : 's'} across all pages
+              {amountSummary.known < filtered.length && ` · Amount available for ${amountSummary.known} of ${filtered.length} invoices`}
+            </div>
+          </div>
+          <strong style={{ fontSize: 19, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{amountSummary.value}</strong>
+        </div>
+      )}
       <PagerFoot
         total={filtered.length}
         page={currentPage}
