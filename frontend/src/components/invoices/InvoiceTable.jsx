@@ -8,12 +8,14 @@ import { setSearch, setTablePage, toggleSelectRow, setSelectAll, clearSelection,
 import Badge from '../common/Badge.jsx';
 import PagerFoot from '../common/PagerFoot.jsx';
 import SortDateTh from '../common/SortDateTh.jsx';
-import { useDateSort } from '../../utils/dateSort';
+import { useDateColumnSort } from '../../utils/dateSort';
 import { invoiceDateLabel } from '../../utils/invoiceDates';
 import { Mail, Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
 
 const PAGE_SIZE = 10;
 const EMPTY_SELECTION = Object.freeze([]);
+// The two sortable date columns: the invoice's own date, and the date that goes with its status
+const DATE_COLUMNS = { invoice: (inv) => inv.rawDate, status: (inv) => inv.date };
 
 // Pinned columns are given an exact width: the next pinned column's `left` offset is the sum of
 // the widths before it, so a column that grew or shrank with its content left a gap or an
@@ -48,7 +50,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const isSupplierUser = useSelector((s) => s.auth.authType === 'supplier');
 
   const matched = useMemo(() => (search ? invoices.filter((inv) => matchesInvoiceQuery(inv, search)) : invoices), [invoices, search]);
-  const { sorted: filtered, dir: dateDir, toggle: toggleDate } = useDateSort(matched, (inv) => inv.date);
+  const { sorted: filtered, toggle: toggleDate, dirFor } = useDateColumnSort(matched, DATE_COLUMNS);
 
   const totalPages   = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage  = Math.min(page, totalPages);
@@ -175,14 +177,14 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               {!supplierView && <th scope="col">Vendor Code</th>}
               <th scope="col">Channel</th>
               <th scope="col">PO No</th>
-              <th scope="col" title="Source invoice date used by the date filters">Invoice Date</th>
+              <SortDateTh label="Invoice Date" dir={dirFor('invoice')} onToggle={() => toggleDate('invoice')} title="Source invoice date used by the date filters" />
               <th scope="col" className="num">Amount</th>
               <th scope="col">Status</th>
               <th scope="col">Current Stage</th>
               {/* Renamed from "Handled By" which was truncating */}
               {!supplierView && <th scope="col">Owner</th>}
               <th scope="col">UTR No</th>
-              <SortDateTh label="Status Date" dir={dateDir} onToggle={toggleDate} />
+              <SortDateTh label="Status Date" dir={dirFor('status')} onToggle={() => toggleDate('status')} />
               <th scope="col" className="col-actions">Actions</th>
             </tr>
           </thead>

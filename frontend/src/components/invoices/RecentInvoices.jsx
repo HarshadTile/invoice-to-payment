@@ -3,7 +3,7 @@ import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
 import { openModal } from '../../features/ui/uiSlice';
 import Badge from '../common/Badge.jsx';
 import SortDateTh from '../common/SortDateTh.jsx';
-import { useDateSort } from '../../utils/dateSort';
+import { useDateColumnSort } from '../../utils/dateSort';
 import { invoiceDateLabel } from '../../utils/invoiceDates';
 import { Mail, Eye, Inbox } from '../common/icons.jsx';
 
@@ -12,9 +12,11 @@ import { Mail, Eye, Inbox } from '../common/icons.jsx';
  * `rows` is already sliced/ordered by the server (or the page) — this component
  * renders a fixed number of rows and never paginates or filters.
  */
+const DATE_COLUMNS = { invoice: (inv) => inv.rawDate, status: (inv) => inv.date };
+
 export default function RecentInvoices({ rows = [] }) {
   const dispatch = useDispatch();
-  const { sorted, dir, toggle } = useDateSort(rows, (inv) => inv.date);
+  const { sorted, toggle, dirFor } = useDateColumnSort(rows, DATE_COLUMNS);
   const openStage = (no, poItem) => dispatch(openModal({ kind: 'stageSimple', ctx: { no, poItem } }));
   const openVendorCode = (code) => dispatch(openModal({ kind: 'vendorCodePreview', ctx: { code } }));
   const openNotify = (no, poItem) => dispatch(openModal({ kind: 'notifyPreview', ctx: { no, poItem } }));
@@ -26,12 +28,12 @@ export default function RecentInvoices({ rows = [] }) {
           <thead>
             <tr>
               <th scope="col">Invoice No</th>
-              <th scope="col">Invoice Date</th>
+              <SortDateTh label="Invoice Date" dir={dirFor('invoice')} onToggle={() => toggle('invoice')} />
               <th scope="col">Vendor Code</th>
               <th scope="col">Channel</th>
               <th scope="col" className="num">Amount</th>
               <th scope="col">Status</th>
-              <SortDateTh label="Status Date" dir={dir} onToggle={toggle} />
+              <SortDateTh label="Status Date" dir={dirFor('status')} onToggle={() => toggle('status')} />
               <th scope="col" className="col-actions">Actions</th>
             </tr>
           </thead>
