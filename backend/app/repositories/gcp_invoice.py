@@ -1,16 +1,49 @@
+import logging
 from pathlib import Path
 from openpyxl import load_workbook
+
+logger = logging.getLogger(__name__)
 
 EXCEL_FILE = Path("data/gcp_invoice_data.xlsx")
 SHEET_NAME = "in"
 
 _cached_invoices = None
+_cached_mtime = None
+
+# Deleted (X) and rejected (D, Y) invoices keep their status. A UTR or due date on such a row
+# must not turn it into Paid / Payment Due (FS 8000276074: Deleted and Rejected rank above Paid).
+_LOCKED_STATUS_FLAGS = {"X", "D", "Y"}
+
+
+def _file_mtime():
+    try:
+        return EXCEL_FILE.stat().st_mtime
+    except OSError:
+        return None
+
 
 def _load_excel_data():
-    global _cached_invoices
-    if _cached_invoices is not None:
+    """Invoices from the Excel file, kept in memory and re-read whenever the file is saved again."""
+    global _cached_invoices, _cached_mtime
+    mtime = _file_mtime()
+    if _cached_invoices is not None and (mtime is None or mtime == _cached_mtime):
         return _cached_invoices
-        
+
+    try:
+        records = _read_excel_records()
+    except Exception:
+        if _cached_invoices is None:
+            raise
+        # The file is probably mid-save; keep serving the last good copy.
+        logger.exception("Could not re-read %s; serving the previous data", EXCEL_FILE)
+        return _cached_invoices
+
+    _cached_invoices = records
+    _cached_mtime = mtime
+    return _cached_invoices
+
+
+def _read_excel_records():
     workbook = load_workbook(
         EXCEL_FILE,
         read_only=True,
@@ -34,15 +67,17 @@ def _load_excel_data():
             utr = record.get("UTR_NO")
             due_date = record.get("MIRO_NET_DUE_DATE")
             
-            if utr is not None and str(utr).strip() not in ("", "-"):
+            flag = str(record.get("STATUS_FLAG") or "").strip().upper()
+            if flag in _LOCKED_STATUS_FLAGS:
+                pass
+            elif utr is not None and str(utr).strip() not in ("", "-"):
                 record["OVERALL_STATUS"] = "Paid"
             elif due_date is not None and str(due_date).strip() != "":
                 record["OVERALL_STATUS"] = "Payment Due"
-                
+
             records.append(record)
-            
-        _cached_invoices = records
-        return _cached_invoices
+
+        return records
     finally:
         workbook.close()
 

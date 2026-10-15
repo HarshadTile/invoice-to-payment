@@ -136,7 +136,12 @@ export const CHANNEL_SYNC_LABELS = {
   mfoxPortal: ['MFOX Portal', 'SAP: FBL1N'],
 };
 
-// A fixed "now" so ticket SLA breach and relative dates are deterministic across the app.
-export const APP_NOW = '2026-09-09';
+// "Today" for ticket SLA breach, overdue checks and the default search dates. It is the real
+// current date in the running app; tests keep a fixed date so fixtures stay deterministic.
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+export const APP_NOW = import.meta.env.MODE === 'test' ? '2026-09-09' : localToday();
 
 export const ASSIGNEE_ROSTER = ['MDE Invoice Team', 'Sourcing Ops Team', 'Accounts Team'];

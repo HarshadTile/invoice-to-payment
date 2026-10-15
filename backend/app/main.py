@@ -1,3 +1,6 @@
+import logging
+import os
+
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -17,11 +20,34 @@ from app.jobs.ticket_jobs import start_jobs, stop_jobs
 # `alembic upgrade head` before starting the app for the first time on a
 # fresh database, and after pulling any change that adds a migration.
 
+logger = logging.getLogger(__name__)
+
+_LOCAL_FRONTEND_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def cors_origins(environ=None) -> list[str]:
+    """Websites allowed to call this API from a browser.
+
+    CORS_ORIGINS (comma-separated) wins, then FRONTEND_URL, then the local dev frontend. A bare
+    "*" is ignored: the API uses logins, and "allow every site" would let any page use them.
+    """
+    env = os.environ if environ is None else environ
+    raw = env.get("CORS_ORIGINS") or env.get("FRONTEND_URL") or ""
+    origins = []
+    for item in raw.split(","):
+        item = item.strip().rstrip("/")
+        if item == "*":
+            logger.warning("Ignoring '*' in CORS_ORIGINS; list the frontend address(es) explicitly.")
+        elif item:
+            origins.append(item)
+    return origins or list(_LOCAL_FRONTEND_ORIGINS)
+
+
 app = FastAPI(title="M&M Invoice-to-Payment Tracker")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -3,7 +3,10 @@ import { panFor, supplierForVendorCode } from '../../utils/businessLogic';
 import { runtime } from '../../data/runtime';
 import { CHANNEL_LABEL, ROLE_MATRIX } from '../../data/constants';
 
+// Local-development shortcut only: a production build (import.meta.env.PROD) can never skip login,
+// even if VITE_DISABLE_AUTH is set by mistake.
 export const AUTH_BYPASS = import.meta.env.MODE !== 'test'
+  && !import.meta.env.PROD
   && import.meta.env.VITE_DISABLE_AUTH === 'true';
 
 /* Valid channelScope values:
