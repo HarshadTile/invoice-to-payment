@@ -59,7 +59,7 @@ export default function LoginPage() {
       if (err.status === 401) {
         setError(form.mode === 'supplier'
           ? 'Invalid vendor code.'
-          : 'Invalid EAML / Employee ID or password.');
+          : 'Invalid email or password.');
       } else {
         setError(err.message || 'Something went wrong. Please try again.');
       }
@@ -69,7 +69,7 @@ export default function LoginPage() {
   function submitInternal(e) {
     e.preventDefault();
     const fe = {};
-    if (!empId.trim()) fe.empId = 'Enter your EAML / Employee ID.';
+    if (!empId.trim()) fe.empId = 'Enter your email address.';
     if (!password) fe.password = 'Enter your password.';
     setFieldErr(fe);
     if (Object.keys(fe).length) return;

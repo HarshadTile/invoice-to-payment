@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { api } from '../api/client';
@@ -9,18 +9,35 @@ import BrandPanel from '../components/login/BrandPanel.jsx';
 import PasswordField from '../components/login/PasswordField.jsx';
 import { AlertIcon, CheckIcon } from '../components/login/icons.jsx';
 import './login.css';
+import '../components/modals/UserSetupLinkModal.css';
 
 export default function ResetPasswordPage() {
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
+  return <PasswordSetupForm key={token} token={token} />;
+}
+
+function PasswordSetupForm({ token }) {
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('idle'); // idle | busy | done
+  const [identity, setIdentity] = useState(null);
+  const [checking, setChecking] = useState(!!token);
+
+  useEffect(() => {
+    let active = true;
+    if (token) authApi.passwordLinkInfo(token).then((info) => {
+      if (active) setIdentity(info);
+    }).catch((err) => {
+      if (active) setError(err.message || 'Unable to verify this link. Please try again.');
+    }).finally(() => { if (active) setChecking(false); });
+    return () => { active = false; };
+  }, [token]);
 
   async function submit(e) {
     e.preventDefault();
@@ -31,7 +48,7 @@ export default function ResetPasswordPage() {
     try {
       await authApi.resetPassword(token, password);
       // The browser may still hold someone else's session (e.g. the admin who sent this
-      // invite). Drop it so "Go to sign in" shows the login form instead of bouncing
+      // setup link). Drop it so "Go to sign in" shows the login form instead of bouncing
       // straight into that other account's app.
       if (api.hasToken()) await dispatch(logoutThunk());
       setStatus('done');
@@ -49,10 +66,12 @@ export default function ResetPasswordPage() {
         <section className="lgn-hero-right">
           <div className="lgn-card">
             <div className="lgn-card-head">
-              <p className="lgn-kicker">Reset your password</p>
+              <p className="lgn-kicker">{identity?.linkType === 'invite' ? 'Welcome to your account' : 'Reset your password'}</p>
               <h2>Choose a new password</h2>
-              {!token && <p className="lgn-card-sub">This link is missing its reset token — open the link from your email again, or request a new one.</p>}
+              {!token && <p className="lgn-card-sub">This link is incomplete. Ask your administrator for a new password setup or reset link.</p>}
             </div>
+
+            {identity && <div className="lgn-setup-identity"><span>Sign-in email</span><strong>{identity.email}</strong><small>Use this email and your new password to sign in.</small></div>}
 
             {error && (
               <div className="lgn-alert error" role="alert"><AlertIcon /><span>{error}</span></div>
@@ -65,7 +84,7 @@ export default function ResetPasswordPage() {
                 </div>
                 <button type="button" className="lgn-submit" onClick={() => navigate('/login')}>Go to sign in</button>
               </>
-            ) : token ? (
+            ) : checking ? <p role="status">Verifying your setup link...</p> : token && identity ? (
               <form className="lgn-form" onSubmit={submit} noValidate>
                 <PasswordField
                   id="rp-password"

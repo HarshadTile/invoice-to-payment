@@ -2,7 +2,8 @@ from datetime import datetime
 from typing import Optional
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy import and_, func, or_
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError as JWTError
 from pydantic import BaseModel
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import write_audit
 from app.core.database import get_db
-from app.core.password_reset import issue_password_reset
+from app.core.password_reset import token_digest
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.user import PasswordResetToken, User
 from app.repositories.gcp_invoice import get_all_cached_invoices
@@ -89,7 +90,7 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
         write_audit(db, user, "Failed login", "account not activated yet (invite pending)")
         raise HTTPException(
             status_code=403,
-            detail="This account hasn't been activated yet. Check your email for the invite link, or ask an admin to resend it.",
+            detail="This account hasn't been activated yet. Use your password setup link, or ask an administrator for a new one.",
         )
     if user.status != "Active":
         write_audit(db, user, "Failed login", "account is deactivated")
@@ -276,14 +277,7 @@ class ForgotPasswordRequest(BaseModel):
 
 @router.post("/forgot-password")
 def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    email = request.email.strip().lower()
-    user = db.query(User).filter(User.email == email).first()
-    response = {"msg": "If that email has an account, a reset link has been sent to it."}
-    if not user or user.status != "Active":
-        return response
-    issue_password_reset(db, user, admin_initiated=False)
-    write_audit(db, user, "Requested password reset", f"({user.username}) via Forgot password")
-    return response
+    return {"msg": "Contact your administrator to request a password reset link."}
 
 
 class ResetPasswordRequest(BaseModel):
@@ -291,36 +285,72 @@ class ResetPasswordRequest(BaseModel):
     password: str
 
 
+class PasswordLinkInfoRequest(BaseModel):
+    token: str
+
+
+@router.post("/password-link-info")
+def password_link_info(request: PasswordLinkInfoRequest, response: Response, db: Session = Depends(get_db)):
+    """Reveal the sign-in identity only to the holder of a valid, unused link."""
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    record = db.query(PasswordResetToken).filter(
+        or_(PasswordResetToken.token == token_digest(request.token), and_(
+            func.length(PasswordResetToken.token) < 64, PasswordResetToken.token == request.token,
+        )),
+        PasswordResetToken.used.is_(False),
+        PasswordResetToken.expires_at > datetime.utcnow(),
+    ).first()
+    user = db.get(User, record.user_id) if record else None
+    if not user or user.status not in ("Invited", "Active"):
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired. Request a new one.")
+    return {"email": user.email, "name": user.name, "linkType": "invite" if user.status == "Invited" else "reset"}
+
+
 @router.post("/reset-password")
-def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+def reset_password(request: ResetPasswordRequest, response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
     if len(request.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
     record = db.query(PasswordResetToken).filter(
-        PasswordResetToken.token == request.token
+        or_(PasswordResetToken.token == token_digest(request.token), and_(
+            func.length(PasswordResetToken.token) < 64, PasswordResetToken.token == request.token,
+        ))
     ).first()
-    if not record or record.used or record.expires_at < datetime.utcnow():
+    if not record:
         raise HTTPException(
             status_code=400,
             detail="This reset link is invalid or has expired. Request a new one.",
         )
-    user = db.query(User).filter(User.id == record.user_id).first()
-    if not user:
+    # Lock user first (the same order as link issuance), then refresh the token.
+    user = db.query(User).filter(User.id == record.user_id).populate_existing().with_for_update().first()
+    record = db.query(PasswordResetToken).filter(PasswordResetToken.id == record.id).populate_existing().with_for_update().first()
+    if (not user or user.status not in ("Invited", "Active") or not record
+            or record.used or record.expires_at <= datetime.utcnow()):
         raise HTTPException(
             status_code=400,
             detail="This reset link is invalid or has expired. Request a new one.",
         )
 
     was_invited = user.status == "Invited"
+    claimed = db.query(PasswordResetToken).filter(
+        PasswordResetToken.id == record.id, PasswordResetToken.used.is_(False),
+        PasswordResetToken.expires_at > datetime.utcnow(),
+    ).update({"used": True}, synchronize_session=False)
+    if claimed != 1:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired. Request a new one.")
     user.password_hash = get_password_hash(request.password)
     if was_invited:
         user.status = "Active"
-    record.used = True
-    db.commit()
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.id, PasswordResetToken.used.is_(False),
+    ).update({"used": True}, synchronize_session=False)
     write_audit(
         db,
         user,
         "Activated invite" if was_invited else "Reset own password",
-        f"({user.username}) via emailed link",
+        f"({user.email}) via one-time password link",
     )
     return {"msg": "Password updated. You can now sign in with your new password."}
 

@@ -1,4 +1,7 @@
 from datetime import datetime, timedelta
+from urllib.parse import parse_qs, urlsplit
+
+from app.core.password_reset import issue_password_reset
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,7 +20,7 @@ def no_real_email(monkeypatch):
     """Every test in this file hits the real /forgot-password endpoint; never let that
     actually send mail (or depend on network/SMTP credentials being available)."""
     sent = []
-    monkeypatch.setattr("app.core.password_reset.send_email", lambda to, subject, text, html=None: sent.append((to, subject, text, html)))
+    monkeypatch.setattr("app.core.email.send_email", lambda to, subject, text, html=None: sent.append((to, subject, text, html)))
     return sent
 
 
@@ -45,13 +48,12 @@ def _cleanup(username):
     db.close()
 
 
-def _latest_token(user_id):
+def _request_link(user_id):
     db = SessionLocal()
-    row = (db.query(PasswordResetToken)
-           .filter(PasswordResetToken.user_id == user_id)
-           .order_by(PasswordResetToken.id.desc()).first())
+    result = issue_password_reset(db, db.get(User, user_id), admin_initiated=True)
+    db.commit()
     db.close()
-    return row
+    return parse_qs(urlsplit(result["setupLink"]).query)["token"][0]
 
 
 def test_forgot_password_gives_the_same_response_for_a_known_and_unknown_email(no_real_email):
@@ -65,7 +67,8 @@ def test_forgot_password_gives_the_same_response_for_a_known_and_unknown_email(n
 
     assert known.status_code == 200 == unknown.status_code
     assert known.json() == unknown.json()
-    assert len(no_real_email) == 1  # only the real account triggers an email
+    assert len(no_real_email) == 0
+    assert "administrator" in known.json()["msg"]
 
     _cleanup("reset_user_1")
 
@@ -77,8 +80,7 @@ def test_full_reset_flow_and_the_token_can_only_be_used_once(no_real_email):
     user_id, email = user.id, user.email
     db.close()
 
-    client.post("/api/v1/auth/forgot-password", json={"email": email})
-    token = _latest_token(user_id).token
+    token = _request_link(user_id)
 
     too_short = client.post("/api/v1/auth/reset-password", json={"token": token, "password": "short"})
     assert too_short.status_code == 400
@@ -125,11 +127,9 @@ def test_a_new_request_invalidates_the_previous_outstanding_token(no_real_email)
     user_id, email = user.id, user.email
     db.close()
 
-    client.post("/api/v1/auth/forgot-password", json={"email": email})
-    first_token = _latest_token(user_id).token
+    first_token = _request_link(user_id)
 
-    client.post("/api/v1/auth/forgot-password", json={"email": email})
-    second_token = _latest_token(user_id).token
+    second_token = _request_link(user_id)
     assert second_token != first_token
 
     stale = client.post("/api/v1/auth/reset-password", json={"token": first_token, "password": "Whatever1!"})

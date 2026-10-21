@@ -9,6 +9,8 @@ const initialState = {
   integrations: [],
   senderEmail: 'i2ptracker@company.com',
   twoFactorOn: false,
+  inviteLinkExpiryMinutes: 10080,
+  resetLinkExpiryMinutes: 1440,
 };
 
 const settingsSlice = createSlice({
@@ -21,6 +23,8 @@ const settingsSlice = createSlice({
       if (p.integrations) state.integrations = p.integrations;
       if (p.senderEmail != null) state.senderEmail = p.senderEmail;
       if (p.twoFactorOn != null) state.twoFactorOn = p.twoFactorOn;
+      if (p.inviteLinkExpiryMinutes != null) state.inviteLinkExpiryMinutes = p.inviteLinkExpiryMinutes;
+      if (p.resetLinkExpiryMinutes != null) state.resetLinkExpiryMinutes = p.resetLinkExpiryMinutes;
     },
     togglePermissionLocal(state, action) {
       const { role, cap } = action.payload;

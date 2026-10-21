@@ -83,6 +83,5 @@ def test_audit_table_is_readable_by_internal_users_but_never_writable_or_supplie
     assert wipe.status_code == 403
     assert len(_audit_rows()) == count  # nothing was erased
 
-    # Other tables are still writable as before (a scratch key — these tests run against
-    # the real dev database, so never overwrite a table people actually use).
-    assert client.put("/api/v1/tables/zz-test-scratch", headers=headers, json={"rows": []}).status_code == 200
+    # Unknown table keys are also protected by the configuration allowlist.
+    assert client.put("/api/v1/tables/zz-test-scratch", headers=headers, json={"rows": []}).status_code == 403

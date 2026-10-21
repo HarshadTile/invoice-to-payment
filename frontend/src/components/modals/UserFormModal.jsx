@@ -8,7 +8,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * Create or edit a real login account (app/models/user.py), via the usersApi passed in.
  * `user`: null to create, an existing user object to edit.
  *
- * No password field, ever: creating an account emails the person an invite link to set
+ * No password field: creating an account generates a shareable link to set
  * their own first password — nobody who creates or edits an account sets it for them.
  *
  * Three separate concepts, deliberately not mixed in one dropdown:
@@ -74,7 +74,7 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
         <>
           <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
           <button type="button" className="btn primary" onClick={save} disabled={busy}>
-            {busy ? 'Sending…' : editing ? 'Save Changes' : 'Send Invite'}
+            {busy ? 'Saving…' : editing ? 'Save Changes' : 'Create User & Generate Link'}
           </button>
         </>
       )}
@@ -93,7 +93,7 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
       </div>
       {!editing && (
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '-6px 0 14px' }}>
-          They sign in with this email and get a message to set their own password. No password is set here.
+          They sign in with this email. After creating the user, copy and share their one-time password setup link.
         </p>
       )}
 
@@ -147,7 +147,7 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
               <>
                 <input value="Invited — hasn't set a password yet" readOnly />
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 0' }}>
-                  Use the key icon on their row to resend the invite.
+                  Use the key icon on their row to generate a new setup link.
                 </p>
               </>
             ) : (

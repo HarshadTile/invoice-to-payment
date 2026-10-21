@@ -56,7 +56,7 @@ describe('Login flows', () => {
     await user.type(screen.getByPlaceholderText('Enter your Mahindra Email ID'), 'wrong');
     await user.type(screen.getByPlaceholderText('Enter your password'), 'wrong');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(await screen.findByText(/Invalid EAML . Employee ID or password/)).toBeInTheDocument();
+    expect(await screen.findByText(/Invalid email or password/)).toBeInTheDocument();
   });
 
   it('logs in as internal Admin (All Channels) and lands on Invoice Tracking', async () => {
@@ -397,8 +397,16 @@ describe('Internal admin - full navigation', () => {
     // Name and email only: the sign-in name comes from the email, and there's no title/department.
     fireEvent.change(inputs[0], { target: { value: 'Test User' } });
     fireEvent.change(inputs[1], { target: { value: 'test.user@example.com' } });
-    await user.click(screen.getByRole('button', { name: 'Send Invite' }));
+    await user.click(screen.getByRole('button', { name: 'Create User & Generate Link' }));
+    expect(await screen.findByText('Password setup link ready')).toBeInTheDocument();
+    expect(screen.getByLabelText('One-time setup link').value).toContain('/reset-password?token=');
+    await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(await screen.findByText('test.user@example.com')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Generate setup link for Test User' }));
+    await user.click(screen.getByRole('button', { name: 'Generate Link' }));
+    expect(await screen.findByText('Password setup link ready')).toBeInTheDocument();
+    expect(screen.getByLabelText('One-time setup link').value).toContain('test-replacement');
+    await user.click(screen.getByRole('button', { name: 'Done' }));
   });
 
   it('Settings: a user is authorized for one channel at a time', async () => {

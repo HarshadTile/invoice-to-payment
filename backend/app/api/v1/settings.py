@@ -97,6 +97,9 @@ def update_settings(
     db: Session = Depends(get_db)
 ):
     wants_matrix = payload.roleMatrix is not None
+    wants_expiry = payload.inviteLinkExpiryMinutes is not None or payload.resetLinkExpiryMinutes is not None
+    if wants_expiry and not has_capability(db, actor, "manageUsers"):
+        raise HTTPException(status_code=403, detail="You don't have permission to manage password link expiry.")
     wants_config = payload.senderEmail is not None or payload.twoFactorOn is not None
     if wants_matrix and not has_capability(db, actor, "manageRoles"):
         raise HTTPException(status_code=403, detail="You don't have permission to change roles and permissions.")
@@ -105,10 +108,26 @@ def update_settings(
 
     settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
     if not settings:
-        settings = AppSettings(id=1, two_factor=False, sender_email="i2ptracker@company.com")
+        settings = AppSettings(
+            id=1,
+            role_matrix_json=load_role_matrix(db),
+            two_factor=False,
+            sender_email="i2ptracker@company.com",
+            invite_link_expiry_minutes=10080,
+            reset_link_expiry_minutes=1440,
+        )
         db.add(settings)
 
     audit_entries = []
+    for field, attr, default in (
+        ("inviteLinkExpiryMinutes", "invite_link_expiry_minutes", 10080),
+        ("resetLinkExpiryMinutes", "reset_link_expiry_minutes", 1440),
+    ):
+        value = getattr(payload, field)
+        previous = getattr(settings, attr) or default
+        if value is not None and value != previous:
+            setattr(settings, attr, value)
+            audit_entries.append(("Changed password link expiry", f"{field}: {previous} -> {value} minutes"))
     if wants_matrix:
         current = load_role_matrix(db)
         cleaned = _validate_role_matrix(payload.roleMatrix, current)

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from app.api.v1.auth import get_current_user_token
 from app.core.audit import AUDIT_TABLE_KEY
 from app.core.database import get_db
+from app.core.password_reset import link_expiry_settings
 from app.core.permissions import has_capability, normalize_matrix
 from app.models.ticket import Ticket, TicketComment
 from app.models.settings import TableRow, AppSettings
@@ -135,12 +136,15 @@ def get_workspace_data(
     # Query Settings
     settings_db = db.query(AppSettings).filter(AppSettings.id == 1).first()
     settings_dict = {}
+    if is_internal:
+        settings_dict.update(link_expiry_settings(db))
+        settings_dict["roleMatrix"] = normalize_matrix(settings_db.role_matrix_json if settings_db else None)
     if settings_db and is_internal:
-        settings_dict = {
+        settings_dict.update({
             "roleMatrix": normalize_matrix(settings_db.role_matrix_json),
             "twoFactorOn": settings_db.two_factor,
             "senderEmail": settings_db.sender_email
-        }
+        })
     
 
     # Query Sync Log

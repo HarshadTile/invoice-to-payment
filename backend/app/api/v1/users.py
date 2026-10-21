@@ -1,9 +1,9 @@
-import logging
 import re
 import secrets
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy import func
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
@@ -11,12 +11,11 @@ from app.api.v1.auth import get_current_user_token
 from app.core.audit import write_audit
 from app.core.database import get_db
 from app.core.permissions import require_capability, require_internal_user
-from app.core.password_reset import issue_invite, issue_password_reset, notify_email_changed
+from app.core.password_reset import issue_invite, issue_password_reset
 from app.core.security import get_password_hash
 from app.models.user import PasswordResetToken, User, UserChannelAccess
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
 VALID_ROLES = ["Admin", "Invoice Team", "Approver", "Accounts", "Viewer"]
 VALID_STATUSES = ["Active", "Inactive", "Invited"]
@@ -156,16 +155,18 @@ def get_users(db: Session = Depends(get_db), _: User = Depends(require_internal_
 @router.post("/")
 def create_user(
     user_in: UserCreate,
+    response: Response,
     db: Session = Depends(get_db),
     actor: User = Depends(require_manage_users),
 ):
     _validate_role(user_in.role)
-    username = (user_in.username or "").strip().lower() or _username_from_email(db, user_in.email)
+    email = str(user_in.email).strip().lower()
+    username = (user_in.username or "").strip().lower() or _username_from_email(db, email)
     existing = db.query(User).filter(
-        (User.username == username) | (User.email == user_in.email)
+        (User.username == username) | (func.lower(User.email) == email)
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Username or email already exists.")
+        raise HTTPException(status_code=400, detail="An account with that email or login ID already exists.")
 
     requested = user_in.channels if user_in.channels is not None else (
         [user_in.channelScope] if user_in.channelScope else []
@@ -177,7 +178,7 @@ def create_user(
         username=username,
         password_hash=get_password_hash(secrets.token_urlsafe(32)),
         name=user_in.name,
-        email=user_in.email,
+        email=email,
         role=user_in.role,
         channel_scope=channel_scope,
         ticket_role=ticket_role,
@@ -187,34 +188,38 @@ def create_user(
     )
     _sync_ticket_channels(new_user, channels)
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    issue_invite(db, new_user)
+    db.flush()
+    link = issue_invite(db, new_user)
     write_audit(
         db,
         actor,
         "Invited user",
-        f"{new_user.name} ({new_user.username}), role {new_user.role}, "
+        f"{new_user.name} ({new_user.email}), role {new_user.role}, "
         f"channels {', '.join(channels) if channels else 'all'}, ticket role {ticket_role}",
     )
-    return _serialize(new_user)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return {**_serialize(new_user), **link}
 
 
 @router.patch("/{user_id}")
 def update_user(
     user_id: int,
     patch: UserUpdate,
+    response: Response,
     db: Session = Depends(get_db),
     actor: User = Depends(require_manage_users),
 ):
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).with_for_update().first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
     _validate_role(patch.role)
     _validate_status(patch.status)
+    if patch.email:
+        patch.email = str(patch.email).strip().lower()
     if patch.email and patch.email != user.email:
-        if db.query(User).filter(User.email == patch.email, User.id != user_id).first():
+        if db.query(User).filter(func.lower(User.email) == patch.email, User.id != user_id).first():
             raise HTTPException(status_code=400, detail="That email is already in use.")
 
     effective_role = patch.role if patch.role is not None else user.role
@@ -256,63 +261,47 @@ def update_user(
         changes.append(f"ticket role -> {ticket_role}")
         user.ticket_role = ticket_role
 
-    db.commit()
-    db.refresh(user)
+    db.flush()
+    link = _handle_email_change(db, user) if user.email != old_email else {}
     if changes:
         write_audit(db, actor, "Updated user", f"{user.name} ({user.username}): {', '.join(changes)}")
+    else:
+        db.commit()
     result = _serialize(user)
-    if user.email != old_email:
-        # "sent" / "failed" / None (nothing to send, e.g. an Inactive account) — lets the UI
-        # tell the admin whether the new address actually got a link.
-        result["emailLink"] = _handle_email_change(db, user, old_email)
-    return result
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return {**result, **link}
 
 
-def _handle_email_change(db: Session, user: User, old_email: str) -> Optional[str]:
-    """A link already emailed to the old address must not keep working once the account
-    moves to a new one, and the new address should immediately get a working link — which
-    also proves it's a real inbox. Never fails the edit itself: the new email is already
-    saved, and an admin can resend from the key icon if the mail doesn't go out. An Active
-    account's old address also gets a heads-up that it moved."""
+def _handle_email_change(db: Session, user: User) -> dict:
+    """Invalidate old links and return a replacement for the administrator to share."""
     db.query(PasswordResetToken).filter(
         PasswordResetToken.user_id == user.id, PasswordResetToken.used == False,  # noqa: E712
     ).update({"used": True})
-    db.commit()
     if user.status not in ("Invited", "Active"):
-        return None
-    try:
-        if user.status == "Invited":
-            issue_invite(db, user)
-        else:
-            issue_password_reset(db, user, admin_initiated=True)
-        outcome = "sent"
-    except Exception:  # noqa: BLE001 — SMTP can fail in many ways; see docstring
-        logger.exception("Couldn't email a link to the new address for user %s", user.username)
-        outcome = "failed"
-    if user.status == "Active":
-        try:
-            notify_email_changed(user, old_email)
-        except Exception:  # noqa: BLE001
-            logger.exception("Couldn't notify the old address for user %s", user.username)
-    return outcome
+        return {}
+    return issue_invite(db, user) if user.status == "Invited" else issue_password_reset(db, user, admin_initiated=True)
 
 
 @router.post("/{user_id}/reset-password")
 def reset_password(
     user_id: int,
+    response: Response,
     db: Session = Depends(get_db),
     actor: User = Depends(require_manage_users),
 ):
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).with_for_update().first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
     if user.status == "Invited":
-        issue_invite(db, user)
-        write_audit(db, actor, "Resent invite", f"{user.name} ({user.username})")
+        link = issue_invite(db, user)
+        write_audit(db, actor, "Generated setup link", f"{user.name} ({user.email})")
     else:
-        issue_password_reset(db, user, admin_initiated=True)
-        write_audit(db, actor, "Requested password reset", f"{user.name} ({user.username}) - reset link emailed")
-    return {"msg": f"A link has been emailed to {user.email}."}
+        link = issue_password_reset(db, user, admin_initiated=True)
+        write_audit(db, actor, "Generated reset link", f"{user.name} ({user.email})")
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return {"msg": "Share this one-time link privately with the user.", **link}
 
 
 @router.delete("/{user_id}")

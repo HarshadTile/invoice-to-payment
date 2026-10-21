@@ -16,3 +16,5 @@ class AppSettings(Base):
     role_matrix_json = Column(JSON)
     two_factor = Column(Boolean)
     sender_email = Column(String(191))
+    invite_link_expiry_minutes = Column(Integer, nullable=False, default=10080, server_default="10080")
+    reset_link_expiry_minutes = Column(Integer, nullable=False, default=1440, server_default="1440")

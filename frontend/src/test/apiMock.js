@@ -229,9 +229,13 @@ export function installApiMock() {
         ...body,
       };
       persistedUsers = [...persistedUsers, created];
-      return created;
+      return { ...created, setupLink: `http://localhost:5173/reset-password?token=test-invite-${created.id}`, expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), linkType: 'invite' };
     }
-    if (/^\/v1\/users\/\d+\/reset-password$/.test(path)) return { msg: 'Reset link sent.' };
+    if (/^\/v1\/users\/\d+\/reset-password$/.test(path)) {
+      const user = persistedUsers.find((u) => u.id === Number(path.split('/')[3]));
+      const invite = user?.status === 'Invited';
+      return { setupLink: 'http://localhost:5173/reset-password?token=test-replacement', expiresAt: new Date(Date.now() + (invite ? 7 * 86400000 : 1800000)).toISOString(), linkType: invite ? 'invite' : 'reset' };
+    }
     if (path === '/v1/tickets') {
       seq += 1;
       const id = 'TCK-' + seq;
