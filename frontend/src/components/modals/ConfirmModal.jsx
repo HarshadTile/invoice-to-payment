@@ -25,7 +25,7 @@ export default function ConfirmModal({ ctx }) {
     if (action?.type === 'logout') {
       await dispatch(logoutThunk());
       dispatch(pushToast('Signed out.'));
-      navigate('/login');
+      navigate(action.destination || '/login');
     }
 
     dispatch(closeModal());

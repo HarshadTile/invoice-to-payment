@@ -12,8 +12,19 @@ from app.core.audit import write_audit
 from app.core.database import get_db
 from app.core.password_reset import issue_password_reset
 from app.core.security import create_access_token, get_password_hash, verify_password
+from app.models.supplier import Supplier, SupplierSetupToken
 from app.models.user import PasswordResetToken, User
 from app.repositories.gcp_invoice import get_all_cached_invoices
+from app.services.supplier_service import (
+    GENERIC_LOGIN_ERROR,
+    build_session,
+    clear_failures,
+    is_locked,
+    is_managed_supplier_token,
+    load_active_supplier,
+    register_failure,
+    vendor_codes_of,
+)
 
 router = APIRouter()
 security = HTTPBearer()
@@ -68,6 +79,84 @@ def supplier_login(request: SupplierLoginRequest, db: Session = Depends(get_db))
             "pan": pan,
         },
     }
+
+
+class SupplierPasswordLoginRequest(BaseModel):
+    pan: str
+    password: str
+
+
+@router.post("/supplier/login-with-password")
+def supplier_login_with_password(request: SupplierPasswordLoginRequest, db: Session = Depends(get_db)):
+    """PAN + password sign-in for suppliers created on the Suppliers screen. The original
+    vendor-code login above is unchanged and keeps working alongside this one."""
+    pan = request.pan.strip().upper()
+    actor = f"Supplier {pan}"
+    supplier = db.query(Supplier).filter(Supplier.pan == pan).first()
+    if not supplier or supplier.status != "Active" or not supplier.password_hash:
+        write_audit(db, actor, "Failed login", "unknown PAN, not active, or no password set")
+        raise HTTPException(status_code=401, detail=GENERIC_LOGIN_ERROR)
+    if is_locked(supplier):
+        write_audit(db, actor, "Failed login", "PAN is locked after too many wrong attempts")
+        raise HTTPException(status_code=401, detail=GENERIC_LOGIN_ERROR)
+    if not verify_password(request.password, supplier.password_hash):
+        register_failure(db, supplier)
+        write_audit(db, actor, "Failed login", "wrong password")
+        raise HTTPException(status_code=401, detail=GENERIC_LOGIN_ERROR)
+
+    clear_failures(db, supplier)
+    session = build_session(supplier)
+    write_audit(db, actor, "Logged in", f"{supplier.name}, supplier portal")
+    return session
+
+
+def _valid_setup_record(db: Session, token: str) -> SupplierSetupToken:
+    invalid = HTTPException(
+        status_code=400,
+        detail="This link is invalid or has expired. Ask the team for a new one.",
+    )
+    record = db.query(SupplierSetupToken).filter(SupplierSetupToken.token == token).first()
+    if not record or record.used or record.expires_at < datetime.utcnow():
+        raise invalid
+    supplier = db.get(Supplier, record.supplier_id)
+    if not supplier or supplier.status != "Invited":
+        raise invalid
+    return record
+
+
+@router.get("/supplier/check-setup-link")
+def check_setup_link(token: str, db: Session = Depends(get_db)):
+    record = _valid_setup_record(db, token)
+    return {"valid": True, "name": db.get(Supplier, record.supplier_id).name}
+
+
+class SupplierSetupRequest(BaseModel):
+    token: str
+    pan: str
+    password: str
+
+
+@router.post("/supplier/complete-supplier-setup")
+def complete_supplier_setup(request: SupplierSetupRequest, db: Session = Depends(get_db)):
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    record = _valid_setup_record(db, request.token)
+    supplier = db.get(Supplier, record.supplier_id)
+    actor = f"Supplier {supplier.pan}"
+    if is_locked(supplier):
+        raise HTTPException(status_code=400, detail="Too many wrong attempts. Try again in 15 minutes.")
+    if request.pan.strip().upper() != supplier.pan:
+        register_failure(db, supplier)
+        write_audit(db, actor, "Failed setup", "PAN did not match the setup link")
+        raise HTTPException(status_code=400, detail="That PAN doesn't match this link.")
+
+    supplier.password_hash = get_password_hash(request.password)
+    supplier.status = "Active"
+    supplier.failed_attempts, supplier.locked_until = 0, None
+    record.used = True
+    db.commit()
+    write_audit(db, actor, "Completed setup", f"{supplier.name} set a password")
+    return {"msg": "Password set. You can now sign in with your PAN and password."}
 
 
 class InternalLoginRequest(BaseModel):
@@ -169,6 +258,23 @@ def get_current_user(
 ):
     """Return one canonical, server-verified identity for service-layer use."""
     auth_type = payload.get("auth_type")
+    if auth_type == "supplier" and is_managed_supplier_token(payload):
+        supplier = load_active_supplier(db, payload)
+        codes = vendor_codes_of(supplier)
+        return {
+            "auth_type": "supplier",
+            "supplier_id": supplier.id,
+            "vendor_code": codes[0] if codes else "",
+            "vendor_codes": codes,
+            "company": supplier.name or "Vendor",
+            "pan": supplier.pan,
+            "user_id": None,
+            "name": supplier.name or "Vendor",
+            "ticket_role": "SUPPLIER",
+            "channel_scope": None,
+            "allowed_channels": [],
+        }
+
     if auth_type == "supplier":
         vendor_code = str(payload.get("sub") or "").strip()
         if not vendor_code:
@@ -177,6 +283,7 @@ def get_current_user(
         company = scope.get("company") or "Vendor"
         return {
             "auth_type": "supplier",
+            "supplier_id": None,
             "vendor_code": vendor_code,
             "vendor_codes": [vendor_code],
             "company": company,
@@ -244,6 +351,16 @@ def get_ticket_user(user: dict = Depends(get_current_user)) -> dict:
 
 @router.get("/me")
 def get_me(user: dict = Depends(get_current_user)):
+    if user["auth_type"] == "supplier" and user.get("supplier_id"):
+        return {
+            "auth": {
+                "authType": "supplier",
+                "pan": user["pan"],
+                "company": user["company"],
+                "vcodes": user["vendor_codes"],
+                "vcode": user["vendor_code"],
+            }
+        }
     if user["auth_type"] == "supplier":
         return {
             "auth": {
@@ -336,7 +453,8 @@ def logout(credentials: HTTPAuthorizationCredentials | None = Depends(optional_s
         try:
             payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
             if payload.get("auth_type") == "supplier":
-                write_audit(db, f"Supplier {payload.get('sub')}", "Logged out", "supplier portal")
+                who = (payload.get("scope") or {}).get("pan") if is_managed_supplier_token(payload) else payload.get("sub")
+                write_audit(db, f"Supplier {who}", "Logged out", "supplier portal")
             else:
                 user = db.query(User).filter(User.id == int(payload.get("sub"))).first()
                 if user:

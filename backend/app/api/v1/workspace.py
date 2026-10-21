@@ -8,6 +8,7 @@ from app.api.v1.auth import get_current_user_token
 from app.core.audit import AUDIT_TABLE_KEY
 from app.core.database import get_db
 from app.core.permissions import has_capability, normalize_matrix
+from app.services.supplier_service import is_managed_supplier_token, supplier_vendor_codes_from_token
 from app.models.ticket import Ticket, TicketComment
 from app.models.settings import TableRow, AppSettings
 from app.models.sync_log import SyncLog
@@ -106,8 +107,10 @@ def get_workspace_data(
     query = db.query(Ticket).options(joinedload(Ticket.comments))
     
     if auth_type == "supplier":
-        vcode = payload.get("sub")
-        query = query.filter(Ticket.raised_by == vcode)
+        if is_managed_supplier_token(payload):
+            query = query.filter(Ticket.vendor_code.in_(supplier_vendor_codes_from_token(db, payload)))
+        else:
+            query = query.filter(Ticket.raised_by == payload.get("sub"))
     
     tickets_db = query.all()
     tickets = [_serialize_ticket(t) for t in tickets_db]

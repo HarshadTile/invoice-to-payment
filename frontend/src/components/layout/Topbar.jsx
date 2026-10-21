@@ -1,13 +1,13 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
 import { runtime } from '../../data/runtime';
 import { getFiscalYear } from '../../utils/businessLogic';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
 import { pushToast, setScopeFilter, toggleSidebar, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
 import { useScope } from '../../features/ui/scope';
-import { Bell, HelpCircle, ChevronDown, Menu } from '../common/icons.jsx';
+import { HelpCircle, ChevronDown, Menu } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
 import NotificationBell from './NotificationBell.jsx';
 
@@ -23,6 +23,7 @@ function crumbFor(pathname, params, lockedChannelLabel) {
   if (pathname.startsWith('/app/channel/')) { const c = CHANNELS.find((x) => x.key === params.key); return `Processing Channels / ${c ? c.label : ''}`; }
   if (pathname.startsWith('/app/vendor-code/') || pathname.startsWith('/supplier/vendor-code/')) return `Supplier Visibility / ${params.code || ''}`;
   if (pathname.startsWith('/app/supplier-visibility')) return 'Supplier Visibility';
+  if (pathname.startsWith('/app/suppliers')) return 'Supplier Management';
   if (pathname.startsWith('/app/logs')) return 'Logs / History';
   if (pathname.startsWith('/app/inquiry-desk')) return 'Inquiry Desk';
   if (pathname.startsWith('/supplier/home')) return 'My Invoices';
@@ -129,6 +130,61 @@ function TopbarVendorDropdown({ scope, onUpdate }) {
               </button>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SupplierVendorCodeDropdown({ codes, scope, onUpdate }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const selected = codes.length === 1 ? codes[0] : (codes.includes(scope.vcode) ? scope.vcode : '');
+  const choices = codes.length > 1 ? [{ value: '', label: 'All vendor codes' }, ...codes.map((code) => ({ value: code, label: code }))] : codes.map((code) => ({ value: code, label: code }));
+  const selectedLabel = choices.find((choice) => choice.value === selected)?.label || codes[0];
+
+  useEffect(() => {
+    const close = (event) => { if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false); };
+    const escape = (event) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', escape);
+    };
+  }, []);
+
+  function pick(value) {
+    onUpdate('vcode', value);
+    setOpen(false);
+  }
+
+  return (
+    <div className="topbar-supplier-code" ref={wrapRef}>
+      <button
+        type="button"
+        className="topbar-supplier-code-trigger"
+        aria-label="Filter supplier invoices by vendor code"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>{selectedLabel}</span><ChevronDown size={14} />
+      </button>
+      {open && (
+        <div className="topbar-supplier-code-menu" role="listbox" aria-label="Vendor codes">
+          {choices.map((choice) => (
+            <button
+              key={choice.value || 'all'}
+              type="button"
+              role="option"
+              aria-selected={selected === choice.value}
+              className={selected === choice.value ? 'selected' : ''}
+              onClick={() => pick(choice.value)}
+            >
+              {choice.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -287,10 +343,9 @@ function TopbarFiscalYearDropdown({ scope, onUpdate, defaultFY }) {
 
 export default function Topbar() {
   const dispatch = useDispatch();
-  const navigate = useNavigate();
   const location = useLocation();
   const params   = useParams();
-  const { authType, channelScope } = useSelector((s) => s.auth);
+  const { authType, channelScope, supplierVendorCodes } = useSelector((s) => s.auth);
   const sidebarCollapsed = useSelector((s) => s.ui.sidebarCollapsed);
 
   const crumb = crumbFor(location.pathname, params, authType === 'internal' && channelScope !== 'all' ? (CHANNEL_LABEL[channelScope] || channelScope) : '');
@@ -322,6 +377,9 @@ export default function Topbar() {
       <div className="topbar-right">
         {authType === 'supplier' && (
           <TopbarFiscalYearDropdown scope={scope} onUpdate={updateScope} defaultFY={getFiscalYear(new Date().toISOString())} />
+        )}
+        {authType === 'supplier' && supplierVendorCodes.length > 0 && (
+          <SupplierVendorCodeDropdown codes={supplierVendorCodes} scope={scope} onUpdate={updateScope} />
         )}
         {/* Internal users: financial year filter, shown on every page next to Channel and Vendor; defaults to the current FY */}
         {authType === 'internal' && (

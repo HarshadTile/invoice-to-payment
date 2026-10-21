@@ -39,7 +39,8 @@ def write_audit(db: Session, actor: "User | str", action: str, detail: str):
 def actor_from_token(db: Session, payload: dict) -> "User | str":
     """Who a JWT payload belongs to, for attributing an audit row to the caller."""
     if payload.get("auth_type") == "supplier":
-        return f"Supplier {payload.get('sub')}"
+        scope = payload.get("scope") or {}
+        return f"Supplier {scope.get('pan') if 'stamp' in scope else payload.get('sub')}"
     user = db.query(User).filter(User.id == int(payload.get("sub"))).first()
     return user or f"User #{payload.get('sub')}"
 
