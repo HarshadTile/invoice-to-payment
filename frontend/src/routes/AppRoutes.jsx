@@ -17,6 +17,8 @@ import InvoicesPage from '../pages/InvoicesPage.jsx';
 import SearchInvoicePage from '../pages/SearchInvoicePage.jsx';
 import ChannelPage from '../pages/ChannelPage.jsx';
 import SupplierVisibilityPage from '../pages/SupplierVisibilityPage.jsx';
+import SuppliersPage from '../pages/SuppliersPage.jsx';
+import SupplierSetupPage from '../pages/SupplierSetupPage.jsx';
 import VendorCodePage from '../pages/VendorCodePage.jsx';
 import InquiryDeskPage from '../pages/InquiryDeskPage.jsx';
 import OutputsPage from '../pages/OutputsPage.jsx';
@@ -34,9 +36,12 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to={AUTH_BYPASS ? '/app/invoices' : '/login'} replace />} />
       <Route path="/login" element={AUTH_BYPASS ? <Navigate to="/app/invoices" replace /> : <RedirectIfLoggedIn><LoginPage /></RedirectIfLoggedIn>} />
+      <Route path="/supplier/login" element={AUTH_BYPASS ? <Navigate to="/app/invoices" replace /> : <RedirectIfLoggedIn><LoginPage /></RedirectIfLoggedIn>} />
       {/* Always reachable, even mid-session — an emailed reset link shouldn't get bounced by a stale login. */}
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      {/* The link a team member shares with a new supplier; public, like reset-password. */}
+      <Route path="/supplier/setup" element={<SupplierSetupPage />} />
 
       {/* Internal / HQ side */}
       <Route element={<RequireInternal />}>
@@ -52,6 +57,9 @@ export default function AppRoutes() {
             <Route path="/app/notifications" element={<NotificationsPage />} />
           </Route>
           <Route path="/app/profile" element={<ProfilePage />} />
+          <Route element={<RequireCapability cap="manageSuppliers" />}>
+            <Route path="/app/suppliers" element={<SuppliersPage />} />
+          </Route>
 
           <Route element={<RequireHQ />}>
             <Route path="/app/supplier-visibility" element={<SupplierVisibilityPage />} />

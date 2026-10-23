@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useDispatch } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { loginThunk } from '../features/bootstrap/hydrateThunks';
 import { pushToast } from '../features/ui/uiSlice';
-import { supplierForVendorCode } from '../utils/businessLogic';
 import AppHeader from '../components/login/AppHeader.jsx';
 import BrandPanel from '../components/login/BrandPanel.jsx';
 import AuthCard from '../components/login/AuthCard.jsx';
@@ -18,8 +17,11 @@ import './login.css';
 export default function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
-  const [tab, setTab] = useState('internal');
+  const setupComplete = searchParams.get('setup') === 'complete';
+  const tab = location.pathname === '/supplier/login' || searchParams.get('account') === 'supplier' ? 'supplier' : 'internal';
   const [status, setStatus] = useState('idle'); // idle | busy | success
   const [error, setError] = useState('');
   const [fieldErr, setFieldErr] = useState({});
@@ -28,23 +30,11 @@ export default function LoginPage() {
 
   const [channelScope, setChannelScope] = useState('all');
   const [empId, setEmpId] = useState('');
-  const [vcode, setVcode] = useState('');
-  const [mobile, setMobile] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
+  const [pan, setPan] = useState(searchParams.get('pan') || '');
   const [password, setPassword] = useState('');
 
   const busy = status === 'busy';
   const done = status === 'success';
-
-  function switchTab(next) {
-    if (next === tab) return;
-    setTab(next);
-    setError('');
-    setFieldErr({});
-    setPassword('');
-    setShowPw(false);
-  }
 
   async function runLogin(form, dest) {
     setError('');
@@ -59,7 +49,9 @@ export default function LoginPage() {
       if (err.status === 401) {
         setError(form.mode === 'supplier'
           ? 'Invalid vendor code.'
-          : 'Invalid email or password.');
+          : form.mode === 'supplierPassword'
+            ? 'PAN or password is incorrect, or the account is inactive.'
+            : 'Invalid email or password.');
       } else {
         setError(err.message || 'Something went wrong. Please try again.');
       }
@@ -80,11 +72,11 @@ export default function LoginPage() {
   async function submitSupplier(e) {
     e.preventDefault();
     const fe = {};
-    if (!vcode.trim()) fe.vcode = 'Enter your vendor code.';
+    if (!pan.trim()) fe.pan = 'Enter your PAN.';
+    if (!password) fe.password = 'Enter your password.';
     setFieldErr(fe);
     if (Object.keys(fe).length) return;
-
-    runLogin({ mode: 'supplier', vcode: vcode.trim(), company: supplierForVendorCode(vcode.trim()) }, '/supplier/home');
+    runLogin({ mode: 'supplierPassword', pan: pan.trim().toUpperCase(), password }, '/supplier/home');
   }
 
 
@@ -121,6 +113,11 @@ export default function LoginPage() {
           <AlertIcon /><span>{error}</span>
         </div>
       )}
+      {setupComplete && !error && (
+        <div className="lgn-alert success" role="status">
+          <CheckIcon /><span>Your password is set. Sign in with your PAN and password.</span>
+        </div>
+      )}
       {done && (
         <div className="lgn-alert success" role="status">
           <CheckIcon /><span>Signed in — taking you to your workspace…</span>
@@ -139,9 +136,9 @@ export default function LoginPage() {
         <section className="lgn-hero-right">
           <AuthCard
             onNotify={notify}
-            subtitle={tab === 'supplier' ? 'Use your vendor code to continue.' : 'Sign in to continue.'}
+            subtitle={tab === 'supplier' ? 'Use your PAN and password to continue.' : 'Sign in to continue.'}
           >
-            <AccountTypeSelector value={tab} onChange={switchTab} />
+            <AccountTypeSelector value={tab} />
             {alerts}
 
             {tab === 'internal' ? (
@@ -166,15 +163,23 @@ export default function LoginPage() {
               <form className="lgn-form" onSubmit={submitSupplier} noValidate>
                 <div className="lgn-form-spacer supplier-code-only" aria-hidden="true" />
                 <FormField
-                  id="lgn-vcode"
-                  label="Vendor Code"
+                  id="lgn-pan"
+                  label="PAN"
                   icon={<HashIcon className="lgn-ic" />}
-                  error={fieldErr.vcode}
+                  error={fieldErr.pan}
                   type="text"
                   autoComplete="username"
-                  placeholder="Enter vendor code"
-                  value={vcode}
-                  onChange={(e) => setVcode(e.target.value)}
+                  placeholder="Enter your PAN"
+                  maxLength={10}
+                  value={pan}
+                  onChange={(e) => setPan(e.target.value.toUpperCase())}
+                />
+                <PasswordField
+                  value={password}
+                  onChange={setPassword}
+                  error={fieldErr.password}
+                  visible={showPw}
+                  onToggleVisible={() => setShowPw((v) => !v)}
                 />
                 {rememberRow}
                 <PrimaryButton loading={busy} done={done} />

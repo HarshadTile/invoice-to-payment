@@ -17,6 +17,13 @@ from app.core.database import Base, engine
 from app.models import *  # noqa: F403 - register all models in test metadata
 from app.models.settings import AppSettings, TableRow
 from app.models.sync_log import SyncLog
+from sqlalchemy import event
+
+
+@event.listens_for(engine, 'connect')
+def enable_foreign_keys(connection, _record):
+    # Match MySQL cascade behavior when tests delete a supplier with code/token rows.
+    connection.execute('PRAGMA foreign_keys=ON')
 
 Base.metadata.create_all(engine)
 

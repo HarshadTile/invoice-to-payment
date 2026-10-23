@@ -18,7 +18,7 @@ import PasswordLinkExpirySettings from '../components/PasswordLinkExpirySettings
 import { Plus, Edit, Trash, Key, Inbox, ChevronRight } from '../components/common/icons.jsx';
 
 // Mirrors ADMIN_LOCKED_CAPABILITIES on the server (app/core/permissions.py).
-const ADMIN_LOCKED = ['manageUsers', 'manageConfig', 'manageRoles'];
+const ADMIN_LOCKED = ['manageUsers', 'manageConfig', 'manageRoles', 'manageSuppliers'];
 const CAPS = [
   ['createTrace', 'Search Invoice(s)'],
   ['importExport', 'Export Data'],
@@ -26,6 +26,7 @@ const CAPS = [
   ['manageUsers', 'Manage Users'],
   ['manageRoles', 'Manage Roles & Permissions'],
   ['viewAuditLog', 'View Audit Logs'],
+  ['manageSuppliers', 'Manage Suppliers'],
 ];
 
 export default function SettingsPage() {

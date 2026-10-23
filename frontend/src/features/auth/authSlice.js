@@ -21,6 +21,7 @@ const initialState = {
   supplierQuery: null,
   supplierPAN: null,
   supplierLoginVcode: null,
+  supplierVendorCodes: [], // every vendor code this supplier may see (one for the original vendor-code login)
   currentUser: { name: 'Ravi Kulkarni', initials: 'RK', title: 'MDE Invoice Lead', dept: 'Procurement', email: 'r.kulkarni@company.com' },
 };
 
@@ -46,6 +47,7 @@ const authSlice = createSlice({
         state.supplierQuery = supplier;
         state.supplierPAN = runtime.invoices.find((invoice) => invoice.vcode === val)?.pan || panFor(supplier);
         state.supplierLoginVcode = val;
+        state.supplierVendorCodes = [val];
       } else {
         state.authType = 'internal';
         state.channelScope = CHANNEL_KEYS.has(val) ? val : 'all';
@@ -53,6 +55,7 @@ const authSlice = createSlice({
         state.supplierQuery = null;
         state.supplierPAN = null;
         state.supplierLoginVcode = null;
+        state.supplierVendorCodes = [];
       }
     },
     logout(state) {
@@ -66,6 +69,7 @@ const authSlice = createSlice({
         state.currentUser = userFromAuth(action.payload);
       }
       if (state.authType === 'supplier') {
+        state.supplierVendorCodes = action.payload.vcodes || (action.payload.vcode ? [action.payload.vcode] : []);
         state.supplierLoginVcode = state.vcode;
         state.supplierQuery = state.company;
         state.supplierPAN = state.pan;

@@ -212,6 +212,7 @@
   color: #fff;
   box-shadow: 0 1px 4px rgba(196, 18, 46, .35);
 }
+.lgn-portal-label{margin:0 0 14px;color:var(--brand);font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;}
 
 /* fields */
 .lgn-form { display: flex; flex-direction: column; gap: 12px; }
@@ -399,6 +400,8 @@
   border-radius: 50%;
   animation: lgn-spin .7s linear infinite;
 }
+.supplier-setup-progress{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:11px 13px;border:1px solid #e7e8ec;border-radius:9px;background:#f8f9fb;color:#4c5360;font-size:12.5px;font-weight:550;}
+.supplier-setup-spinner{width:16px;height:16px;flex:0 0 16px;border:2px solid #e4c5ca;border-top-color:var(--brand);border-radius:50%;animation:lgn-spin .7s linear infinite;}
 @keyframes lgn-spin { to { transform: rotate(360deg); } }
 
 /* minimal in-card legal line */

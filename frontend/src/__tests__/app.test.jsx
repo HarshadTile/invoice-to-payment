@@ -31,10 +31,10 @@ function freshStore() {
   });
 }
 
-function renderApp(store) {
+function renderApp(store, path = '/login') {
   return render(
     <Provider store={store}>
-      <MemoryRouter initialEntries={['/login']}>
+      <MemoryRouter initialEntries={[path]}>
         <AppRoutes />
         <ToastStack />
       </MemoryRouter>
@@ -82,11 +82,11 @@ describe('Login flows', () => {
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();
   });
 
-  it('logs in as a supplier (vendor code) and lands on My Invoices', async () => {
+  it('logs in as a supplier with PAN and password and lands on My Invoices', async () => {
     const user = userEvent.setup();
-    renderApp(freshStore());
-    await user.click(screen.getByRole('button', { name: 'Supplier' }));
-    await user.type(screen.getByPlaceholderText('Enter vendor code'), 'DIT00388AC');
+    renderApp(freshStore(), '/supplier/login');
+    await user.type(screen.getByPlaceholderText('Enter your PAN'), 'ABCDE1234F');
+    await user.type(screen.getByPlaceholderText('Enter your password'), 'supplier123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByText('Total Invoices')).toBeInTheDocument();
   });
@@ -665,9 +665,9 @@ describe('Supplier session', () => {
   async function loginSupplier() {
     const store = freshStore();
     const user = userEvent.setup();
-    renderApp(store);
-    await user.click(screen.getByRole('button', { name: 'Supplier' }));
-    await user.type(screen.getByPlaceholderText('Enter vendor code'), 'DIT00388AC');
+    renderApp(store, '/supplier/login');
+    await user.type(screen.getByPlaceholderText('Enter your PAN'), 'ABCDE1234F');
+    await user.type(screen.getByPlaceholderText('Enter your password'), 'supplier123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await screen.findByText('Total Invoices');
     return { store, user };
@@ -720,13 +720,13 @@ describe('Supplier session', () => {
     const user = userEvent.setup();
     render(
       <Provider store={store}>
-        <MemoryRouter initialEntries={['/login']}>
+        <MemoryRouter initialEntries={['/supplier/login']}>
           <AppRoutes />
         </MemoryRouter>
       </Provider>,
     );
-    await user.click(screen.getByRole('button', { name: 'Supplier' }));
-    await user.type(screen.getByPlaceholderText('Enter vendor code'), 'DIT00388AC');
+    await user.type(screen.getByPlaceholderText('Enter your PAN'), 'ABCDE1234F');
+    await user.type(screen.getByPlaceholderText('Enter your password'), 'supplier123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await screen.findByText('Total Invoices');
     // supplier is logged in; app-level guard should keep them off /app/* even if navigated there

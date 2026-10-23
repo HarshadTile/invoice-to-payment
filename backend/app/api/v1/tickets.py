@@ -35,7 +35,7 @@ router = APIRouter(prefix="/tickets", tags=["Tickets"])
 
 def _audit_actor(user: dict) -> str:
     if user["auth_type"] == "supplier":
-        return f"Supplier {user['vendor_code']}"
+        return f"Supplier {user['pan'] if user.get('supplier_id') else user['vendor_code']}"
     return user.get("name") or user.get("email") or f"User #{user.get('id')}"
 
 

@@ -10,9 +10,9 @@ export default function RaiseTicketModal({ ctx }) {
   const dispatch = useDispatch();
   const invoices = useSelector(selectScopedInvoices);
   const authType = useSelector((state) => state.auth.authType);
-  const supplierCode = useSelector((state) => state.auth.supplierLoginVcode);
+  const supplierCodes = useSelector((state) => state.auth.supplierVendorCodes);
   const availableInvoices = authType === 'supplier'
-    ? invoices.filter((item) => item.vcode === supplierCode)
+    ? invoices.filter((item) => supplierCodes.includes(item.vcode))
     : invoices;
   const [invoiceNo, setInvoiceNo] = useState(ctx.no || availableInvoices[0]?.no || '');
   const [category, setCategory] = useState(TICKET_CATEGORIES[0]);

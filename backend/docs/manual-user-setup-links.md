@@ -54,7 +54,7 @@ the `no-referrer` policy to prevent token-bearing URLs being sent as referrers.
 
 ## Tester checklist
 
-- Use MySQL and run `alembic upgrade head`; the expected head is `f2a94d6e8b10`.
+- Use MySQL and run `alembic upgrade head`; the expected head is `3d2f71a9c8e4`.
 - Configure your own `.env` and a reachable `FRONTEND_URL`. Do not copy another
   developer's credentials or commit `.env` or local supplier-mobile spreadsheets.
 - As an authorized administrator, create a user and verify the name, sign-in

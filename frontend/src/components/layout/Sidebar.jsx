@@ -38,7 +38,7 @@ export default function Sidebar() {
   const collapsed = useSelector((s) => s.ui.sidebarCollapsed);
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
   const isOpen = (id) => expandedNav.includes(id);
-  const logout = () => dispatch(askLogout());
+  const logout = () => dispatch(askLogout(authType === 'supplier' ? '/supplier/login' : '/login'));
   // In the icon-only rail a group's children have nowhere to show, so opening a group
   // widens the sidebar first.
   const toggleGroup = (id) => () => {
@@ -122,6 +122,9 @@ export default function Sidebar() {
           {/* Supplier Visibility and Reports — HQ only */}
           {isHQ && (
             <NavItem icon={<Building />} label="Supplier Visibility" active={isActive('/app/supplier-visibility')} onClick={() => navigate('/app/supplier-visibility')} />
+          )}
+          {perm.manageSuppliers && (
+            <NavItem icon={<Users />} label="Supplier Management" active={isActive('/app/suppliers')} onClick={() => navigate('/app/suppliers')} />
           )}
           {hasTicketAccess && (
             <>

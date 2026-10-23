@@ -85,8 +85,8 @@ describe('manual password link popup', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     show();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy invitation' })); });
-    expect(screen.getByRole('button', { name: '✓ Copied' })).toHaveClass('setup-link-copied');
+    expect(screen.getByRole('button', { name: '✓ Copied' })).toHaveClass('user-setup-link-copied');
     act(() => { vi.advanceTimersByTime(3000); });
-    expect(screen.getByRole('button', { name: 'Copy invitation' })).not.toHaveClass('setup-link-copied');
+    expect(screen.getByRole('button', { name: 'Copy invitation' })).not.toHaveClass('user-setup-link-copied');
   });
 });

@@ -18,19 +18,20 @@ from app.models.user import User
 #   manageUsers   invite, edit, deactivate and remove users
 #   manageRoles   change what each role may do (this matrix)
 #   viewAuditLog  read the audit log
-CAPABILITIES = ("importExport", "createTrace", "manageConfig", "manageUsers", "manageRoles", "viewAuditLog")
+#   manageSuppliers  create suppliers, issue their setup links, change their vendor codes and status
+CAPABILITIES = ("importExport", "createTrace", "manageConfig", "manageUsers", "manageRoles", "viewAuditLog", "manageSuppliers")
 
 DEFAULT_ROLE_MATRIX = {
-    "Admin": {"importExport": True, "createTrace": True, "manageConfig": True, "manageUsers": True, "manageRoles": True, "viewAuditLog": True},
-    "Invoice Team": {"importExport": True, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False},
-    "Approver": {"importExport": False, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False},
-    "Accounts": {"importExport": False, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False},
-    "Viewer": {"importExport": False, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False},
+    "Admin": {"importExport": True, "createTrace": True, "manageConfig": True, "manageUsers": True, "manageRoles": True, "viewAuditLog": True, "manageSuppliers": True},
+    "Invoice Team": {"importExport": True, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False, "manageSuppliers": True},
+    "Approver": {"importExport": False, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False, "manageSuppliers": False},
+    "Accounts": {"importExport": False, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False, "manageSuppliers": False},
+    "Viewer": {"importExport": False, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False, "manageSuppliers": False},
 }
 
 # Capabilities the Admin role must always keep, so a bad edit can never lock every admin
 # out of fixing it.
-ADMIN_LOCKED_CAPABILITIES = ("manageUsers", "manageConfig", "manageRoles")
+ADMIN_LOCKED_CAPABILITIES = ("manageUsers", "manageConfig", "manageRoles", "manageSuppliers")
 
 
 def normalize_matrix(matrix: dict | None) -> dict:

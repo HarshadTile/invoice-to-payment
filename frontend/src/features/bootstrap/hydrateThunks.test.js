@@ -72,3 +72,28 @@ describe('loginThunk', () => {
     expect(selectScopedInvoices(store.getState())).toHaveLength(1);
   });
 });
+
+describe('supplier sign-in', () => {
+  it('PAN + password posts to the password endpoint and keeps the allowed vendor codes', async () => {
+    const SUPPLIER_AUTH = { authType: 'supplier', pan: 'AAAPA1111A', company: 'Acme', vcodes: ['V1', 'V2'], vcode: 'V1' };
+    mockApi.post.mockResolvedValue({ token: 't', auth: SUPPLIER_AUTH });
+    mockApi.get.mockResolvedValue(BOOTSTRAP);
+    const store = makeStore();
+    await store.dispatch(loginThunk({ mode: 'supplierPassword', pan: 'AAAPA1111A', password: 'pw' }));
+    expect(mockApi.post).toHaveBeenCalledWith('/v1/auth/supplier/login-with-password', { pan: 'AAAPA1111A', password: 'pw' });
+    expect(store.getState().auth.supplierVendorCodes).toEqual(['V1', 'V2']);
+    expect(store.getState().auth.supplierPAN).toBe('AAAPA1111A');
+  });
+
+  it('the original vendor-code login still posts to its own endpoint', async () => {
+    const LEGACY_AUTH = { authType: 'supplier', vcode: 'V9', company: 'Old Way', pan: 'AAAPA1111A' };
+    mockApi.post.mockResolvedValue({ token: 't', auth: LEGACY_AUTH });
+    mockApi.get.mockResolvedValue(BOOTSTRAP);
+    const store = makeStore();
+    const form = { mode: 'supplier', vcode: 'V9', company: 'Old Way' };
+    await store.dispatch(loginThunk(form));
+    expect(mockApi.post).toHaveBeenCalledWith('/v1/auth/supplier/login', form);
+    expect(store.getState().auth.supplierVendorCodes).toEqual(['V9']);
+    expect(store.getState().auth.supplierLoginVcode).toBe('V9');
+  });
+});

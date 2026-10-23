@@ -13,7 +13,7 @@ import InvoiceProgressCard from '../../components/invoices/InvoiceProgressCard.j
 export default function SupplierHomePage() {
   const dispatch = useDispatch();
   const invoices = useSelector(selectScopedInvoices);
-  const code = useSelector((s) => s.auth.supplierLoginVcode);
+  const { supplierLoginVcode, supplierVendorCodes } = useSelector((s) => s.auth);
   const [activeKpi, setActiveKpi] = useState('total');
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -31,6 +31,8 @@ export default function SupplierHomePage() {
   const poSearch = searchParams.get('po_number') || '';
   const poItemSearch = searchParams.get('po_item') || '';
   const fySearch = scope.fy;
+  const allowedCodes = supplierVendorCodes.length ? supplierVendorCodes : (supplierLoginVcode ? [supplierLoginVcode] : []);
+  const selectedCode = allowedCodes.includes(scope.vcode) ? scope.vcode : 'all';
 
   const update = (changes, { replace = true } = {}) => {
     const next = new URLSearchParams(searchParams);
@@ -39,7 +41,7 @@ export default function SupplierHomePage() {
   };
 
   const codeInvoices = invoices.filter((i) => {
-    if (i.vcode !== code) return false;
+    if (selectedCode === 'all' ? !allowedCodes.includes(i.vcode) : i.vcode !== selectedCode) return false;
     const invoiceMatches = !invoiceSearch.trim() || i.no.toLowerCase().includes(invoiceSearch.trim().toLowerCase());
     const poMatches = !poSearch.trim() || i.po.toLowerCase().includes(poSearch.trim().toLowerCase());
     const itemMatches = !poItemSearch.trim() || String(i.poItem) === poItemSearch.trim();
@@ -57,7 +59,7 @@ export default function SupplierHomePage() {
         </div>
         {opened.length
           ? opened.map((inv, rowIndex) => <InvoiceProgressCard key={`${inv.no}-${inv.poItem}-${rowIndex}`} inv={inv} />)
-          : <div className="card"><p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>Invoice {openNo} was not found on {code}.</p></div>}
+          : <div className="card"><p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>Invoice {openNo} was not found for this vendor code.</p></div>}
       </>
     );
   }

@@ -50,9 +50,11 @@ function internalUser(loginId) {
 }
 
 function authFor(form) {
-  if (form.mode === 'supplier') {
+  if (form.mode === 'supplier' || form.mode === 'supplierPassword') {
     return {
       authType: 'supplier', channelScope: 'all', role: 'Viewer',
+      company: 'Tata Communications Ltd', pan: form.pan || 'ABCDE1234F',
+      vcode: form.vcode || 'DIT00388AC', vcodes: [form.vcode || 'DIT00388AC'],
       supplierQuery: form.company, supplierPAN: 'ABCDE1234F',
       supplierLoginVcode: form.vcode || 'DIT00388AC', currentUser: DEFAULT_USER,
     };
@@ -190,6 +192,12 @@ export function installApiMock() {
   const CREDS = { admin: 'admin123', 'admin@company.com': 'admin123', ravi: 'ravi123', 'r.kulkarni@company.com': 'ravi123', priya: 'priya123' };
 
   const post = vi.fn(async (path, body) => {
+    if (path === '/v1/auth/supplier/login-with-password') {
+      if (body.pan !== 'ABCDE1234F' || body.password !== 'supplier123') {
+        throw Object.assign(new Error('PAN or password is incorrect, or the account is inactive.'), { status: 401 });
+      }
+      return { token: 'test-supplier-token', auth: authFor({ ...body, mode: 'supplierPassword' }) };
+    }
     if (path === '/v1/auth/login' || path === '/v1/auth/supplier/login') {
       const form = body || {};
       if (form.mode !== 'supplier') {

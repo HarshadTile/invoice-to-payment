@@ -33,7 +33,7 @@ def _scoped_notifications(db: Session, user: dict):
         user,
     ).filter(Ticket.legacy_unlinked.is_(False))
     if user["auth_type"] == "supplier":
-        return query.filter(Ticket.vendor_code == user["vendor_code"])
+        return query.filter(Ticket.vendor_code.in_(user["vendor_codes"]))
     if user["ticket_role"] == "ADMIN":
         return query
     if user["ticket_role"] == "CHANNEL_LEAD":

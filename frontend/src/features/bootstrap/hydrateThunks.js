@@ -16,7 +16,9 @@ async function loadInvoices(auth, fallback) {
   // Workspace bootstrap data is retained only for the internal prototype path.
   if (import.meta.env.MODE === 'test') return fallback;
   if (auth?.authType !== 'supplier' && !USE_FASTAPI_INVOICES) return fallback;
-  const vendorCode = auth?.authType === 'supplier' ? auth.vcode : undefined;
+  // A supplier created on the Suppliers screen has a list of vendor codes and the server already
+  // limits the data to them; the original vendor-code login filters by its one code, as before.
+  const vendorCode = auth?.authType === 'supplier' && !auth.vcodes ? auth.vcode : undefined;
   return invoiceApi.listAll(vendorCode ? { vendor_code: vendorCode } : {});
 }
 
@@ -36,7 +38,11 @@ export const loadBootstrap = (auth) => async (dispatch) => {
  *  `opts.remember === false` keeps the session in sessionStorage only. */
 export const loginThunk = (form, opts = {}) => async (dispatch) => {
   let token, auth;
-  if (form.mode === 'supplier') {
+  if (form.mode === 'supplierPassword') {
+    const res = await api.post('/v1/auth/supplier/login-with-password', { pan: form.pan, password: form.password });
+    token = res.token;
+    auth = res.auth;
+  } else if (form.mode === 'supplier') {
     const res = await api.post('/v1/auth/supplier/login', form);
     token = res.token;
     auth = res.auth;
