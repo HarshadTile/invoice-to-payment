@@ -164,6 +164,7 @@ function SupplierVendorCodeDropdown({ codes, scope, onUpdate }) {
       <button
         type="button"
         className="topbar-supplier-code-trigger"
+        data-open={open}
         aria-label="Filter supplier invoices by vendor code"
         aria-haspopup="listbox"
         aria-expanded={open}

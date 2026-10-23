@@ -1,5 +1,5 @@
 import { useSelector } from 'react-redux';
-import { vendorCodesFor } from '../utils/businessLogic';
+import { useScope } from '../features/ui/scope';
 import { runtime } from '../data/runtime';
 import { CHANNEL_LABEL } from '../data/constants';
 import { Building, Mail, Shield, User } from '../components/common/icons.jsx';
@@ -13,26 +13,29 @@ const TICKET_ROLE_LABEL = {
 
 /** Profile: a banner with who you are, then cards for contact, work and access details. Read-only. */
 export default function ProfilePage() {
-  const { authType, currentUser, supplierQuery, supplierPAN, supplierLoginVcode, channelScope, role, ticketRole } = useSelector((s) => s.auth);
+  const { authType, currentUser, supplierQuery, supplierPAN, supplierVendorCodes, channelScope, role, ticketRole } = useSelector((s) => s.auth);
+  const scope = useScope();
 
   if (authType === 'supplier') {
-    const pan = runtime.invoices.find((invoice) => invoice.vcode === supplierLoginVcode)?.pan || supplierPAN || '-';
-    const codes = vendorCodesFor(supplierQuery);
+    const pan = supplierPAN || runtime.invoices.find((invoice) => invoice.vcode === supplierVendorCodes?.[0])?.pan || '-';
+    const codes = [...new Set(supplierVendorCodes || [])];
+    const selectedCode = codes.length === 1 ? codes[0] : (codes.includes(scope.vcode) ? scope.vcode : '');
+    const filterLabel = selectedCode || 'All assigned vendor codes';
     const initials = String(supplierQuery || 'S').trim().slice(0, 2).toUpperCase();
     return (
       <section className="pf-page">
-        <Banner initials={initials} name={supplierQuery} subtitle="Supplier account" chips={[{ text: `Signed in as ${supplierLoginVcode}`, tone: 'brand', mono: true }]} />
+        <Banner initials={initials} name={supplierQuery} subtitle="Supplier account" chips={[{ text: `Viewing ${filterLabel}`, tone: 'brand', mono: !!selectedCode }]} />
         <div className="pf-cards">
           <InfoCard icon={<Building />} title="Account">
-            <Row label="Signed-in Vendor Code" value={supplierLoginVcode} mono />
+            <Row label="Vendor code filter" value={filterLabel} mono={!!selectedCode} />
             <Row label="PAN" value={pan} mono />
           </InfoCard>
-          <InfoCard icon={<Shield />} title="Vendor codes" hint={`${codes.length} ${codes.length === 1 ? 'code' : 'codes'}`} wide>
-            <p className="pf-note">Codes associated with your supplier account. Invoice access is limited to your signed-in vendor code.</p>
+          <InfoCard icon={<Shield />} title="Vendor codes" hint={`${codes.length} ${codes.length === 1 ? 'code' : 'codes'}`}>
+            <p className="pf-note">These vendor codes are assigned to your supplier account. Use the vendor-code selector in the top bar to filter invoices.</p>
             <div className="pf-codes">
               {codes.map((c) => (
-                <span key={c} className={`pf-code${c === supplierLoginVcode ? ' current' : ''}`}>
-                  {c}{c === supplierLoginVcode && <i>Current login</i>}
+                <span key={c} className={`pf-code${c === selectedCode ? ' current' : ''}`}>
+                  {c}{c === selectedCode && <i>Selected</i>}
                 </span>
               ))}
             </div>

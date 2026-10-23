@@ -63,7 +63,7 @@ export default function ResetPasswordPage() {
                 <div className="lgn-alert success" role="status">
                   <CheckIcon /><span>Password updated. You can now sign in with your new password.</span>
                 </div>
-                <button type="button" className="lgn-submit" onClick={() => navigate('/login')}>Go to sign in</button>
+                <button type="button" className="lgn-submit" onClick={() => navigate('/login?account=internal')}>Go to sign in</button>
               </>
             ) : token ? (
               <form className="lgn-form" onSubmit={submit} noValidate>

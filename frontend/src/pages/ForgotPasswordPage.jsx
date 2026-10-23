@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
                 <div className="lgn-alert success" role="status">
                   <CheckIcon /><span>If that email has an account, a reset link has been sent to it. Check your inbox.</span>
                 </div>
-                <button type="button" className="lgn-submit" onClick={() => navigate('/login')}>Back to sign in</button>
+                <button type="button" className="lgn-submit" onClick={() => navigate('/login?account=internal')}>Back to sign in</button>
               </>
             ) : (
               <form className="lgn-form" onSubmit={submit} noValidate>
@@ -69,7 +69,7 @@ export default function ForgotPasswordPage() {
                 <button type="submit" className="lgn-submit" disabled={status === 'busy'}>
                   {status === 'busy' ? 'Sending…' : 'Send reset link'}
                 </button>
-                <button type="button" className="lgn-link" style={{ marginTop: 14 }} onClick={() => navigate('/login')}>
+                <button type="button" className="lgn-link" style={{ marginTop: 14 }} onClick={() => navigate('/login?account=internal')}>
                   Back to sign in
                 </button>
               </form>

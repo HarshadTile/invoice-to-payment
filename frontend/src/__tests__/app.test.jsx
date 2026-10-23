@@ -704,7 +704,7 @@ describe('Supplier session', () => {
     await user.click(screen.getAllByText('My Profile')[0]);
     expect(await screen.findByRole('heading', { name: 'Vendor codes' })).toBeInTheDocument();
     expect(screen.getAllByText('PAN', { exact: true })).toHaveLength(1);
-    expect(screen.getByText('Signed-in Vendor Code')).toBeInTheDocument();
+    expect(screen.getByText('Vendor code filter')).toBeInTheDocument();
   });
 
   it('cannot reach internal-only routes directly (route guard redirects)', async () => {

@@ -61,7 +61,8 @@ export default function SupplierSetupPage() {
       // supplier sign-in form instead of redirecting back into the staff app.
       if (api.hasToken()) await dispatch(logoutThunk());
       const params = new URLSearchParams({ mode: 'pan', pan: panValue, setup: 'complete' });
-      navigate(`/supplier/login?${params.toString()}`, { replace: true });
+      params.set('account', 'supplier');
+      navigate(`/login?${params.toString()}`, { replace: true });
     } catch (err) {
       setBusy(false);
       setPhase('');

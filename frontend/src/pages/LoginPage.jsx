@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useDispatch } from 'react-redux';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { loginThunk } from '../features/bootstrap/hydrateThunks';
 import { pushToast } from '../features/ui/uiSlice';
 import AppHeader from '../components/login/AppHeader.jsx';
@@ -17,11 +17,10 @@ import './login.css';
 export default function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  const setupComplete = searchParams.get('setup') === 'complete';
-  const tab = location.pathname === '/supplier/login' || searchParams.get('account') === 'supplier' ? 'supplier' : 'internal';
+  const tab = searchParams.get('account') === 'internal' ? 'internal' : 'supplier';
+  const setupComplete = tab === 'supplier' && searchParams.get('setup') === 'complete';
   const [status, setStatus] = useState('idle'); // idle | busy | success
   const [error, setError] = useState('');
   const [fieldErr, setFieldErr] = useState({});
@@ -82,6 +81,13 @@ export default function LoginPage() {
 
   const notify = (msg) => dispatch(pushToast(msg));
 
+  function selectAccountType(nextTab) {
+    setError('');
+    setFieldErr({});
+    setPassword('');
+    navigate(`/login?account=${nextTab}`, { replace: true });
+  }
+
   const forgotLink = (
     <button type="button" className="lgn-link" onClick={() => navigate('/forgot-password')}>
       Forgot password?
@@ -96,6 +102,7 @@ export default function LoginPage() {
       visible={showPw}
       onToggleVisible={() => setShowPw((v) => !v)}
       labelAction={forgotLink}
+      placeholder={tab === 'supplier' ? 'Enter your supplier password' : 'Enter your Mahindra password'}
     />
   );
 
@@ -136,9 +143,8 @@ export default function LoginPage() {
         <section className="lgn-hero-right">
           <AuthCard
             onNotify={notify}
-            subtitle={tab === 'supplier' ? 'Use your PAN and password to continue.' : 'Sign in to continue.'}
           >
-            <AccountTypeSelector value={tab} />
+            <AccountTypeSelector value={tab} onChange={selectAccountType} />
             {alerts}
 
             {tab === 'internal' ? (
@@ -151,7 +157,7 @@ export default function LoginPage() {
                   error={fieldErr.empId}
                   type="text"
                   autoComplete="username"
-                  placeholder="Enter your Mahindra Email ID"
+                  placeholder="name@mahindra.com"
                   value={empId}
                   onChange={(e) => setEmpId(e.target.value)}
                 />
@@ -161,7 +167,10 @@ export default function LoginPage() {
               </form>
             ) : (
               <form className="lgn-form" onSubmit={submitSupplier} noValidate>
-                <div className="lgn-form-spacer supplier-code-only" aria-hidden="true" />
+                <div className="lgn-supplier-note">
+                  <strong>Supplier portal</strong>
+                  <span>Use the PAN registered to your supplier account.</span>
+                </div>
                 <FormField
                   id="lgn-pan"
                   label="PAN"
@@ -169,7 +178,7 @@ export default function LoginPage() {
                   error={fieldErr.pan}
                   type="text"
                   autoComplete="username"
-                  placeholder="Enter your PAN"
+                  placeholder="e.g. ABCDE1234F"
                   maxLength={10}
                   value={pan}
                   onChange={(e) => setPan(e.target.value.toUpperCase())}
@@ -180,6 +189,7 @@ export default function LoginPage() {
                   error={fieldErr.password}
                   visible={showPw}
                   onToggleVisible={() => setShowPw((v) => !v)}
+                  placeholder="Enter your supplier password"
                 />
                 {rememberRow}
                 <PrimaryButton loading={busy} done={done} />

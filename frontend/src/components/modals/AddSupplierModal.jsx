@@ -36,7 +36,11 @@ export default function AddSupplierModal({ onClose, onCreated }) {
     setError('');
   }
 
-  const toggle = (code) => setCodes((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+  function toggle(code) {
+    const isSelected = codes.includes(code);
+    setCodes((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+    if (!isSelected && error === 'Tick at least one vendor code.') setError('');
+  }
   const shownResults = query.trim() ? results : [];
 
   async function create() {
@@ -110,7 +114,7 @@ export default function AddSupplierModal({ onClose, onCreated }) {
               <strong>{picked.name}</strong>
               <span className="supplier-pan">PAN <b>{picked.pan}</b></span>
             </div>
-            <button type="button" className="supplier-change" onClick={() => setPicked(null)}>Change</button>
+            <button type="button" className="supplier-change" onClick={() => { setPicked(null); setError(''); }}>Change</button>
           </div>
           <fieldset className="supplier-codes-fieldset">
             <legend className="supplier-codes-heading">Vendor code access <span>{codes.length} selected</span></legend>
