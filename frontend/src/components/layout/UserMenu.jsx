@@ -65,7 +65,7 @@ export default function UserMenu() {
             <User size={16} />Profile
           </button>
           <button type="button" role="menuitem" className="user-menu-item danger"
-            onClick={() => { setOpen(false); dispatch(askLogout(isSupplier ? '/supplier/login' : '/login')); }}>
+            onClick={() => { setOpen(false); dispatch(askLogout(`/login?account=${isSupplier ? 'supplier' : 'internal'}`)); }}>
             <LogOut size={16} />Logout
           </button>
         </div>

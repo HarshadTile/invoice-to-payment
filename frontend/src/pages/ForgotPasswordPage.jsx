@@ -18,7 +18,8 @@ export default function ForgotPasswordPage() {
               <p className="lgn-card-sub">Contact your administrator and provide your sign-in email. They can generate a one-time password reset link for you.</p>
             </div>
             <p className="modal-copy">No email is sent automatically. Open the link your administrator shares, choose a new password, then return to sign in.</p>
-            <button type="button" className="lgn-submit" onClick={() => navigate('/login')}>Back to sign in</button>
+            <button type="button" className="lgn-submit" onClick={() => navigate('/login?account=internal')}>Back to sign in</button>
+
           </div>
         </section>
       </div>

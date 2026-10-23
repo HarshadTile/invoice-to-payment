@@ -31,7 +31,7 @@ function freshStore() {
   });
 }
 
-function renderApp(store, path = '/login') {
+function renderApp(store, path = '/login?account=internal') {
   return render(
     <Provider store={store}>
       <MemoryRouter initialEntries={[path]}>
@@ -50,11 +50,23 @@ beforeEach(() => {
 });
 
 describe('Login flows', () => {
+  it('defaults to supplier sign-in and switches forms without retaining a password', async () => {
+    const user = userEvent.setup();
+    renderApp(freshStore(), '/login');
+    expect(screen.getByLabelText('PAN')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Password'), 'unsent-password');
+    await user.click(screen.getByRole('button', { name: 'Internal Team' }));
+    expect(screen.getByLabelText('Enter Email ID')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: 'Supplier', exact: true }));
+    expect(screen.getByLabelText('PAN')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toHaveValue('');
+  });
   it('rejects bad internal credentials and shows an error', async () => {
     const user = userEvent.setup();
     renderApp(freshStore());
-    await user.type(screen.getByPlaceholderText('Enter your Mahindra Email ID'), 'wrong');
-    await user.type(screen.getByPlaceholderText('Enter your password'), 'wrong');
+    await user.type(screen.getByLabelText('Enter Email ID'), 'wrong');
+    await user.type(screen.getByLabelText('Password'), 'wrong');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByText(/Invalid email or password/)).toBeInTheDocument();
   });
@@ -62,8 +74,8 @@ describe('Login flows', () => {
   it('logs in as internal Admin (All Channels) and lands on Invoice Tracking', async () => {
     const user = userEvent.setup();
     renderApp(freshStore());
-    await user.type(screen.getByPlaceholderText('Enter your Mahindra Email ID'), 'admin');
-    await user.type(screen.getByPlaceholderText('Enter your password'), 'admin123');
+    await user.type(screen.getByLabelText('Enter Email ID'), 'admin');
+    await user.type(screen.getByLabelText('Password'), 'admin123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByRole('heading', { name: 'Invoice Tracking' })).toBeInTheDocument();
     expect(screen.getAllByText(/^INV-/).length).toBeGreaterThan(0);
@@ -73,8 +85,8 @@ describe('Login flows', () => {
     const user = userEvent.setup();
     renderApp(freshStore());
     await user.selectOptions(screen.getByRole('combobox'), 'msetuSrm');
-    await user.type(screen.getByPlaceholderText('Enter your Mahindra Email ID'), 'admin');
-    await user.type(screen.getByPlaceholderText('Enter your password'), 'admin123');
+    await user.type(screen.getByLabelText('Enter Email ID'), 'admin');
+    await user.type(screen.getByLabelText('Password'), 'admin123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByRole('heading', { name: /Msetu \/ SRM Invoice Tracking/ })).toBeInTheDocument();
     expect(screen.queryByText('Vendor Status Reports')).not.toBeInTheDocument();
@@ -85,8 +97,8 @@ describe('Login flows', () => {
   it('logs in as a supplier with PAN and password and lands on My Invoices', async () => {
     const user = userEvent.setup();
     renderApp(freshStore(), '/supplier/login');
-    await user.type(screen.getByPlaceholderText('Enter your PAN'), 'ABCDE1234F');
-    await user.type(screen.getByPlaceholderText('Enter your password'), 'supplier123');
+    await user.type(screen.getByLabelText('PAN'), 'ABCDE1234F');
+    await user.type(screen.getByLabelText('Password'), 'supplier123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByText('Total Invoices')).toBeInTheDocument();
   });
@@ -97,8 +109,8 @@ describe('Internal admin - full navigation', () => {
     const store = freshStore();
     const user = userEvent.setup();
     renderApp(store);
-    await user.type(screen.getByPlaceholderText('Enter your Mahindra Email ID'), 'admin');
-    await user.type(screen.getByPlaceholderText('Enter your password'), 'admin123');
+    await user.type(screen.getByLabelText('Enter Email ID'), 'admin');
+    await user.type(screen.getByLabelText('Password'), 'admin123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await screen.findByRole('heading', { name: 'Invoice Tracking' });
     return { store, user };
@@ -621,8 +633,8 @@ describe('Internal admin - full navigation', () => {
   it('signing in with the e-mail shows the full name of the account holder', async () => {
     const user = userEvent.setup();
     renderApp(freshStore());
-    await user.type(screen.getByPlaceholderText('Enter your Mahindra Email ID'), 'r.kulkarni@company.com');
-    await user.type(screen.getByPlaceholderText('Enter your password'), 'ravi123');
+    await user.type(screen.getByLabelText('Enter Email ID'), 'r.kulkarni@company.com');
+    await user.type(screen.getByLabelText('Password'), 'ravi123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await screen.findByRole('heading', { name: 'Invoice Tracking' });
     await user.click(screen.getByRole('button', { name: 'Account menu for Ravi Kulkarni' }));
@@ -666,8 +678,8 @@ describe('Supplier session', () => {
     const store = freshStore();
     const user = userEvent.setup();
     renderApp(store, '/supplier/login');
-    await user.type(screen.getByPlaceholderText('Enter your PAN'), 'ABCDE1234F');
-    await user.type(screen.getByPlaceholderText('Enter your password'), 'supplier123');
+    await user.type(screen.getByLabelText('PAN'), 'ABCDE1234F');
+    await user.type(screen.getByLabelText('Password'), 'supplier123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await screen.findByText('Total Invoices');
     return { store, user };
@@ -712,7 +724,7 @@ describe('Supplier session', () => {
     await user.click(screen.getAllByText('My Profile')[0]);
     expect(await screen.findByRole('heading', { name: 'Vendor codes' })).toBeInTheDocument();
     expect(screen.getAllByText('PAN', { exact: true })).toHaveLength(1);
-    expect(screen.getByText('Signed-in Vendor Code')).toBeInTheDocument();
+    expect(screen.getByText('Vendor code filter')).toBeInTheDocument();
   });
 
   it('cannot reach internal-only routes directly (route guard redirects)', async () => {
@@ -725,8 +737,8 @@ describe('Supplier session', () => {
         </MemoryRouter>
       </Provider>,
     );
-    await user.type(screen.getByPlaceholderText('Enter your PAN'), 'ABCDE1234F');
-    await user.type(screen.getByPlaceholderText('Enter your password'), 'supplier123');
+    await user.type(screen.getByLabelText('PAN'), 'ABCDE1234F');
+    await user.type(screen.getByLabelText('Password'), 'supplier123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await screen.findByText('Total Invoices');
     // supplier is logged in; app-level guard should keep them off /app/* even if navigated there

@@ -59,7 +59,7 @@ describe('SupplierSetupPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /set password/i }));
 
     await waitFor(() => expect(mockAuth.completeSupplierSetup).toHaveBeenCalledWith({ token: 'abc', pan: 'AAAPA1111A', password: 'Chosen-pass1' }));
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/supplier/login?mode=pan&pan=AAAPA1111A&setup=complete', { replace: true }));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/login?mode=pan&pan=AAAPA1111A&setup=complete&account=supplier', { replace: true }));
     expect(mockThunks.loginThunk).not.toHaveBeenCalled();
   });
 });

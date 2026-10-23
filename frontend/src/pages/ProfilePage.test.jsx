@@ -4,10 +4,11 @@ import { render, screen, within } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer, { setAuthFromServer } from '../features/auth/authSlice';
+import uiReducer from '../features/ui/uiSlice';
 import ProfilePage from './ProfilePage.jsx';
 
 function renderProfile(auth) {
-  const store = configureStore({ reducer: { auth: authReducer } });
+  const store = configureStore({ reducer: { auth: authReducer, ui: uiReducer } });
   store.dispatch(setAuthFromServer(auth));
   return render(<Provider store={store}><ProfilePage /></Provider>);
 }

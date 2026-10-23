@@ -154,7 +154,7 @@
   border: 1px solid rgba(23, 24, 26, .06);
   border-radius: 14px;
   box-shadow: 0 24px 60px rgba(60, 4, 14, .26);
-  padding: 26px 28px;
+  padding: 22px 28px;
   animation: lgn-card-in .28s ease both;
 }
 @keyframes lgn-card-in {
@@ -162,7 +162,7 @@
   to   { opacity: 1; transform: none; }
 }
 
-.lgn-card-head { margin-bottom: 14px; }
+.lgn-card-head { margin-bottom: 12px; }
 .lgn-kicker {
   font-size: 11px;
   font-weight: 700;
@@ -182,7 +182,7 @@
 }
 .lgn-card-sub { font-size: 12.5px; color: #5A6270; margin: 0; }
 
-/* segmented control */
+/* Sign-in account selector */
 .lgn-seg {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -190,7 +190,7 @@
   padding: 4px;
   background: #EEEFF3;
   border-radius: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 .lgn-seg button {
   appearance: none;
@@ -212,14 +212,27 @@
   color: #fff;
   box-shadow: 0 1px 4px rgba(196, 18, 46, .35);
 }
-.lgn-portal-label{margin:0 0 14px;color:var(--brand);font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;}
 
 /* fields */
-.lgn-form { display: flex; flex-direction: column; gap: 12px; }
+.lgn-form { display: flex; flex-direction: column; gap: 10px; }
+.lgn-supplier-note {
+  box-sizing: border-box;
+  min-height: 67px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 13px;
+  color: #4B5563;
+  background: #F7F8FA;
+  border: 1px solid #E7E9EE;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.lgn-supplier-note strong { color: #293241; font-size: 12.5px; }
 /* the Supplier tab has one field fewer than Internal Team — this invisible
    spacer takes exactly one field's place so the card height never changes */
-.lgn-form-spacer { height: 67px; flex-shrink: 0; }
-.lgn-form-spacer.supplier-code-only { height: 24px; }
 .lgn-field { display: flex; flex-direction: column; gap: 6px; }
 .lgn-field label { font-size: 12.5px; font-weight: 600; color: #333A47; line-height: 1.2; }
 .lgn-label-row {
@@ -406,7 +419,7 @@
 
 /* minimal in-card legal line */
 .lgn-legal {
-  margin-top: 12px;
+  margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid #ECEDF1;
   display: flex;
@@ -441,22 +454,20 @@
 @media (min-width: 1025px) and (max-height: 820px) {
   .lgn-hdr { height: 56px; }
   .lgn-hero-right { padding: 12px clamp(20px, 3vw, 44px); }
-  .lgn-card { padding: 18px 24px; width: min(100%, 420px); }
-  .lgn-card-head { margin-bottom: 10px; }
+  .lgn-card { padding: 14px 24px; width: min(100%, 420px); }
+  .lgn-card-head { margin-bottom: 8px; }
   .lgn-kicker { margin-bottom: 4px; font-size: 10.5px; }
   .lgn-card-head h2 { font-size: 16px; line-height: 1.25; }
   .lgn-card-sub { font-size: 11.5px; }
-  .lgn-seg { margin-bottom: 10px; }
-  .lgn-seg button { padding: 8px; }
-  .lgn-form { gap: 9px; }
-  .lgn-form-spacer { height: 62px; }
-  .lgn-form-spacer.supplier-code-only { height: 18px; }
-  .lgn-field { gap: 5px; }
+  .lgn-seg { margin-bottom: 8px; }
+  .lgn-form { gap: 7px; }
+  .lgn-supplier-note { min-height: 62px; }
+  .lgn-field { gap: 4px; }
   .lgn-input input, .lgn-input select { height: 42px; }
-  .lgn-submit { height: 44px; margin-top: 2px; }
+  .lgn-submit { height: 42px; margin-top: 1px; }
   .lgn-remember { margin-top: 2px; }
   .lgn-alert { margin-bottom: 10px; }
-  .lgn-legal { margin-top: 10px; padding-top: 8px; }
+  .lgn-legal { margin-top: 7px; padding-top: 7px; }
   .lgn-hero-left { padding: clamp(24px, 3vw, 48px); }
   .lgn-eyebrow { margin-bottom: 10px; }
   .lgn-hero-title { font-size: clamp(20px, 2.3vw, 28px); margin-bottom: 10px; }
@@ -511,7 +522,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lgn-submit, .lgn-seg button, .lgn-input input, .lgn-input select { transition: none; }
+  .lgn-submit, .lgn-input input, .lgn-input select { transition: none; }
   .lgn-card { animation: none; }
   .lgn-spinner { animation-duration: 1.4s; }
 }

@@ -51,7 +51,7 @@ describe('SuppliersPage', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'B2' })); // untick B2
     await userEvent.click(screen.getByRole('button', { name: /create supplier/i }));
     await waitFor(() => expect(mockSuppliers.addSupplier).toHaveBeenCalledWith({ pan: 'BBBPB2222B', vendorCodes: ['B1'], channel: undefined }));
-    expect(await screen.findByDisplayValue('http://x/supplier/setup?token=abc')).toBeInTheDocument();
+    expect((await screen.findByLabelText('Ready-to-send supplier message')).value).toContain('http://x/supplier/setup?token=abc');
     expect(screen.getAllByText(/valid for 7 days/i).length).toBeGreaterThan(0);
   });
 

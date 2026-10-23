@@ -31,10 +31,33 @@ export default function SuppliersPage() {
 
   useEffect(() => {
     const q = search.trim();
-    const timer = setTimeout(() => {
-      suppliersApi.listSuppliers(q ? { search: q } : {}).then(setSuppliers).catch((err) => setLoadError(err.message));
-    }, q ? 250 : 0);
-    return () => clearTimeout(timer);
+    let stale = false;
+    const refresh = () => {
+      if (document.visibilityState === 'hidden') return;
+      suppliersApi.listSuppliers(q ? { search: q } : {})
+        .then((rows) => {
+          if (stale) return;
+          setSuppliers(rows);
+          setLoadError('');
+        })
+        .catch((err) => {
+          if (!stale) setLoadError(err.message);
+        });
+    };
+    const initialLoad = setTimeout(refresh, q ? 250 : 0);
+    const poll = setInterval(refresh, 15000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      stale = true;
+      clearTimeout(initialLoad);
+      clearInterval(poll);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [search]);
 
   const replace = (updated) => setSuppliers((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));

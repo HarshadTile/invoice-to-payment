@@ -1,7 +1,11 @@
-/** Compact, non-interactive label showing which portal this sign-in page is for. */
-export default function AccountTypeSelector({ value }) {
-  const label = value === 'supplier' ? 'Supplier sign in' : 'Internal Team sign in';
+/** Lets users choose the sign-in form that matches their account. */
+export default function AccountTypeSelector({ value, onChange }) {
   return (
-    <p className="lgn-portal-label">{label}</p>
+    <div className="lgn-seg" role="group" aria-label="Choose sign-in type">
+      <button type="button" aria-pressed={value === 'internal'} data-active={value === 'internal'}
+        onClick={() => onChange('internal')}>Internal Team</button>
+      <button type="button" aria-pressed={value === 'supplier'} data-active={value === 'supplier'}
+        onClick={() => onChange('supplier')}>Supplier</button>
+    </div>
   );
 }

@@ -38,7 +38,7 @@ export default function Sidebar() {
   const collapsed = useSelector((s) => s.ui.sidebarCollapsed);
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
   const isOpen = (id) => expandedNav.includes(id);
-  const logout = () => dispatch(askLogout(authType === 'supplier' ? '/supplier/login' : '/login'));
+  const logout = () => dispatch(askLogout(`/login?account=${authType === 'supplier' ? 'supplier' : 'internal'}`));
   // In the icon-only rail a group's children have nowhere to show, so opening a group
   // widens the sidebar first.
   const toggleGroup = (id) => () => {
