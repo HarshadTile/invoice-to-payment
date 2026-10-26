@@ -203,7 +203,7 @@ def test_notification_unread_count_paging_and_read_by_ticket():
     admin = _internal_headers("admin", "admin123", "all")
     created = _create_ticket(supplier, invoice_no).json()
 
-    count = client.get("/api/v1/notifications/unread-count", headers=admin)
+    count = client.get("/api/v1/notifications/unread-notification-count", headers=admin)
     assert count.status_code == 200
     assert count.json()["unread"] == len(client.get("/api/v1/notifications?unread=true", headers=admin).json()) >= 1
 

@@ -2,7 +2,7 @@
  * Builds the supplier-facing Logs: one chronological list combining
  *  - Invoice  : milestones with the real date each happened (uploaded, approved, booked)
  *  - Payment  : payment completed (with UTR) and rejected/deleted invoices (with reason)
- *  - Query    : the vendor code's own query history, from GET /v1/tickets/supplier-log
+ *  - Query    : the vendor code's own query history, from GET /v1/tickets/supplier-activity-log
  * Only things a supplier is meant to see: no internal notes, assignees or approver names.
  */
 
@@ -97,7 +97,7 @@ export function queryLogRows(entries, invoices, scoped = true) {
     .filter(Boolean);
 }
 
-/** Staff view of query activity (GET /v1/tickets/activity-log): every event on the tickets the
+/** Staff view of query activity (GET /v1/tickets/internal-activity-log): every event on the tickets the
  *  signed-in team member may see, with who did it. Limited to `invoices` when a scope is given. */
 export function staffQueryLogRows(entries, invoices, scoped = true) {
   const byNo = new Map(invoices.map((inv) => [inv.no, inv]));

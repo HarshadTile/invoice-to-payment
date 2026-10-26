@@ -31,7 +31,7 @@ export default function SupplierLogsPage() {
   const [queryError, setQueryError] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    api.get('/v1/tickets/supplier-log')
+    api.get('/v1/tickets/supplier-activity-log')
       .then((data) => { if (!cancelled) setQueryEntries(Array.isArray(data) ? data : []); })
       .catch(() => { if (!cancelled) setQueryError(true); });
     return () => { cancelled = true; };

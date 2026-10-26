@@ -607,7 +607,7 @@ describe('Internal admin - full navigation', () => {
     const queries = await within(kpis).findByRole('button', { name: /^Open Queries/ });
     await user.click(queries);
     expect(queries).toHaveAttribute('aria-pressed', 'true');
-    const { items } = await mockApi.get('/v1/tickets?include_closed=true');
+    const { items } = await mockApi.get('/v1/tickets/list-tickets?include_closed=true');
     const queriedInvoices = items.filter((ticket) => ['OPEN', 'IN_PROGRESS'].includes(ticket.status)).map((ticket) => ticket.invoice_no);
     document.querySelectorAll('.data-table tbody tr').forEach((row) => {
       const invoice = row.querySelector('td button');

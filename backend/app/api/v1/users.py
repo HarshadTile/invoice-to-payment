@@ -147,12 +147,14 @@ def _primary_scope(role: str, channels: list[str], current: Optional[str] = None
     return current if current in channels else channels[0]
 
 
-@router.get("/")
+@router.get("/", include_in_schema=False)
+@router.get("/list-users", operation_id="listUsers", summary="List internal users")
 def get_users(db: Session = Depends(get_db), _: User = Depends(require_internal_user)):
     return [_serialize(user) for user in db.query(User).order_by(User.name).all()]
 
 
-@router.post("/")
+@router.post("/", include_in_schema=False)
+@router.post("/add-user", operation_id="addUser", summary="Add an internal user")
 def create_user(
     user_in: UserCreate,
     response: Response,
@@ -202,7 +204,8 @@ def create_user(
     return {**_serialize(new_user), **link}
 
 
-@router.patch("/{user_id}")
+@router.patch("/{user_id}", include_in_schema=False)
+@router.patch("/{user_id}/update-user", operation_id="updateUser", summary="Update an internal user")
 def update_user(
     user_id: int,
     patch: UserUpdate,
@@ -283,7 +286,12 @@ def _handle_email_change(db: Session, user: User) -> dict:
     return issue_invite(db, user) if user.status == "Invited" else issue_password_reset(db, user, admin_initiated=True)
 
 
-@router.post("/{user_id}/reset-password")
+@router.post("/{user_id}/reset-password", include_in_schema=False)
+@router.post(
+    "/{user_id}/send-access-link",
+    operation_id="sendUserAccessLink",
+    summary="Generate an account setup or password reset link",
+)
 def reset_password(
     user_id: int,
     response: Response,
@@ -304,7 +312,8 @@ def reset_password(
     return {"msg": "Share this one-time link privately with the user.", **link}
 
 
-@router.delete("/{user_id}")
+@router.delete("/{user_id}", include_in_schema=False)
+@router.delete("/{user_id}/delete-user", operation_id="deleteUser", summary="Delete an internal user")
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),

@@ -25,7 +25,7 @@ async function loadInvoices(auth, fallback) {
 /** Pull the whole dataset from the API and push it into the store + runtime. */
 export const loadBootstrap = (auth) => async (dispatch) => {
   let b = { invoices: [], syncLog: [], tickets: [], ticketSeq: 0, tables: {}, settings: {} };
-  if (!AUTH_BYPASS) b = await api.get('/v1/workspace');
+  if (!AUTH_BYPASS) b = await api.get('/v1/load-workspace-data');
   const invoices = await loadInvoices(auth, b.invoices);
   setRuntimeData({ invoices, syncLog: b.syncLog });
   dispatch(bumpData()); // memoised invoice selectors must re-read the new data
