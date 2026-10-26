@@ -6,16 +6,19 @@ import { LINK_EXPIRY_OPTIONS } from '../utils/linkExpiry';
 import { Clock, Shield, CheckCircle } from './common/icons.jsx';
 import './PasswordLinkExpirySettings.css';
 
-export default function PasswordLinkExpirySettings() {
+export default function PasswordLinkExpirySettings({ accountType = 'internal' }) {
   const dispatch = useDispatch();
   const saved = useSelector((state) => state.settings);
   const [draft, setDraft] = useState({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const supplier = accountType === 'supplier';
+  const inviteField = supplier ? 'supplierInviteLinkExpiryMinutes' : 'inviteLinkExpiryMinutes';
+  const resetField = supplier ? 'supplierResetLinkExpiryMinutes' : 'resetLinkExpiryMinutes';
   const values = {
-    inviteLinkExpiryMinutes: draft.inviteLinkExpiryMinutes ?? saved.inviteLinkExpiryMinutes ?? 10080,
-    resetLinkExpiryMinutes: draft.resetLinkExpiryMinutes ?? saved.resetLinkExpiryMinutes ?? 1440,
+    [inviteField]: draft[inviteField] ?? saved[inviteField] ?? 10080,
+    [resetField]: draft[resetField] ?? saved[resetField] ?? 1440,
   };
   async function save(event) {
     event.preventDefault();
@@ -29,10 +32,10 @@ export default function PasswordLinkExpirySettings() {
     finally { setBusy(false); }
   }
   return <form onSubmit={save} className="link-expiry-settings">
-    <div className="link-expiry-heading"><span className="link-expiry-icon"><Shield size={21} /></span><div><h3>Password Link Expiry</h3><p>Set the time available to create or reset a password.</p></div><span className="link-expiry-limit"><Clock size={13} />Up to 7 days</span></div>
+    <div className="link-expiry-heading"><span className="link-expiry-icon"><Shield size={21} /></span><div><h3>Password Link Expiry</h3><p>{supplier ? 'Set the time available for suppliers to create or reset a password.' : 'Set the time available to create or reset a password.'}</p></div><span className="link-expiry-limit"><Clock size={13} />Up to 7 days</span></div>
     <div className="link-expiry-controls">
       {[
-        ['inviteLinkExpiryMinutes', 'New account setup', 'For newly invited users'], ['resetLinkExpiryMinutes', 'Password reset', 'For existing accounts'],
+        [inviteField, 'New account setup', supplier ? 'For newly invited suppliers' : 'For newly invited users'], [resetField, 'Password reset', 'For existing accounts'],
       ].map(([field, label, hint]) => <div className="link-expiry-field" key={field}>
         <label htmlFor={field}>{label}</label>
         <select id={field} aria-describedby={`${field}-hint`} value={values[field]} disabled={busy} onChange={(event) => { setDraft((prev) => ({ ...prev, [field]: Number(event.target.value) })); setMessage(''); setError(''); }}>

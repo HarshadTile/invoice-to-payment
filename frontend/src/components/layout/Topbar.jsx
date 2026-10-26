@@ -10,10 +10,11 @@ import { useScope } from '../../features/ui/scope';
 import { HelpCircle, ChevronDown, Menu } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
 import NotificationBell from './NotificationBell.jsx';
+import useEnabledChannels from '../../features/settings/useEnabledChannels';
 
 const SETTINGS_LABEL = {
   integrations: 'Integration Settings', auditLogs: 'Audit Logs',
-  users: 'Users', roles: 'Roles & Permissions',
+  users: 'User Management', suppliers: 'Supplier Management', roles: 'Roles & Permissions',
 };
 
 function crumbFor(pathname, params, lockedChannelLabel) {
@@ -23,7 +24,6 @@ function crumbFor(pathname, params, lockedChannelLabel) {
   if (pathname.startsWith('/app/channel/')) { const c = CHANNELS.find((x) => x.key === params.key); return `Processing Channels / ${c ? c.label : ''}`; }
   if (pathname.startsWith('/app/vendor-code/') || pathname.startsWith('/supplier/vendor-code/')) return `Supplier Visibility / ${params.code || ''}`;
   if (pathname.startsWith('/app/supplier-visibility')) return 'Supplier Visibility';
-  if (pathname.startsWith('/app/suppliers')) return 'Supplier Management';
   if (pathname.startsWith('/app/logs')) return 'Logs / History';
   if (pathname.startsWith('/app/inquiry-desk')) return 'Inquiry Desk';
   if (pathname.startsWith('/supplier/home')) return 'My Invoices';
@@ -200,7 +200,7 @@ function TopbarChannelDropdown({ scope, onUpdate }) {
   const currentKey        = scope.channel;
 
   // Only shown for HQ, so all channels are allowed
-  const allowedChannels = CHANNELS;
+  const allowedChannels = useEnabledChannels();
 
   const selectedLabel = currentKey ? allowedChannels.find((c) => c.key === currentKey)?.label ?? currentKey : null;
 

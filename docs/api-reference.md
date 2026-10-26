@@ -117,6 +117,25 @@ Notification list and count results are scoped to the authenticated user and the
 | PUT | `/api/v1/tables/{table_key}` | Update a supported table-backed data set. | `TableUpdate` JSON |
 | GET | `/health` | Check API process health. Does not require a user session. | None |
 
+Password link expiry is configured separately for internal users and suppliers. Internal
+fields `inviteLinkExpiryMinutes` and `resetLinkExpiryMinutes` require Manage Users.
+Supplier fields `supplierInviteLinkExpiryMinutes` and `supplierResetLinkExpiryMinutes`
+require Manage Suppliers. All four fields accept only 30, 60, 240, 720, 1440, 2880,
+4320 or 10080 minutes and are included in the workspace settings. Setup defaults to
+10080 minutes and reset to 1440 minutes. Changes affect newly issued links only.
+Supplier add, setup-link generation and password-reset responses include `setupLink`,
+`expiresAt` (UTC), `expiryMinutes` and `linkType` (`invite` or `reset`). Replacing a reset
+link keeps its reset type and applies the current supplier reset duration.
+
 ## Compatibility and schema details
+
+Portal availability is managed under Integration Settings with the `channelAvailability`
+object on `PUT /api/v1/settings` (Manage Integration Settings permission). Keys are
+`msetuSrm`, `poPortal`, and `mfoxPortal`, with strict boolean values; defaults are
+`true`, `true`, and `false`. Workspace settings include the saved values. The public
+`GET /api/v1/auth/portal-availability` endpoint returns only these flags for the login
+picker and disables caching. Disabled portals are hidden from navigation and new-user
+channel choices; internal and managed-supplier sign-ins to them return 403. Existing
+account assignments and historical invoice data are retained.
 
 Some previous route paths remain registered for older clients but are hidden from OpenAPI. New frontend and integration code should use the paths in this document. The current backend schema definitions—including exact request fields, validation rules, and response shapes—are available in Swagger UI at `/docs` and in the generated OpenAPI document at `/openapi.json`.

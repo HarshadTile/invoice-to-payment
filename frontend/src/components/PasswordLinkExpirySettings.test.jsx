@@ -32,3 +32,21 @@ it('keeps saved settings unchanged when saving fails', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save');
   expect(store.getState().settings.resetLinkExpiryMinutes).toBe(1440);
 });
+
+it('saves supplier expiry independently and hydrates it on remount', async () => {
+  api.put.mockResolvedValue({ msg: 'Settings updated' });
+  const store = configureStore({ reducer: { settings: reducer } });
+  const view = () => <Provider store={store}><PasswordLinkExpirySettings accountType="supplier" /></Provider>;
+  const first = render(view());
+  fireEvent.change(screen.getByLabelText('New account setup'), { target: { value: '2880' } });
+  fireEvent.change(screen.getByLabelText('Password reset'), { target: { value: '4320' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save expiry settings' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('expiry saved');
+  expect(api.put).toHaveBeenLastCalledWith('/v1/settings', { supplierInviteLinkExpiryMinutes: 2880, supplierResetLinkExpiryMinutes: 4320 });
+  expect(store.getState().settings.inviteLinkExpiryMinutes).toBe(10080);
+  expect(store.getState().settings.resetLinkExpiryMinutes).toBe(1440);
+  first.unmount();
+  render(view());
+  expect(screen.getByLabelText('New account setup')).toHaveValue('2880');
+  expect(screen.getByLabelText('Password reset')).toHaveValue('4320');
+});

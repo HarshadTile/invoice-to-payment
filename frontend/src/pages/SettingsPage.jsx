@@ -15,6 +15,7 @@ import UserFormModal from '../components/modals/UserFormModal.jsx';
 import ResetPasswordModal from '../components/modals/ResetPasswordModal.jsx';
 import UserSetupLinkModal from '../components/modals/UserSetupLinkModal.jsx';
 import PasswordLinkExpirySettings from '../components/PasswordLinkExpirySettings.jsx';
+import ChannelAvailabilitySettings from '../components/ChannelAvailabilitySettings.jsx';
 import { Plus, Edit, Trash, Key, Inbox, ChevronRight } from '../components/common/icons.jsx';
 
 // Mirrors ADMIN_LOCKED_CAPABILITIES on the server (app/core/permissions.py).
@@ -48,6 +49,7 @@ function IntegrationsTab() {
   const rows = useSelector((s) => s.settings.integrations);
   return (
     <div className="card">
+      <ChannelAvailabilitySettings />
       <div className="table-scroll">
         <table>
           <thead><tr><th>Platform</th><th>Status</th><th>Last Synced</th></tr></thead>

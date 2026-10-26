@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import AUDIT_TABLE_KEY, write_audit
 from app.core.database import get_db
+from app.core.channels import channel_availability
 from app.core.permissions import (
     ADMIN_LOCKED_CAPABILITIES,
     CAPABILITIES,
@@ -100,7 +101,10 @@ def update_settings(
     wants_expiry = payload.inviteLinkExpiryMinutes is not None or payload.resetLinkExpiryMinutes is not None
     if wants_expiry and not has_capability(db, actor, "manageUsers"):
         raise HTTPException(status_code=403, detail="You don't have permission to manage password link expiry.")
-    wants_config = payload.senderEmail is not None or payload.twoFactorOn is not None
+    wants_supplier_expiry = payload.supplierInviteLinkExpiryMinutes is not None or payload.supplierResetLinkExpiryMinutes is not None
+    if wants_supplier_expiry and not has_capability(db, actor, "manageSuppliers"):
+        raise HTTPException(status_code=403, detail="You don't have permission to manage supplier password link expiry.")
+    wants_config = payload.senderEmail is not None or payload.twoFactorOn is not None or payload.channelAvailability is not None
     if wants_matrix and not has_capability(db, actor, "manageRoles"):
         raise HTTPException(status_code=403, detail="You don't have permission to change roles and permissions.")
     if wants_config and not has_capability(db, actor, "manageConfig"):
@@ -115,13 +119,24 @@ def update_settings(
             sender_email="i2ptracker@company.com",
             invite_link_expiry_minutes=10080,
             reset_link_expiry_minutes=1440,
+            supplier_invite_link_expiry_minutes=10080,
+            supplier_reset_link_expiry_minutes=1440,
         )
         db.add(settings)
 
     audit_entries = []
+    if payload.channelAvailability is not None:
+        previous = channel_availability(db)
+        updated = {**previous, **payload.channelAvailability}
+        settings.channel_availability = updated
+        changes = [f"{key}: {'enabled' if value else 'disabled'}" for key, value in updated.items() if previous[key] != value]
+        if changes:
+            audit_entries.append(("Changed portal availability", "; ".join(changes)))
     for field, attr, default in (
         ("inviteLinkExpiryMinutes", "invite_link_expiry_minutes", 10080),
         ("resetLinkExpiryMinutes", "reset_link_expiry_minutes", 1440),
+        ("supplierInviteLinkExpiryMinutes", "supplier_invite_link_expiry_minutes", 10080),
+        ("supplierResetLinkExpiryMinutes", "supplier_reset_link_expiry_minutes", 1440),
     ):
         value = getattr(payload, field)
         previous = getattr(settings, attr) or default

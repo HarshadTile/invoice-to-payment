@@ -25,6 +25,8 @@ def link_expiry_settings(db: Session) -> dict:
     return {
         "inviteLinkExpiryMinutes": (settings.invite_link_expiry_minutes if settings else None) or INVITE_TOKEN_LIFETIME_MINUTES,
         "resetLinkExpiryMinutes": (settings.reset_link_expiry_minutes if settings else None) or RESET_TOKEN_LIFETIME_MINUTES,
+        "supplierInviteLinkExpiryMinutes": (settings.supplier_invite_link_expiry_minutes if settings else None) or INVITE_TOKEN_LIFETIME_MINUTES,
+        "supplierResetLinkExpiryMinutes": (settings.supplier_reset_link_expiry_minutes if settings else None) or RESET_TOKEN_LIFETIME_MINUTES,
     }
 
 

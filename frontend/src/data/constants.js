@@ -39,6 +39,7 @@ const ALL_CHANNELS = [
 
 // Channels offered in the UI: sidebar, filters, tabs, dashboards. Manual isn't one of them.
 export const CHANNELS = ALL_CHANNELS.filter((c) => c.key !== 'manual');
+export const DEFAULT_CHANNEL_AVAILABILITY = { msetuSrm: true, poPortal: true, mfoxPortal: false };
 
 export const CHANNEL_LABEL = Object.fromEntries(ALL_CHANNELS.map((c) => [c.key, c.label]));
 

@@ -236,7 +236,7 @@ def test_a_locked_account_cannot_sign_in_to_a_different_portal():
 def test_an_all_access_account_may_preview_any_single_channel():
     # Admin has channel_scope "all"; narrowing its own session to one channel is just a
     # view preference, not a widening of access, so the login form may still offer it.
-    for portal in ("msetuSrm", "poPortal", "mfoxPortal", "all"):
+    for portal in ("msetuSrm", "poPortal", "all"):
         response = anonymous.post("/api/v1/auth/login", json={
             "username": admin_username, "password": "Passw0rd!", "channelScope": portal,
         })
