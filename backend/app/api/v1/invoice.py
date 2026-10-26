@@ -50,7 +50,13 @@ def _redact_for_supplier(invoice: InvoiceResponse) -> InvoiceResponse:
     return invoice.model_copy(update={"workflow": workflow})
 
 
-@router.get("", response_model=InvoiceListResponse)
+@router.get("", response_model=InvoiceListResponse, include_in_schema=False)
+@router.get(
+    "/list-invoices",
+    response_model=InvoiceListResponse,
+    operation_id="listInvoices",
+    summary="List invoices",
+)
 def get_all_invoices(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=1000),
@@ -92,7 +98,8 @@ def get_all_invoices(
         total_pages=total_pages,
     )
 
-@router.get("/summary")
+@router.get("/summary", include_in_schema=False)
+@router.get("/invoice-summary", operation_id="getInvoiceSummary", summary="Get invoice summary")
 def get_invoice_summary(
     vendor_code: str | None = None,
     user: dict = Depends(get_current_user_token),
@@ -137,7 +144,8 @@ def get_invoice_summary(
         "byStatus": by_status
     }
 
-@router.get("/recent")
+@router.get("/recent", include_in_schema=False)
+@router.get("/recent-invoices", operation_id="listRecentInvoices", summary="List recent invoices")
 def get_recent_invoices(
     limit: int = 5,
     vendor_code: str | None = None,
@@ -158,7 +166,13 @@ def get_recent_invoices(
     invoices = invoices[:limit]
     return [_redact_for_supplier(i) for i in invoices] if supplier_codes is not None else invoices
 
-@router.get("/{invoice_number:path}", response_model=InvoiceResponse)
+@router.get("/{invoice_number:path}", response_model=InvoiceResponse, include_in_schema=False)
+@router.get(
+    "/invoice-details/{invoice_number:path}",
+    response_model=InvoiceResponse,
+    operation_id="getInvoiceDetails",
+    summary="Get invoice details",
+)
 def get_invoice_by_number(
     invoice_number: str,
     po_item: int | None = None,

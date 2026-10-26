@@ -91,10 +91,10 @@ function queryString(filters = {}) {
 }
 
 export const invoiceApi = {
-  list: (filters = {}) => request(queryString(filters)),
-  get: (invoiceNumber, poItem) => request(`/${encodeURIComponent(invoiceNumber)}${queryString({ po_item: poItem })}`),
-  summary: (filters = {}) => request(`/summary${queryString(filters)}`),
-  recent: (filters = {}) => request(`/recent${queryString(filters)}`),
+  list: (filters = {}) => request(`/list-invoices${queryString(filters)}`),
+  get: (invoiceNumber, poItem) => request(`/invoice-details/${encodeURIComponent(invoiceNumber)}${queryString({ po_item: poItem })}`),
+  summary: (filters = {}) => request(`/invoice-summary${queryString(filters)}`),
+  recent: (filters = {}) => request(`/recent-invoices${queryString(filters)}`),
   async listAll(filters = {}) {
     const pageSize = 1000;
     const first = await this.list({ ...filters, page: 1, page_size: pageSize });

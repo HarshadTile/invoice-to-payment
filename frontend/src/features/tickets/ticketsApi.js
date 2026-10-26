@@ -42,32 +42,32 @@ export const ticketsApi = createApi({
   tagTypes: ['Ticket', 'TicketList', 'Summary', 'Activity', 'Assignable'],
   endpoints: (builder) => ({
     getTickets: builder.query({
-      query: (filters = {}) => queryString(filters),
+      query: (filters = {}) => `/list-tickets${queryString(filters)}`,
       providesTags: ticketTags,
     }),
     getTicket: builder.query({
-      query: (id) => `/${id}`,
+      query: (id) => `/${id}/ticket-details`,
       providesTags: (_result, _error, id) => [{ type: 'Ticket', id }],
     }),
     getTicketSummary: builder.query({
-      query: (filters = {}) => `/summary${queryString(filters)}`,
+      query: (filters = {}) => `/ticket-summary${queryString(filters)}`,
       providesTags: [{ type: 'Summary', id: 'CURRENT' }],
     }),
     getTicketBoard: builder.query({
-      query: (filters = {}) => `/board${queryString(filters)}`,
+      query: (filters = {}) => `/ticket-board${queryString(filters)}`,
       providesTags: [{ type: 'TicketList', id: 'LIST' }],
     }),
     getTicketActivity: builder.query({
-      query: (id) => `/${id}/activity`,
+      query: (id) => `/${id}/ticket-activity`,
       providesTags: (_result, _error, id) => [{ type: 'Activity', id }],
     }),
     getAssignableUsers: builder.query({
-      query: (channel) => `/assignable-users${queryString({ channel })}`,
+      query: (channel) => `/list-assignable-users${queryString({ channel })}`,
       providesTags: (_result, _error, channel) => [{ type: 'Assignable', id: channel }],
     }),
     createTicket: builder.mutation({
       query: ({ idempotencyKey, ...body }) => ({
-        url: '',
+        url: '/create-ticket',
         method: 'POST',
         body,
         headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
@@ -76,7 +76,7 @@ export const ticketsApi = createApi({
     }),
     replyToTicket: builder.mutation({
       query: ({ id, body, visibility = 'PUBLIC', expected_version }) => ({
-        url: `/${id}/comments`,
+        url: `/${id}/add-comment`,
         method: 'POST',
         body: { body, visibility, expected_version },
       }),
@@ -84,7 +84,7 @@ export const ticketsApi = createApi({
     }),
     assignTicket: builder.mutation({
       query: ({ id, assignee_id, note, expected_version }) => ({
-        url: `/${id}/assign`,
+        url: `/${id}/assign-ticket`,
         method: 'POST',
         body: { assignee_id, note: note || null, expected_version },
       }),
@@ -92,7 +92,7 @@ export const ticketsApi = createApi({
     }),
     updateTicket: builder.mutation({
       query: ({ id, expected_version, ...body }) => ({
-        url: `/${id}`,
+        url: `/${id}/update-ticket`,
         method: 'PATCH',
         body: { ...body, expected_version },
       }),
@@ -100,7 +100,7 @@ export const ticketsApi = createApi({
     }),
     resolveTicket: builder.mutation({
       query: ({ id, resolution_note, expected_version }) => ({
-        url: `/${id}/resolve`,
+        url: `/${id}/resolve-ticket`,
         method: 'POST',
         body: { resolution_note, expected_version },
       }),
@@ -108,7 +108,7 @@ export const ticketsApi = createApi({
     }),
     closeTicket: builder.mutation({
       query: ({ id, expected_version }) => ({
-        url: `/${id}/close`,
+        url: `/${id}/close-ticket`,
         method: 'POST',
         body: { expected_version },
       }),
@@ -116,14 +116,14 @@ export const ticketsApi = createApi({
     }),
     reopenTicket: builder.mutation({
       query: ({ id, reason, expected_version }) => ({
-        url: `/${id}/reopen`,
+        url: `/${id}/reopen-ticket`,
         method: 'POST',
         body: { reason, expected_version },
       }),
       invalidatesTags: mutationTags,
     }),
     markTicketRead: builder.mutation({
-      query: (id) => ({ url: `/${id}/read`, method: 'POST' }),
+      query: (id) => ({ url: `/${id}/mark-as-read`, method: 'POST' }),
       invalidatesTags: (_result, _error, id) => [{ type: 'Ticket', id }, 'TicketList'],
     }),
     uploadAttachment: builder.mutation({
@@ -132,7 +132,7 @@ export const ticketsApi = createApi({
         body.append('file', file);
         body.append('visibility', visibility);
         body.append('expected_version', String(expected_version));
-        return { url: `/${id}/attachments`, method: 'POST', body };
+        return { url: `/${id}/upload-attachment`, method: 'POST', body };
       },
       invalidatesTags: mutationTags,
     }),

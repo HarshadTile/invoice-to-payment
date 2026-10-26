@@ -130,20 +130,20 @@ def test_new_account_is_invited_not_active_until_the_link_is_used(issued_links):
 
 def test_admin_can_update_and_delete_a_user():
     _cleanup("temp_user_1b")
-    created = as_admin.post("/api/v1/users/", json={
+    created = as_admin.post("/api/v1/users/add-user", json={
         "username": "temp_user_1b", "name": "Temp One B", "email": "temp1b@example.com",
         "role": "Approver", "channelScope": "msetuSrm",
     })
     user_id = created.json()["id"]
 
-    updated = as_admin.patch(f"/api/v1/users/{user_id}", json={"status": "Inactive", "role": "Viewer"})
+    updated = as_admin.patch(f"/api/v1/users/{user_id}/update-user", json={"status": "Inactive", "role": "Viewer"})
     assert updated.status_code == 200
     assert updated.json()["status"] == "Inactive"
     assert updated.json()["role"] == "Viewer"
 
-    deleted = as_admin.delete(f"/api/v1/users/{user_id}")
+    deleted = as_admin.delete(f"/api/v1/users/{user_id}/delete-user")
     assert deleted.status_code == 200
-    assert not any(u["id"] == user_id for u in as_admin.get("/api/v1/users/").json())
+    assert not any(u["id"] == user_id for u in as_admin.get("/api/v1/users/list-users").json())
 
 
 def test_create_rejects_unknown_role_and_duplicate_email():

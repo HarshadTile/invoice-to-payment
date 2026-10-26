@@ -54,7 +54,8 @@ def _filters(
     return locals()
 
 
-@router.get("", response_model=TicketPage)
+@router.get("", response_model=TicketPage, include_in_schema=False)
+@router.get("/list-tickets", response_model=TicketPage, operation_id="listTickets", summary="List tickets")
 def list_tickets(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -75,7 +76,8 @@ def list_tickets(
     return ticket_service.list_tickets(db, user, filters, page, page_size)
 
 
-@router.post("", response_model=TicketResponse, status_code=201)
+@router.post("", response_model=TicketResponse, status_code=201, include_in_schema=False)
+@router.post("/create-ticket", response_model=TicketResponse, status_code=201, operation_id="createTicket", summary="Create a ticket")
 def create_ticket(
     ticket_in: TicketCreate,
     idempotency_key: str | None = Header(None, alias="Idempotency-Key", max_length=128),
@@ -92,7 +94,8 @@ def create_ticket(
     return ticket
 
 
-@router.get("/summary", response_model=TicketSummaryResponse)
+@router.get("/summary", response_model=TicketSummaryResponse, include_in_schema=False)
+@router.get("/ticket-summary", response_model=TicketSummaryResponse, operation_id="getTicketSummary", summary="Get ticket summary")
 def get_summary(
     channel: str | None = None,
     priority: str | None = None,
@@ -105,7 +108,8 @@ def get_summary(
     return ticket_service.summary(db, user, {"channel": channel, "priority": priority, "vendor_code": vendor_code, "invoice_no": invoice_no, "fy": fy})
 
 
-@router.get("/board", response_model=TicketBoardResponse)
+@router.get("/board", response_model=TicketBoardResponse, include_in_schema=False)
+@router.get("/ticket-board", response_model=TicketBoardResponse, operation_id="getTicketBoard", summary="Get tickets grouped by board status")
 def get_board(
     channel: str | None = None,
     priority: str | None = None,
@@ -116,7 +120,8 @@ def get_board(
     return ticket_service.board(db, user, {"channel": channel, "priority": priority, "fy": fy})
 
 
-@router.get("/assignable-users", response_model=list[AssignableUserResponse])
+@router.get("/assignable-users", response_model=list[AssignableUserResponse], include_in_schema=False)
+@router.get("/list-assignable-users", response_model=list[AssignableUserResponse], operation_id="listAssignableUsers", summary="List users available for ticket assignment")
 def get_assignable_users(
     channel: str,
     user: dict = Depends(get_ticket_user),
@@ -125,22 +130,26 @@ def get_assignable_users(
     return ticket_service.assignable_users(db, user, channel)
 
 
-@router.get("/activity-log", response_model=list[StaffLogEntry])
+@router.get("/activity-log", response_model=list[StaffLogEntry], include_in_schema=False)
+@router.get("/internal-activity-log", response_model=list[StaffLogEntry], operation_id="getInternalTicketActivityLog", summary="Get the internal ticket activity log")
 def get_activity_log(user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
     return ticket_service.staff_activity_log(db, user)
 
 
-@router.get("/supplier-log", response_model=list[SupplierLogEntry])
+@router.get("/supplier-log", response_model=list[SupplierLogEntry], include_in_schema=False)
+@router.get("/supplier-activity-log", response_model=list[SupplierLogEntry], operation_id="getSupplierTicketActivityLog", summary="Get the supplier-visible ticket activity log")
 def get_supplier_log(user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
     return ticket_service.supplier_query_log(db, user)
 
 
-@router.get("/{ticket_id}", response_model=TicketResponse)
+@router.get("/{ticket_id}", response_model=TicketResponse, include_in_schema=False)
+@router.get("/{ticket_id}/ticket-details", response_model=TicketResponse, operation_id="getTicketDetails", summary="Get ticket details")
 def get_ticket(ticket_id: str, user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
     return ticket_service.get_ticket(db, user, ticket_id)
 
 
-@router.get("/{ticket_id}/comments", response_model=list[TicketCommentResponse])
+@router.get("/{ticket_id}/comments", response_model=list[TicketCommentResponse], include_in_schema=False)
+@router.get("/{ticket_id}/list-comments", response_model=list[TicketCommentResponse], operation_id="listTicketComments", summary="List comments on a ticket")
 def get_comments(
     ticket_id: str,
     after_id: int | None = Query(None, ge=0),
@@ -149,7 +158,8 @@ def get_comments(
 ):
     return ticket_service.get_comments(db, user, ticket_id, after_id)
 
-@router.post("/{ticket_id}/comments", response_model=TicketResponse)
+@router.post("/{ticket_id}/comments", response_model=TicketResponse, include_in_schema=False)
+@router.post("/{ticket_id}/add-comment", response_model=TicketResponse, operation_id="addTicketComment", summary="Add a comment to a ticket")
 def add_comment(
     ticket_id: str,
     comment_in: TicketCommentCreate,
@@ -166,7 +176,8 @@ def add_comment(
     return ticket
 
 
-@router.post("/{ticket_id}/assign", response_model=TicketResponse)
+@router.post("/{ticket_id}/assign", response_model=TicketResponse, include_in_schema=False)
+@router.post("/{ticket_id}/assign-ticket", response_model=TicketResponse, operation_id="assignTicket", summary="Assign a ticket")
 def assign_ticket(
     ticket_id: str,
     assign_in: TicketAssignRequest,
@@ -176,7 +187,8 @@ def assign_ticket(
     return ticket_service.assign_ticket(db, user, ticket_id, assign_in)
 
 
-@router.patch("/{ticket_id}", response_model=TicketResponse)
+@router.patch("/{ticket_id}", response_model=TicketResponse, include_in_schema=False)
+@router.patch("/{ticket_id}/update-ticket", response_model=TicketResponse, operation_id="updateTicket", summary="Update ticket fields")
 def patch_ticket(
     ticket_id: str,
     patch_in: TicketPatchRequest,
@@ -186,7 +198,8 @@ def patch_ticket(
     return ticket_service.patch_ticket(db, user, ticket_id, patch_in)
 
 
-@router.post("/{ticket_id}/resolve", response_model=TicketResponse)
+@router.post("/{ticket_id}/resolve", response_model=TicketResponse, include_in_schema=False)
+@router.post("/{ticket_id}/resolve-ticket", response_model=TicketResponse, operation_id="resolveTicket", summary="Resolve a ticket")
 def resolve_ticket(
     ticket_id: str,
     resolve_in: TicketResolveRequest,
@@ -196,7 +209,8 @@ def resolve_ticket(
     return ticket_service.resolve_ticket(db, user, ticket_id, resolve_in)
 
 
-@router.post("/{ticket_id}/close", response_model=TicketResponse)
+@router.post("/{ticket_id}/close", response_model=TicketResponse, include_in_schema=False)
+@router.post("/{ticket_id}/close-ticket", response_model=TicketResponse, operation_id="closeTicket", summary="Close a ticket")
 def close_ticket(
     ticket_id: str,
     close_in: TicketCloseRequest,
@@ -206,7 +220,8 @@ def close_ticket(
     return ticket_service.close_ticket(db, user, ticket_id, close_in)
 
 
-@router.post("/{ticket_id}/reopen", response_model=TicketResponse)
+@router.post("/{ticket_id}/reopen", response_model=TicketResponse, include_in_schema=False)
+@router.post("/{ticket_id}/reopen-ticket", response_model=TicketResponse, operation_id="reopenTicket", summary="Reopen a ticket")
 def reopen_ticket(
     ticket_id: str,
     reopen_in: TicketReopenRequest,
@@ -216,17 +231,20 @@ def reopen_ticket(
     return ticket_service.reopen_ticket(db, user, ticket_id, reopen_in)
 
 
-@router.post("/{ticket_id}/read")
+@router.post("/{ticket_id}/read", include_in_schema=False)
+@router.post("/{ticket_id}/mark-as-read", operation_id="markTicketAsRead", summary="Mark a ticket as read")
 def mark_read(ticket_id: str, user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
     return ticket_service.mark_read(db, user, ticket_id)
 
 
-@router.get("/{ticket_id}/activity", response_model=list[TicketActivityResponse])
+@router.get("/{ticket_id}/activity", response_model=list[TicketActivityResponse], include_in_schema=False)
+@router.get("/{ticket_id}/ticket-activity", response_model=list[TicketActivityResponse], operation_id="getTicketActivity", summary="Get ticket activity")
 def get_activity(ticket_id: str, user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
     return ticket_service.get_activity(db, user, ticket_id)
 
 
-@router.post("/{ticket_id}/attachments", response_model=AttachmentResponse, status_code=201)
+@router.post("/{ticket_id}/attachments", response_model=AttachmentResponse, status_code=201, include_in_schema=False)
+@router.post("/{ticket_id}/upload-attachment", response_model=AttachmentResponse, status_code=201, operation_id="uploadTicketAttachment", summary="Upload a ticket attachment")
 async def upload_attachment(
     ticket_id: str,
     file: UploadFile = File(...),
@@ -239,7 +257,8 @@ async def upload_attachment(
     return await ticket_service.upload_attachment(db, user, ticket_id, file, visibility, expected_version, comment_id)
 
 
-@router.get("/{ticket_id}/attachments/{attachment_id}")
+@router.get("/{ticket_id}/attachments/{attachment_id}", include_in_schema=False)
+@router.get("/{ticket_id}/download-attachment/{attachment_id}", operation_id="downloadTicketAttachment", summary="Download a ticket attachment")
 def download_attachment(
     ticket_id: str,
     attachment_id: int,

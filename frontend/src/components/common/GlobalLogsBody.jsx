@@ -20,7 +20,7 @@ const NO_FILTERS = { search: '', type: 'all', from: '', to: '' };
 /**
  * Logs / History for the internal team: one chronological list of what actually happened,
  * from the real data only: invoice milestones and payments (with the real dates on the
- * invoice record) and query activity (from GET /v1/tickets/activity-log, limited to the
+ * invoice record) and query activity (from GET /v1/tickets/internal-activity-log, limited to the
  * tickets this person may see), each with who did it.
  */
 export default function GlobalLogsBody({ invoiceList }) {
@@ -30,7 +30,7 @@ export default function GlobalLogsBody({ invoiceList }) {
   const [queryError, setQueryError] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    api.get('/v1/tickets/activity-log')
+    api.get('/v1/tickets/internal-activity-log')
       .then((data) => { if (!cancelled) setEntries(Array.isArray(data) ? data : []); })
       .catch(() => { if (!cancelled) setQueryError(true); });
     return () => { cancelled = true; };

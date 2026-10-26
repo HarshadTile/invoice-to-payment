@@ -144,19 +144,19 @@ export function installApiMock() {
   });
 
   const get = vi.fn(async (path) => {
-    if (path === '/v1/workspace') return bootstrap();
+    if (path === '/v1/load-workspace-data') return bootstrap();
     if (path === '/v1/auth/me') throw Object.assign(new Error('no session'), { status: 401 });
-    if (path === '/v1/users/') return persistedUsers;
+    if (path === '/v1/users/list-users') return persistedUsers;
     if (path.startsWith('/tables/')) return TABLE_SEED[path.slice('/tables/'.length)] || [];
-    if (path === '/v1/tickets/activity-log') return [];
+    if (path === '/v1/tickets/internal-activity-log' || path === '/v1/tickets/supplier-activity-log') return [];
     if (path === '/v1/ticket-permissions') return { roles: ['Admin', 'Channel Lead', 'Assignee', 'Supplier'], rows: [{ action: 'View ticket', cells: [{ text: 'Always', ifAssigned: '' }, { text: 'Always', ifAssigned: '' }, { text: '', ifAssigned: 'Always' }, { text: 'Always', ifAssigned: '' }] }] };
     if (path === '/settings') return bootstrap().settings;
-    if (path === '/v1/notifications/unread-count') return { unread: notifications.filter((n) => !n.read_at).length };
+    if (path === '/v1/notifications/unread-notification-count') return { unread: notifications.filter((n) => !n.read_at).length };
     if (path.startsWith('/v1/notifications')) {
       const limit = Number(new URLSearchParams(path.split('?')[1] || '').get('limit')) || 100;
       return notifications.slice(0, limit).map((n) => ({ ...n }));
     }
-    if (path.startsWith('/v1/tickets/summary')) {
+    if (path.startsWith('/v1/tickets/ticket-summary')) {
       const rows = persistedTickets.map(normalizeTicket);
       return {
         open: rows.filter((item) => item.status === 'OPEN').length,
@@ -165,19 +165,28 @@ export function installApiMock() {
         resolved_closed: rows.filter((item) => ['RESOLVED', 'CLOSED'].includes(item.status)).length,
       };
     }
-    if (path.startsWith('/v1/tickets/board')) {
+    if (path.startsWith('/v1/tickets/ticket-board')) {
       const groups = { open: [], in_progress: [], resolved: [], closed: [] };
       persistedTickets.map(normalizeTicket).forEach((item) => groups[item.status.toLowerCase()].push(item));
       return groups;
     }
-    if (path.startsWith('/v1/tickets/assignable-users')) return [{ id: 1, name: 'Priya Deshmukh', role: 'ASSIGNEE' }];
-    if (path.endsWith('/activity')) {
+    if (path.startsWith('/v1/tickets/list-assignable-users')) return [{ id: 1, name: 'Priya Deshmukh', role: 'ASSIGNEE' }];
+    if (path.startsWith('/v1/tickets/list-tickets')) {
+      const items = persistedTickets.map(normalizeTicket);
+      return { items, page: 1, page_size: 100, total: items.length };
+    }
+    if (/^\/v1\/tickets\/[^/]+\/list-comments(?:\?|$)/.test(path)) {
+      const ticket = persistedTickets.find((item) => item.id === path.split('/')[3]);
+      return ticket?.comments || [];
+    }
+    if (path.endsWith('/ticket-activity')) {
       const id = path.split('/')[3];
       const ticket = persistedTickets.find((item) => item.id === id);
       return (ticket?.activity || []).map((item, index) => ({ id: index + 1, event: 'UPDATED', actor_id: 1, meta: {}, created_at: item.created_at || '2026-09-09T10:00:00' }));
     }
     if (path.startsWith('/v1/tickets/')) {
-      const id = path.split('?')[0].split('/').pop();
+      const parts = path.split('?')[0].split('/');
+      const id = parts.at(-1) === 'ticket-details' ? parts[3] : parts.at(-1);
       const t = persistedTickets.find(x => x.id === id);
       if (!t) throw Object.assign(new Error('Not found'), { status: 404 });
       return normalizeTicket(t);
@@ -209,25 +218,25 @@ export function installApiMock() {
       return { token: 'test-token', auth: authFor(form) };
     }
     if (path === '/v1/auth/logout') return { ok: true };
-    if (path === '/v1/notifications/read-all') {
+    if (path === '/v1/notifications/mark-all-as-read') {
       notifications.forEach((n) => { n.read_at = n.read_at || new Date().toISOString(); });
       return { read: true };
     }
     {
-      const one = path.match(/^\/v1\/notifications\/(\d+)\/read$/);
+      const one = path.match(/^\/v1\/notifications\/(\d+)\/mark-as-read$/);
       if (one) {
         const item = notifications.find((n) => n.id === Number(one[1]));
         if (item) item.read_at = item.read_at || new Date().toISOString();
         return { read: true };
       }
-      const byTicket = path.match(/^\/v1\/notifications\/ticket\/([^/]+)\/read$/);
+      const byTicket = path.match(/^\/v1\/notifications\/ticket\/([^/]+)\/mark-notifications-as-read$/);
       if (byTicket) {
         const rows = notifications.filter((n) => n.ticket_id === byTicket[1] && !n.read_at);
         rows.forEach((n) => { n.read_at = new Date().toISOString(); });
         return { read: rows.length };
       }
     }
-    if (path === '/v1/users/') {
+    if (path === '/v1/users/add-user') {
       const created = {
         id: Math.max(...persistedUsers.map((item) => item.id), 0) + 1,
         status: 'Invited',
@@ -239,12 +248,12 @@ export function installApiMock() {
       persistedUsers = [...persistedUsers, created];
       return { ...created, setupLink: `http://localhost:5173/reset-password?token=test-invite-${created.id}`, expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), linkType: 'invite' };
     }
-    if (/^\/v1\/users\/\d+\/reset-password$/.test(path)) {
+    if (/^\/v1\/users\/\d+\/send-access-link$/.test(path)) {
       const user = persistedUsers.find((u) => u.id === Number(path.split('/')[3]));
       const invite = user?.status === 'Invited';
       return { setupLink: 'http://localhost:5173/reset-password?token=test-replacement', expiresAt: new Date(Date.now() + (invite ? 7 * 86400000 : 1800000)).toISOString(), linkType: invite ? 'invite' : 'reset' };
     }
-    if (path === '/v1/tickets') {
+    if (path === '/v1/tickets/create-ticket') {
       seq += 1;
       const id = 'TCK-' + seq;
       const newTicket = {
@@ -258,7 +267,7 @@ export function installApiMock() {
       persistedTickets.unshift(newTicket);
       return normalizeTicket(newTicket);
     }
-    if (path.includes('/comments')) {
+    if (path.includes('/add-comment')) {
       const ticketId = path.split('/')[3];
       const t = persistedTickets.find(x => x.id === ticketId);
       if (t) {
@@ -267,14 +276,14 @@ export function installApiMock() {
       }
       return normalizeTicket(t);
     }
-    if (path.endsWith('/read')) return { read: true };
-    if (path.endsWith('/assign') || path.endsWith('/resolve') || path.endsWith('/close') || path.endsWith('/reopen')) {
+    if (path.endsWith('/mark-as-read')) return { read: true };
+    if (path.endsWith('/assign-ticket') || path.endsWith('/resolve-ticket') || path.endsWith('/close-ticket') || path.endsWith('/reopen-ticket')) {
       const ticketId = path.split('/')[3];
       const t = persistedTickets.find((item) => item.id === ticketId);
-      if (path.endsWith('/assign')) { t.status = 'In Progress'; t.assignee = 'Priya Deshmukh'; }
-      if (path.endsWith('/resolve')) t.status = 'Resolved';
-      if (path.endsWith('/close')) t.status = 'Closed';
-      if (path.endsWith('/reopen')) t.status = 'In Progress';
+      if (path.endsWith('/assign-ticket')) { t.status = 'In Progress'; t.assignee = 'Priya Deshmukh'; }
+      if (path.endsWith('/resolve-ticket')) t.status = 'Resolved';
+      if (path.endsWith('/close-ticket')) t.status = 'Closed';
+      if (path.endsWith('/reopen-ticket')) t.status = 'In Progress';
       t.row_version += 1;
       return normalizeTicket(t);
     }
@@ -282,8 +291,8 @@ export function installApiMock() {
   });
 
   const patch = vi.fn(async (path, body) => {
-    if (/^\/v1\/users\/\d+$/.test(path)) {
-      const id = Number(path.split('/').pop());
+    if (/^\/v1\/users\/\d+\/update-user$/.test(path)) {
+      const id = Number(path.split('/')[3]);
       let updated;
       persistedUsers = persistedUsers.map((item) => {
         if (item.id !== id) return item;
@@ -306,7 +315,7 @@ export function installApiMock() {
   });
   const put = vi.fn(async (_path, body) => (body && body.rows ? body.rows : {}));
   const remove = vi.fn(async (path) => {
-    const id = Number(path.split('/').pop());
+    const id = Number(path.split('/')[3]);
     persistedUsers = persistedUsers.filter((item) => item.id !== id);
     return { msg: 'User removed.' };
   });

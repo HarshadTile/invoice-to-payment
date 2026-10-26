@@ -54,15 +54,15 @@ export const notificationsApi = createApi({
   tagTypes: ['Notification'],
   endpoints: (builder) => ({
     getNotifications: builder.query({
-      query: ({ limit = 50 }) => ({ url: `?limit=${limit}` }),
+      query: ({ limit = 50 }) => ({ url: `/list-notifications?limit=${limit}` }),
       providesTags: [{ type: 'Notification', id: 'LIST' }],
     }),
     getUnreadCount: builder.query({
-      query: () => ({ url: '/unread-count' }),
+      query: () => ({ url: '/unread-notification-count' }),
       providesTags: [{ type: 'Notification', id: 'COUNT' }],
     }),
     markNotificationRead: builder.mutation({
-      query: ({ id }) => ({ url: `/${id}/read`, method: 'POST' }),
+      query: ({ id }) => ({ url: `/${id}/mark-as-read`, method: 'POST' }),
       async onQueryStarted({ id, identity }, { dispatch, getState, queryFulfilled }) {
         const wasUnread = isCachedUnread(getState(), identity, id);
         const undo = patchCaches(dispatch, getState, identity, (list) => {
@@ -74,7 +74,7 @@ export const notificationsApi = createApi({
       invalidatesTags: [{ type: 'Notification', id: 'COUNT' }],
     }),
     markAllNotificationsRead: builder.mutation({
-      query: () => ({ url: '/read-all', method: 'POST' }),
+      query: () => ({ url: '/mark-all-as-read', method: 'POST' }),
       async onQueryStarted({ identity }, { dispatch, getState, queryFulfilled }) {
         const readAt = nowIso();
         const undo = patchCaches(dispatch, getState, identity, (list) => {
@@ -87,7 +87,7 @@ export const notificationsApi = createApi({
     }),
     // Opening a query clears this person's notifications about it.
     markTicketNotificationsRead: builder.mutation({
-      query: ({ ticketId }) => ({ url: `/ticket/${ticketId}/read`, method: 'POST' }),
+      query: ({ ticketId }) => ({ url: `/ticket/${ticketId}/mark-notifications-as-read`, method: 'POST' }),
       invalidatesTags: [{ type: 'Notification', id: 'LIST' }, { type: 'Notification', id: 'COUNT' }],
     }),
   }),

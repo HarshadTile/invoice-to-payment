@@ -17,10 +17,7 @@ from app.models.user import User
 from app.schemas.sync_log import SyncLogResponse
 from collections import defaultdict
 
-router = APIRouter(
-    prefix="/workspace",
-    tags=["Workspace"],
-)
+router = APIRouter(tags=["Workspace"])
 
 
 def _serialize_comment(c: TicketComment) -> dict:
@@ -96,7 +93,12 @@ def _serialize_ticket(t: Ticket) -> dict:
     }
 
 
-@router.get("")
+@router.get("/workspace", include_in_schema=False)
+@router.get(
+    "/load-workspace-data",
+    operation_id="loadWorkspaceData",
+    summary="Load workspace data",
+)
 def get_workspace_data(
     payload: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db)

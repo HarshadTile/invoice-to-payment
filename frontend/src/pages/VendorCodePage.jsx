@@ -33,7 +33,7 @@ export default function VendorCodePage() {
     Promise.all(Array.from({ length: pages - 1 }, (_, index) => {
       const next = new URLSearchParams(params);
       next.set('page', String(index + 2));
-      return api.get(`/v1/tickets?${next}`);
+      return api.get(`/v1/tickets/list-tickets?${next}`);
     })).then((results) => {
       if (!cancelled) setExtraTickets({ source: ticketPage, items: results.flatMap((page) => page.items) });
     }).catch(() => {
