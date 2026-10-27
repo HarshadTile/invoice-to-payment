@@ -27,7 +27,7 @@ export default function Bootstrapper({ children }) {
 
   if (!ready) {
     return (
-      <div style={{ padding: 48, textAlign: 'center', color: '#667', font: '15px system-ui' }}>
+      <div style={{ padding: '3rem', textAlign: 'center', color: '#667', font: '0.9375em system-ui' }}>
         Loading…
       </div>
     );

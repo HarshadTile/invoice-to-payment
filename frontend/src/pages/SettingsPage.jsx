@@ -58,7 +58,7 @@ function IntegrationsTab() {
               <tr key={i}><td>{r[0]}</td><td><Badge tone={r[1] === 'Connected' ? 'green' : 'red'}>{r[1]}</Badge></td><td>{r[2]}</td></tr>
             ))}
             {!rows.length && (
-              <tr><td colSpan={3} style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)' }}>No integration status data available.</td></tr>
+              <tr><td colSpan={3} style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)' }}>No integration status data available.</td></tr>
             )}
           </tbody>
         </table>
@@ -145,7 +145,7 @@ function UsersTab() {
       {loadError && <div className="form-error" role="alert">Couldn't load users: {loadError}</div>}
 
       {users === null && !loadError ? (
-        <p style={{ color: 'var(--text-muted)', fontSize: 13, padding: '20px 0' }}>Loading users…</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', padding: '1.25rem 0' }}>Loading users…</p>
       ) : (
         <div className="table-scroll">
           <table className="data-table">
@@ -248,8 +248,8 @@ function RolesTab() {
   return (
     <>
       <div className="card">
-        <h3 style={{ margin: '0 0 4px' }}>Application roles</h3>
-        <p className="card-hint" style={{ margin: '0 0 12px' }}>
+        <h3 style={{ margin: '0 0 0.25rem' }}>Application roles</h3>
+        <p className="card-hint" style={{ margin: '0 0 0.75rem' }}>
           What each role can do in the app. Changes apply immediately, are checked by the server and are recorded in the audit log.
         </p>
         <div className="table-scroll">

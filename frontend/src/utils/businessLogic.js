@@ -245,6 +245,12 @@ export function ticketBreached(t) {
 }
 
 /* ===================== CSV export ===================== */
+export function timestampedExportName(prefix, date = new Date()) {
+  const pad = (value) => String(value).padStart(2, '0');
+  const timestamp = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}`;
+  return `${prefix}_${timestamp}`;
+}
+
 export function downloadCSV(filename, cols, rows) {
   const csv = [cols.join(',')].concat(
     rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')),

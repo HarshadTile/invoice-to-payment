@@ -39,34 +39,34 @@ export default function InvoiceFilterBar({
   ];
 
   return (
-    <div className="card" style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
-        <div style={{ flex: '1 1 190px', minWidth: 0 }}>
+    <div className="card" style={{ marginBottom: '0.875rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.625rem', alignItems: 'flex-end' }}>
+        <div style={{ flex: '1 1 11.875em', minWidth: '0rem' }}>
           <Dropdown label="Status" ariaLabel="Filter by status" value={status} options={statusOptions} onChange={onStatusChange} />
         </div>
 
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 160px' }}>
-          <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date From</span>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.1875rem', flex: '1 1 10em' }}>
+          <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date From</span>
           <input type="date" className="search-box" style={{ width: '100%' }} value={dateFrom} max={dateTo || undefined}
             onChange={(e) => onDateFrom(e.target.value)} />
         </label>
 
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 160px' }}>
-          <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date To</span>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.1875rem', flex: '1 1 10em' }}>
+          <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date To</span>
           <input type="date" className="search-box" style={{ width: '100%' }} value={dateTo} min={dateFrom || undefined}
             onChange={(e) => onDateTo(e.target.value)} />
         </label>
 
-        <div style={{ display: 'flex', gap: 8, flex: '0 0 auto' }}>
-          <button type="button" className="btn" style={{ height: 38, whiteSpace: 'nowrap' }}
+        <div style={{ display: 'flex', gap: '0.5rem', flex: '0 0 auto' }}>
+          <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap' }}
             title="Back to the default view: last 90 days" onClick={onLast90Days}>&#8634; Last 90 days</button>
-          <button type="button" className="btn" style={{ height: 38, whiteSpace: 'nowrap' }}
+          <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap' }}
             title="Remove the date limit" onClick={onAllDates}>All dates</button>
-          <button type="button" className="btn" style={{ height: 38, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}
             title="Remove all filters" onClick={onClear}><X size={14} />Clear</button>
         </div>
       </div>
-      <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '10px 0 0' }}>
+      <p style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', margin: '0.625rem 0 0' }}>
         {resultCount.toLocaleString()} invoice{resultCount === 1 ? '' : 's'} &middot; {rangeLabel}
         {extra}
       </p>

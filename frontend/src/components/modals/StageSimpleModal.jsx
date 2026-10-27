@@ -34,11 +34,11 @@ export default function StageSimpleModal({ ctx }) {
         </div>
       )}
     >
-      <div style={{ textAlign: 'center', padding: '6px 0 14px' }}>
-        <div style={{ fontSize: 11.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700 }}>{CHANNEL_LABEL[inv.channel]}</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginTop: 8, lineHeight: 1.4 }}>{currentStageName(inv)}</div>
-        <div style={{ marginTop: 12 }}><Badge tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge></div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>Handled by <b>{h.approver}</b> · {h.approverEmail}</div>
+      <div style={{ textAlign: 'center', padding: '0.375rem 0 0.875rem' }}>
+        <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700 }}>{CHANNEL_LABEL[inv.channel]}</div>
+        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', marginTop: '0.5rem', lineHeight: 1.4 }}>{currentStageName(inv)}</div>
+        <div style={{ marginTop: '0.75rem' }}><Badge tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge></div>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.625rem' }}>Handled by <b>{h.approver}</b> · {h.approverEmail}</div>
       </div>
     </ModalShell>
   );

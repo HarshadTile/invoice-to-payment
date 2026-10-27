@@ -3,6 +3,7 @@ import { useDispatch } from 'react-redux';
 import { CHANNEL_LABEL } from '../../data/constants';
 import { openModal } from '../../features/ui/uiSlice';
 import { api } from '../../api/client';
+import { timestampedExportName } from '../../utils/businessLogic';
 import {
   filterLogRows, formatDay, formatDayTime, invoiceLogRows, withUniqueKeys, logRowsToCsv, staffQueryLogRows,
 } from '../../utils/supplierLog';
@@ -55,7 +56,7 @@ export default function GlobalLogsBody({ invoiceList }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'activity-log.csv';
+    link.download = `${timestampedExportName('Logs')}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -67,7 +68,7 @@ export default function GlobalLogsBody({ invoiceList }) {
         onClear={() => { setFilters(NO_FILTERS); setPage(1); }} onExport={exportCsv} exportCount={rows.length}
       />
       {queryError && (
-        <p style={{ color: 'var(--text-muted)', fontSize: 12.5, margin: '0 0 10px' }}>Query activity couldn't be loaded right now. Invoice and payment activity is shown below.</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.78125rem', margin: '0 0 0.625rem' }}>Query activity couldn't be loaded right now. Invoice and payment activity is shown below.</p>
       )}
       <div className="table-scroll">
         <table>
@@ -76,7 +77,7 @@ export default function GlobalLogsBody({ invoiceList }) {
           </thead>
           <tbody>
             {pageRows.length === 0 && (
-              <tr><td colSpan={8} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>
+              <tr><td colSpan={8} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem' }}>
                 {filtersActive ? 'No log entries match your filters.' : 'No activity yet.'}
               </td></tr>
             )}

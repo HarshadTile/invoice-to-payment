@@ -4,7 +4,7 @@ const TONE_BY_STATUS = { Completed: 'green', 'In Progress': 'blue', Failed: 'red
 const DOT_BG = { Failed: 'var(--red)', Completed: 'var(--green)' };
 
 export default function Timeline({ events }) {
-  if (!events.length) return <p style={{ color: 'var(--text-muted)', fontSize: 12.5, margin: '6px 0' }}>No history yet.</p>;
+  if (!events.length) return <p style={{ color: 'var(--text-muted)', fontSize: '0.78125rem', margin: '0.375rem 0' }}>No history yet.</p>;
   return (
     <div>
       {events.map((ev, i) => (
@@ -16,14 +16,14 @@ export default function Timeline({ events }) {
             {i < events.length - 1 && <div className="timeline-line" />}
           </div>
           <div className="timeline-body">
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{ev.date}</div>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)' }}>{ev.event}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 1 }}>{ev.stage}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+            <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>{ev.date}</div>
+            <div style={{ fontSize: '0.78125rem', fontWeight: 600, color: 'var(--text)' }}>{ev.event}</div>
+            <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', marginTop: '0.0625rem' }}>{ev.stage}</div>
+            <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginTop: '0.125rem' }}>
               Handled by <b>{ev.person}</b>{ev.role ? ` · ${ev.role}` : ''}{' '}
               <Badge tone={TONE_BY_STATUS[ev.status] || 'gray'}>{ev.status}</Badge>
             </div>
-            {ev.remarks && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 3, fontStyle: 'italic' }}>{ev.remarks}</div>}
+            {ev.remarks && <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', marginTop: '0.1875rem', fontStyle: 'italic' }}>{ev.remarks}</div>}
           </div>
         </div>
       ))}

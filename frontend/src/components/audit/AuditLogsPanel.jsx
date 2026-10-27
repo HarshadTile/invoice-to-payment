@@ -41,7 +41,7 @@ export default function AuditLogsPanel() {
 
   return (
     <div className="card">
-      <p className="card-hint" style={{ margin: '0 0 10px' }}>Live: updates automatically every few seconds. Newest first.</p>
+      <p className="card-hint" style={{ margin: '0 0 0.625rem' }}>Live: updates automatically every few seconds. Newest first.</p>
       <EditableTable tableKey={TABLE_KEY} cols={['User', 'Action', 'Detail', 'Timestamp']} rows={rows} canImportExport={false} tableClass="audit-table" />
     </div>
   );

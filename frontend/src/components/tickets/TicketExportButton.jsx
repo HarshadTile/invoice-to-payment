@@ -1,5 +1,5 @@
 import { useSelector } from 'react-redux';
-import { downloadCSV } from '../../utils/businessLogic';
+import { downloadCSV, timestampedExportName } from '../../utils/businessLogic';
 import { channelLabel, formatDate, STATUS_LABEL } from '../../utils/tickets';
 import { Download } from '../common/icons.jsx';
 
@@ -19,7 +19,7 @@ export default function TicketExportButton({ tickets = [], loading = false }) {
       // User-entered subjects and other text must remain text in spreadsheet apps.
       return /^[\s]*[=+@-]/.test(text) ? `'${text}` : text;
     }));
-    downloadCSV(supplier ? 'My_Queries' : 'Inquiry_Desk', columns, rows);
+    downloadCSV(timestampedExportName(supplier ? 'My_Queries' : 'Inquiry_Desk'), columns, rows);
   };
 
   return (
