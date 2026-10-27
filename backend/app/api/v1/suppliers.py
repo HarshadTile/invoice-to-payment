@@ -102,9 +102,9 @@ def _resolve_codes(db: Session, pan: str, requested: list[str], supplier_id: Opt
     return resolved
 
 
-def _with_link(db: Session, supplier: Supplier, actor: User) -> dict:
+def _with_link(db: Session, supplier: Supplier, actor: User, kind: str | None = None) -> dict:
     body = serialize_supplier(supplier, actor.name)
-    body["setupLink"] = issue_setup_link(db, supplier)
+    body.update(issue_setup_link(db, supplier, kind))
     return body
 
 
@@ -212,7 +212,7 @@ def reset_supplier_password(supplier_id: int, db: Session = Depends(get_db), act
     supplier.failed_attempts, supplier.locked_until = 0, None
     db.commit()
     write_audit(db, actor, "Reset supplier password", f"{supplier.name} (PAN {supplier.pan}) - new setup link issued")
-    return _with_link(db, supplier, actor)
+    return _with_link(db, supplier, actor, "reset")
 
 
 @router.post("/{supplier_id}/deactivate-supplier")

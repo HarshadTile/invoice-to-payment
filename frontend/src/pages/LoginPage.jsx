@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { api } from '../api/client';
+import { DEFAULT_CHANNEL_AVAILABILITY } from '../data/constants';
 import { useDispatch } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { loginThunk } from '../features/bootstrap/hydrateThunks';
@@ -11,7 +13,7 @@ import WorkspaceSelector from '../components/login/WorkspaceSelector.jsx';
 import FormField from '../components/login/FormField.jsx';
 import PasswordField from '../components/login/PasswordField.jsx';
 import PrimaryButton from '../components/login/PrimaryButton.jsx';
-import { IdIcon, HashIcon, AlertIcon, CheckIcon } from '../components/login/icons.jsx';
+import { IdIcon, AlertIcon, CheckIcon } from '../components/login/icons.jsx';
 import './login.css';
 
 export default function LoginPage() {
@@ -28,6 +30,17 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false);
 
   const [channelScope, setChannelScope] = useState('all');
+  const [availability, setAvailability] = useState(DEFAULT_CHANNEL_AVAILABILITY);
+  useEffect(() => {
+    let stale = false;
+    api.get('/v1/auth/portal-availability').then((data) => {
+      if (!stale && data.channelAvailability) {
+        setAvailability(data.channelAvailability);
+        setChannelScope((current) => data.channelAvailability[current] === false ? 'all' : current);
+      }
+    }).catch(() => { if (!stale) setError('Unable to load portal options. Refresh the page to try again.'); });
+    return () => { stale = true; };
+  }, [tab]);
   const [empId, setEmpId] = useState('');
   const [pan, setPan] = useState(searchParams.get('pan') || '');
   const [password, setPassword] = useState('');
@@ -149,7 +162,7 @@ export default function LoginPage() {
 
             {tab === 'internal' ? (
               <form className="lgn-form" onSubmit={submitInternal} noValidate>
-                <WorkspaceSelector value={channelScope} onChange={setChannelScope} />
+                <WorkspaceSelector value={channelScope} onChange={setChannelScope} availability={availability} />
                 <FormField
                   id="lgn-empid"
                   label="Enter Email ID"
@@ -174,7 +187,7 @@ export default function LoginPage() {
                 <FormField
                   id="lgn-pan"
                   label="PAN"
-                  icon={<HashIcon className="lgn-ic" />}
+                  icon={<IdIcon className="lgn-ic" />}
                   error={fieldErr.pan}
                   type="text"
                   autoComplete="username"

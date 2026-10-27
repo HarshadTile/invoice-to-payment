@@ -14,6 +14,7 @@ import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
 import { api } from '../api/client';
+import { suppliersApi } from '../api/suppliersApi';
 import authReducer, { setAuthFromServer } from '../features/auth/authSlice';
 import { ticketsApi } from '../features/tickets/ticketsApi';
 import { notificationsApi } from '../features/notifications/notificationsApi';
@@ -50,6 +51,14 @@ beforeEach(() => {
 });
 
 describe('Login flows', () => {
+  it('offers only enabled portals at login, including MFOX after it is enabled', async () => {
+    api.get.mockResolvedValueOnce({ channelAvailability: { msetuSrm: true, poPortal: false, mfoxPortal: true } });
+    renderApp(freshStore());
+    await userEvent.click(screen.getByRole('button', { name: 'Internal Team' }));
+    expect(await screen.findByRole('option', { name: 'MFOX Portal' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'PO Portal' })).not.toBeInTheDocument();
+  });
+
   it('defaults to supplier sign-in and switches forms without retaining a password', async () => {
     const user = userEvent.setup();
     renderApp(freshStore(), '/login');
@@ -91,7 +100,10 @@ describe('Login flows', () => {
     expect(await screen.findByRole('heading', { name: /Msetu \/ SRM Invoice Tracking/ })).toBeInTheDocument();
     expect(screen.queryByText('Vendor Status Reports')).not.toBeInTheDocument();
     expect(screen.queryByText('Supplier Visibility')).not.toBeInTheDocument();
-    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(screen.getByRole('button', { name: 'Supplier Management', exact: true })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'User Management', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Integration Settings', exact: true })).not.toBeInTheDocument();
   });
 
   it('logs in as a supplier with PAN and password and lands on My Invoices', async () => {
@@ -116,6 +128,24 @@ describe('Internal admin - full navigation', () => {
     return { store, user };
   }
 
+  it('groups internal users and suppliers under Settings', async () => {
+    const listSuppliers = vi.spyOn(suppliersApi, 'listSuppliers').mockResolvedValue([]);
+    try {
+      const { user } = await loginAdmin();
+      expect(screen.queryByRole('button', { name: 'Supplier Management', exact: true })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Supplier Management', exact: true })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Settings', exact: true }));
+      await user.click(screen.getByRole('button', { name: 'User Management', exact: true }));
+      expect(await screen.findByRole('heading', { name: 'Settings / User Management' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Supplier Management', exact: true }));
+      expect(await screen.findByRole('heading', { name: 'Settings / Supplier Management' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Supplier Management', exact: true })).toHaveAttribute('aria-current', 'page');
+      expect(await screen.findByText('No suppliers')).toBeInTheDocument();
+    } finally {
+      listSuppliers.mockRestore();
+    }
+  });
+
   it('visits every top-level nav destination without error', async () => {
     const { user } = await loginAdmin();
     const destinations = [
@@ -132,7 +162,8 @@ describe('Internal admin - full navigation', () => {
   it('expands Processing Channels and opens each channel', async () => {
     const { user } = await loginAdmin();
     // "Processing Channels" is expanded by default; sidebar channel links are already visible.
-    for (const label of ['Msetu / SRM', 'PO Portal', 'MFOX Portal']) {
+    expect(screen.queryByRole('button', { name: 'MFOX Portal', exact: true })).not.toBeInTheDocument();
+    for (const label of ['Msetu / SRM', 'PO Portal']) {
       const navLink = screen.getAllByText(label)[0];
       await user.click(navLink);
       // The top bar carries the page title, e.g. "Processing Channels / Msetu / SRM".
@@ -402,7 +433,7 @@ describe('Internal admin - full navigation', () => {
   it('Settings: invites a user account', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Settings')[0]);
-    await user.click(screen.getAllByText('Users')[0]);
+    await user.click(screen.getByRole('button', { name: 'User Management', exact: true }));
     await screen.findByText('admin@company.com');
     await user.click(screen.getByRole('button', { name: 'Add User' }));
     const inputs = document.querySelectorAll('.modal-body input');
@@ -410,13 +441,13 @@ describe('Internal admin - full navigation', () => {
     fireEvent.change(inputs[0], { target: { value: 'Test User' } });
     fireEvent.change(inputs[1], { target: { value: 'test.user@example.com' } });
     await user.click(screen.getByRole('button', { name: 'Create User & Generate Link' }));
-    expect(await screen.findByText('Password setup link ready')).toBeInTheDocument();
+    expect(await screen.findByText('Setup link ready')).toBeInTheDocument();
     expect(screen.getByLabelText('One-time setup link').value).toContain('/reset-password?token=');
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(await screen.findByText('test.user@example.com')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Generate setup link for Test User' }));
     await user.click(screen.getByRole('button', { name: 'Generate Link' }));
-    expect(await screen.findByText('Password setup link ready')).toBeInTheDocument();
+    expect(await screen.findByText('Setup link ready')).toBeInTheDocument();
     expect(screen.getByLabelText('One-time setup link').value).toContain('test-replacement');
     await user.click(screen.getByRole('button', { name: 'Done' }));
   });
@@ -424,16 +455,16 @@ describe('Internal admin - full navigation', () => {
   it('Settings: a user is authorized for one channel at a time', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Settings')[0]);
-    await user.click(screen.getAllByText('Users')[0]);
+    await user.click(screen.getByRole('button', { name: 'User Management', exact: true }));
     await screen.findByText('admin@company.com');
     await user.click(screen.getByRole('button', { name: 'Add User' }));
     fireEvent.change(document.querySelector('.modal-body select'), { target: { value: 'Viewer' } });
     const radios = () => [...document.querySelectorAll('.modal-body input[type="radio"]')];
-    expect(radios().length).toBe(3);
+    expect(radios().length).toBe(2);
     expect(document.querySelectorAll('.modal-body input[type="checkbox"]').length).toBe(0);
     await user.click(radios()[1]);
     await user.click(radios()[0]);
-    expect(radios().map((r) => r.checked)).toEqual([true, false, false]);
+    expect(radios().map((r) => r.checked)).toEqual([true, false]);
   });
 
   it('staff without a ticket role do not get the Inquiry Desk, Notifications or the bell', async () => {

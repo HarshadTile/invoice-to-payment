@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useSearchParams } from 'react-router-dom';
+import useEnabledChannels from '../features/settings/useEnabledChannels';
 import { CHANNELS, VIEW_COLUMNS, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
 import { selectFilteredInvoicesAnyChannel } from '../features/invoices/selectors';
@@ -75,6 +76,7 @@ function useChannelInvoiceFilter(channelInvoices, channelKey) {
 }
 
 export default function ChannelPage() {
+  const enabledChannels = useEnabledChannels();
   const { key } = useParams();
   const dispatch = useDispatch();
   const channel = CHANNELS.find((c) => c.key === key);
@@ -86,6 +88,7 @@ export default function ChannelPage() {
   const { shown: filteredChannelInvoices, bar: channelFilterBar } = useChannelInvoiceFilter(channelInvoices, key);
 
   if (!channel) return <p>Unknown channel.</p>;
+  if (!enabledChannels.some((item) => item.key === key)) return <div className="card"><p>This portal is currently disabled. Contact your administrator.</p></div>;
 
   const activeView = savedViewTab && channel.views.includes(savedViewTab) ? savedViewTab : channel.views[0];
 

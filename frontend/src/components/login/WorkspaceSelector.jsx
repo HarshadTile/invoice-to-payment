@@ -1,4 +1,5 @@
 import { BuildingIcon, CaretIcon } from './icons.jsx';
+import { DEFAULT_CHANNEL_AVAILABILITY } from '../../data/constants';
 
 /* Per-channel login options. An Admin account (channel_scope "all") may pick any of these
    to preview that channel's view; an account locked to one portal (Settings > Users) can
@@ -11,14 +12,14 @@ const OPTIONS = [
 ];
 
 /** Portal / Team picker (native select for reliability + a11y). Controlled. */
-export default function WorkspaceSelector({ id = 'lgn-portal', value, onChange }) {
+export default function WorkspaceSelector({ id = 'lgn-portal', value, onChange, availability = DEFAULT_CHANNEL_AVAILABILITY }) {
   return (
     <div className="lgn-field">
       <label htmlFor={id}>Portal / Team</label>
       <div className="lgn-input">
         <BuildingIcon className="lgn-ic" />
         <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-          {OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {OPTIONS.filter((o) => availability[o.value] !== false).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <CaretIcon className="lgn-caret" />
       </div>

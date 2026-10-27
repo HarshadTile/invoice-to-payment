@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import write_audit
 from app.core.database import get_db
+from app.core.channels import channel_availability, require_enabled_channel
 from app.core.password_reset import token_digest
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.supplier import Supplier, SupplierSetupToken
@@ -31,6 +32,12 @@ router = APIRouter()
 security = HTTPBearer()
 
 VALID_CHANNEL_SCOPES = {"all", "msetuSrm", "poPortal", "manual", "mfoxPortal"}
+
+
+@router.get('/portal-availability')
+def public_portal_availability(response: Response, db: Session = Depends(get_db)):
+    response.headers['Cache-Control'] = 'no-store'
+    return {'channelAvailability': channel_availability(db)}
 
 
 def _ticket_role(user: User) -> str:
@@ -105,6 +112,7 @@ def supplier_login_with_password(request: SupplierPasswordLoginRequest, db: Sess
         write_audit(db, actor, "Failed login", "wrong password")
         raise HTTPException(status_code=401, detail=GENERIC_LOGIN_ERROR)
 
+    require_enabled_channel(db, supplier.channel)
     clear_failures(db, supplier)
     session = build_session(supplier)
     write_audit(db, actor, "Logged in", f"{supplier.name}, supplier portal")
@@ -216,6 +224,7 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
                 detail="This account can only sign in to its assigned portal.",
             )
 
+    require_enabled_channel(db, final_scope)
     login_by = "username" if user.username.lower() == login_id else "email"
     scope_data = {
         "channelScope": final_scope,

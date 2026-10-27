@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LOGIN_CHANNELS } from '../../data/constants';
 import ModalShell from './ModalShell.jsx';
+import useEnabledChannels from '../../features/settings/useEnabledChannels';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -18,6 +19,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  *  - Authorized Channel: the one channel they work in. Admin always has all of them.
  */
 export default function UserFormModal({ user, roles, onClose, onSave }) {
+  const enabledChannels = useEnabledChannels();
   const editing = !!user;
   const [values, setValues] = useState(() => (editing
     ? {
@@ -124,7 +126,7 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
           <input value="All Channels — HQ / Admin" readOnly />
         ) : (
           <div className="choice-grid">
-            {LOGIN_CHANNELS.map((c) => (
+            {LOGIN_CHANNELS.filter((c) => enabledChannels.some((channel) => channel.key === c.key)).map((c) => (
               <label key={c.key} className="choice-tile">
                 <input
                   type="radio"

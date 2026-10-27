@@ -9,6 +9,7 @@ import ModalShell from '../components/modals/ModalShell.jsx';
 import AddSupplierModal from '../components/modals/AddSupplierModal.jsx';
 import SetupLinkModal from '../components/modals/SetupLinkModal.jsx';
 import SupplierCodesModal from '../components/modals/SupplierCodesModal.jsx';
+import PasswordLinkExpirySettings from '../components/PasswordLinkExpirySettings.jsx';
 import { Plus, Edit, Trash, Key, Inbox } from '../components/common/icons.jsx';
 
 const TONE = { Active: 'green', Invited: 'amber', Inactive: 'gray' };
@@ -88,6 +89,7 @@ export default function SuppliersPage() {
 
   return (
     <div className="card">
+      {perm.manageSuppliers && <PasswordLinkExpirySettings accountType="supplier" />}
       <div className="toolbar">
         <div className="toolbar-left">
           <input

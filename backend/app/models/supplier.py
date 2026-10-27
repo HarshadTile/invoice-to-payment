@@ -43,5 +43,6 @@ class SupplierSetupToken(Base):
     token = Column(String(64), unique=True, nullable=False, index=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False)
+    link_type = Column(String(16), nullable=False, default="invite", server_default="invite")
     used = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

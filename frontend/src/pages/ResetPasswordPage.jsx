@@ -9,7 +9,6 @@ import BrandPanel from '../components/login/BrandPanel.jsx';
 import PasswordField from '../components/login/PasswordField.jsx';
 import { AlertIcon, CheckIcon } from '../components/login/icons.jsx';
 import './login.css';
-import '../components/modals/UserSetupLinkModal.css';
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();

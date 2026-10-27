@@ -118,8 +118,8 @@
 .topbar-supplier-code-trigger[data-open="true"] svg{transform:rotate(180deg);}
 .topbar-supplier-code-trigger:hover{border-color:#c9cbd1;background:#fbfbfc;}
 .topbar-supplier-code-trigger:focus-visible{outline:0;border-color:var(--brand);box-shadow:var(--ring);}
-.topbar-supplier-code-menu{position:absolute;top:calc(100% + 0.375rem);right:0;z-index:60;box-sizing:border-box;width:max(100%,11.875rem);max-height:min(17.5rem,calc(100vh - 5.625rem));overflow-y:auto;padding:0.3125rem;border:0.0625rem solid var(--border);border-radius:0.625rem;background:#fff;color:var(--text-body);box-shadow:0 0.75rem 2.125rem rgba(23,24,26,.15);}
-.topbar-supplier-code-menu button{display:block;box-sizing:border-box;width:100%;padding:0.5625rem 0.625rem;border:0;border-radius:0.4375rem;background:transparent;color:var(--text-body);font:500 0.78125rem/1.4 var(--font-body);text-align:left;white-space:nowrap;cursor:pointer;}
+.topbar-supplier-code-menu{position:absolute;top:calc(100% + 0.375rem);left:0;right:0;z-index:60;box-sizing:border-box;width:100%;max-height:min(17.5rem,calc(100vh - 5.625rem));overflow-y:auto;padding:0.3125rem;border:0.0625rem solid var(--border);border-radius:0.5625rem;background:#fff;color:var(--text-body);box-shadow:0 0.5rem 1.5rem rgba(23,24,26,.12);}
+.topbar-supplier-code-menu button{display:block;box-sizing:border-box;width:100%;padding:0.5625rem 0.4375rem;border:0;border-radius:0.3125rem;background:transparent;color:var(--text-body);font:500 0.78125rem/1.4 var(--font-body);text-align:left;white-space:normal;overflow-wrap:anywhere;cursor:pointer;}
 .topbar-supplier-code-menu button:hover{background:var(--gray-bg);}
 .topbar-supplier-code-menu button:focus-visible{outline:0.125rem solid var(--brand);outline-offset:-0.125rem;}
 .topbar-supplier-code-menu button.selected{background:var(--brand-tint);color:var(--brand-dark);font-weight:650;}
@@ -282,7 +282,7 @@
   .topbar-right .help-button{display:none;}
   .role-select{max-width:9.375rem;}
   .topbar-supplier-code{width:clamp(6.75rem,30vw,9.25rem);min-width:6.75rem;max-width:none;flex:0 1 auto;}
-  .topbar-supplier-code-menu{width:min(13.75rem,calc(100vw - 1.5rem));max-height:calc(100dvh - 5.625rem);}
+  .topbar-supplier-code-menu{max-height:calc(100dvh - 5.625rem);}
   .crumb b{font-size:0.875rem;}
   #content{padding:1rem 0.875rem 1.75rem;}
 }

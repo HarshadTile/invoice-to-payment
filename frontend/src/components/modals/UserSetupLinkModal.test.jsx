@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import UserSetupLinkModal from './UserSetupLinkModal';
+import SetupLinkModal from './SetupLinkModal';
 
 const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
 afterEach(() => {
@@ -67,26 +68,45 @@ describe('manual password link popup', () => {
     show();
     const field = screen.getByLabelText(/Invitation message/);
     expect(field.closest('details')).not.toHaveAttribute('open');
-    fireEvent.click(screen.getByText('View invitation message'));
+    fireEvent.click(screen.getByText('Preview message'));
     expect(field.closest('details')).toHaveAttribute('open');
     expect(field.value).toContain(props.user.email);
     expect(field.value).toContain(props.setupLink);
   });
 
-  it('uses singular day wording for a 24-hour link', () => {
+  it('shows the configured 24-hour validity without a duplicate countdown panel', () => {
     show({ expiresAt: new Date(Date.now() + 86400000).toISOString(), expiryMinutes: 1440 });
-    expect(screen.getByRole('timer')).toHaveTextContent('1 day');
+    expect(screen.getByRole('timer')).toHaveTextContent('Valid for 24 hours');
     expect(screen.getByRole('timer')).not.toHaveTextContent('1 days');
   });
 
-  it('shows Copied in green for three seconds only after successful copying', async () => {
+  it('shows inline copy confirmation for three seconds only after successful copying', async () => {
     vi.useFakeTimers();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     show();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy invitation' })); });
-    expect(screen.getByRole('button', { name: '✓ Copied' })).toHaveClass('user-setup-link-copied');
+    expect(screen.getByRole('button', { name: '✓ Copied' })).toHaveClass('access-link-copied');
     act(() => { vi.advanceTimersByTime(3000); });
-    expect(screen.getByRole('button', { name: 'Copy invitation' })).not.toHaveClass('user-setup-link-copied');
+    expect(screen.getByRole('button', { name: 'Copy invitation' })).not.toHaveClass('access-link-copied');
+  });
+
+  it('uses the same compact design for suppliers and copies PAN, link and expiry together', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const store = configureStore({ reducer: { ui: () => ({}) } });
+    render(<Provider store={store}><SetupLinkModal supplier={{ name: 'Supplier Ltd', pan: 'ABCDE1234F', expiryMinutes: 4320, linkType: 'reset', expiresAt: new Date(Date.now()+3*86400000).toISOString() }} link="https://portal.example/supplier/setup?token=test" onClose={vi.fn()} /></Provider>);
+    expect(document.querySelector('.access-link-modal')).toHaveStyle({ width: '480px' });
+    expect(screen.getByText('Password reset link ready')).toBeInTheDocument();
+    expect(screen.getByRole('timer')).toHaveTextContent('Valid for 3 days');
+    expect(screen.getByLabelText('Ready-to-send supplier message').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getAllByRole('button', { name: 'Copy invitation' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy invitation' }));
+    expect(await screen.findByRole('button', { name: '✓ Copied' })).toHaveClass('access-link-copied');
+    const message = writeText.mock.calls[0][0];
+    expect(message).toContain('Sign-in PAN: ABCDE1234F');
+    expect(message).toContain('https://portal.example/supplier/setup?token=test');
+    expect(message).toContain('valid for 3 days');
+    expect(message).toContain('Expires:');
   });
 });

@@ -58,7 +58,8 @@ export default function AppRoutes() {
           </Route>
           <Route path="/app/profile" element={<ProfilePage />} />
           <Route element={<RequireCapability cap="manageSuppliers" />}>
-            <Route path="/app/suppliers" element={<SuppliersPage />} />
+            <Route path="/app/settings/suppliers" element={<SuppliersPage />} />
+            <Route path="/app/suppliers" element={<Navigate to="/app/settings/suppliers" replace />} />
           </Route>
 
           <Route element={<RequireHQ />}>

@@ -526,3 +526,6 @@
   .lgn-card { animation: none; }
   .lgn-spinner { animation-duration: 1.4s; }
 }
+.lgn-setup-identity { padding: 14px 16px; margin: 16px 0; background: #f8f8fa; border: 1px solid #e3e3e8; border-radius: 10px; display: grid; gap: 5px; }
+.lgn-setup-identity span, .lgn-setup-identity small { color: #637086; font-size: 12px; }
+.lgn-setup-identity strong { overflow-wrap: anywhere; font-size: 15px; }

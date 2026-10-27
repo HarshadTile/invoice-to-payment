@@ -40,7 +40,7 @@ def _message(response):
 def _link_token(supplier_id):
     db = SessionLocal()
     try:
-        return issue_setup_link(db, db.get(Supplier, supplier_id)).split("token=")[1]
+        return issue_setup_link(db, db.get(Supplier, supplier_id))["setupLink"].split("token=")[1]
     finally:
         db.close()
 

@@ -31,6 +31,20 @@ beforeEach(() => {
 });
 
 describe('SuppliersPage', () => {
+  it('shows expiry controls and uses the issued reset duration in the share message', async () => {
+    mockSuppliers.listSuppliers.mockResolvedValue([{ ...ROW, status: 'Active' }]);
+    mockSuppliers.resetSupplierPassword.mockResolvedValue({ ...ROW, setupLink: 'http://x/supplier/setup?token=reset', expiryMinutes: 4320, linkType: 'reset', expiresAt: '2026-11-01T10:00:00Z' });
+    renderPage();
+    expect(screen.getByLabelText('New account setup')).toHaveValue('10080');
+    expect(screen.getByLabelText('Password reset')).toHaveValue('1440');
+    await userEvent.click(await screen.findByRole('button', { name: 'Reset password of Acme Tools' }));
+    const message = await screen.findByLabelText('Ready-to-send supplier message');
+    expect(message.value).toContain('valid for 3 days');
+    expect(message.value).toContain('Sign-in PAN: AAAPA1111A');
+    expect(message.value).toContain('Reset link: http://x/supplier/setup?token=reset');
+    expect(message.value).toContain('Expires:');
+  });
+
   it('lists suppliers and searches by typing', async () => {
     renderPage();
     expect(await screen.findByText('Acme Tools')).toBeInTheDocument();

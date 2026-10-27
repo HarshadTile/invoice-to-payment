@@ -8,16 +8,15 @@ Two kinds of supplier token exist side by side:
 """
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.password_reset import FRONTEND_URL
+from app.core.password_reset import FRONTEND_URL, link_expiry_settings
 from app.core.security import create_access_token
 from app.models.supplier import Supplier, SupplierSetupToken
 
-SETUP_TOKEN_LIFETIME_DAYS = 7
 MAX_FAILED_ATTEMPTS = 5
 LOCK_MINUTES = 15
 GENERIC_LOGIN_ERROR = "PAN or password is incorrect, or the account is inactive."
@@ -41,18 +40,33 @@ def serialize_supplier(supplier: Supplier, created_by_name: str | None = None) -
     }
 
 
-def issue_setup_link(db: Session, supplier: Supplier) -> str:
-    """A fresh 7-day, single-use link. Any earlier unused link for this supplier stops working."""
+def issue_setup_link(db: Session, supplier: Supplier, kind: str | None = None) -> dict:
+    """Issue a single-use link with the saved duration; preserve reset type on replacement."""
+    db.query(Supplier).filter(Supplier.id == supplier.id).with_for_update().one()
+    previous = db.query(SupplierSetupToken).filter_by(supplier_id=supplier.id).order_by(SupplierSetupToken.id.desc()).first()
+    kind = kind or (previous.link_type if previous else "invite")
+    if kind not in ("invite", "reset"):
+        raise HTTPException(status_code=400, detail="Invalid supplier link type.")
+    field = "supplierResetLinkExpiryMinutes" if kind == "reset" else "supplierInviteLinkExpiryMinutes"
+    minutes = link_expiry_settings(db)[field]
+    if type(minutes) is not int or minutes not in (30, 60, 240, 720, 1440, 2880, 4320, 10080):
+        raise HTTPException(status_code=400, detail="Choose an allowed link expiry between 30 minutes and 7 days.")
     db.query(SupplierSetupToken).filter(
         SupplierSetupToken.supplier_id == supplier.id, SupplierSetupToken.used == False,  # noqa: E712
     ).update({"used": True})
     token = secrets.token_urlsafe(32)
+    expires = datetime.utcnow() + timedelta(minutes=minutes)
     db.add(SupplierSetupToken(
         token=token, supplier_id=supplier.id,
-        expires_at=datetime.utcnow() + timedelta(days=SETUP_TOKEN_LIFETIME_DAYS),
+        expires_at=expires, link_type=kind,
     ))
     db.commit()
-    return f"{FRONTEND_URL}/supplier/setup?token={token}"
+    return {
+        "setupLink": f"{FRONTEND_URL}/supplier/setup?token={token}",
+        "expiresAt": expires.replace(tzinfo=timezone.utc).isoformat(),
+        "expiryMinutes": minutes,
+        "linkType": kind,
+    }
 
 
 def is_locked(supplier: Supplier) -> bool:
