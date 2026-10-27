@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useSearchParams } from 'react-router-dom';
+import useEnabledChannels from '../features/settings/useEnabledChannels';
 import { CHANNELS, VIEW_COLUMNS, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
 import { selectFilteredInvoicesAnyChannel } from '../features/invoices/selectors';
@@ -75,6 +76,7 @@ function useChannelInvoiceFilter(channelInvoices, channelKey) {
 }
 
 export default function ChannelPage() {
+  const enabledChannels = useEnabledChannels();
   const { key } = useParams();
   const dispatch = useDispatch();
   const channel = CHANNELS.find((c) => c.key === key);
@@ -86,12 +88,13 @@ export default function ChannelPage() {
   const { shown: filteredChannelInvoices, bar: channelFilterBar } = useChannelInvoiceFilter(channelInvoices, key);
 
   if (!channel) return <p>Unknown channel.</p>;
+  if (!enabledChannels.some((item) => item.key === key)) return <div className="card"><p>This portal is currently disabled. Contact your administrator.</p></div>;
 
   const activeView = savedViewTab && channel.views.includes(savedViewTab) ? savedViewTab : channel.views[0];
 
   return (
     <>
-      <div className="sheet-carousel" style={{ margin: '4px 0 16px' }}>
+      <div className="sheet-carousel" style={{ margin: '0.25rem 0 1rem' }}>
         <div className="car-track">
           {channel.views.map((v) => (
             <button type="button" key={v} className={`car-chip${v === activeView ? ' active' : ''}`} onClick={() => dispatch(setChannelViewTab({ key, view: v }))}>{v}</button>
@@ -142,7 +145,7 @@ function ChannelHistory({ channelKey, channelInvoices }) {
 
   return (
     <>
-      <div className="row" style={{ marginBottom: 18 }}>
+      <div className="row" style={{ marginBottom: '1.125rem' }}>
         <StatCard
           label={`${CHANNEL_LABEL[channelKey]} : Total Invoices`}
           value={channelInvoices.length}
@@ -170,7 +173,7 @@ function ChannelHistory({ channelKey, channelInvoices }) {
           active={activeKpi === 'failed'}
         />
       </div>
-      <div className="card" style={{ marginBottom: 18 }}>
+      <div className="card" style={{ marginBottom: '1.125rem' }}>
         <h3>{activeFilter.label} <span className="card-hint">{activeFilter.invoices.length} invoice{activeFilter.invoices.length === 1 ? '' : 's'}</span></h3>
         <InvoiceTable invoices={activeFilter.invoices} tableKey={`channel-${channelKey}-history-${activeKpi}`} mode="full" />
       </div>
@@ -182,7 +185,7 @@ function ChannelHistory({ channelKey, channelInvoices }) {
             <tbody>
               {rows.length ? rows.map((s, i) => (
                 <tr key={i}><td>{s.channel}</td><td>{s.time}</td><td><Badge tone={s.status === 'Success' ? 'green' : 'red'}>{s.status}</Badge></td><td>{s.records}</td><td>{s.msg}</td></tr>
-              )) : <tr><td colSpan={5} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 18 }}>No sync runs logged for this portal yet.</td></tr>}
+              )) : <tr><td colSpan={5} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.125rem' }}>No sync runs logged for this portal yet.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -212,7 +215,6 @@ function ChannelSubView({ channelKey, view, channelInvoices, canImportExport }) 
         canImportExport={canImportExport}
         onViewInvoice={(no) => dispatch(openModal({ kind: 'invoiceDetail', ctx: { no } }))}
         onViewVendorCode={(code) => dispatch(openModal({ kind: 'vendorCodePreview', ctx: { code } }))}
-        onNotify={(no) => dispatch(openModal({ kind: 'notifyPreview', ctx: { no } }))}
       />
     </div>
   );

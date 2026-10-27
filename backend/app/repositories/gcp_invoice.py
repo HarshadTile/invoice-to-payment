@@ -54,10 +54,12 @@ def get_invoices(
     invoice_number: str | None = None,
     po_number: str | None = None,
     po_item: int | None = None,
+    vendor_codes: list[str] | None = None,
 ):
     """Get paginated invoices from the in-memory cached Excel data."""
     all_records = _load_excel_data()
     records = []
+    allowed_codes = {c.strip().lower() for c in vendor_codes} if vendor_codes is not None else None
 
     for record in all_records:
         if invoice_number:
@@ -79,6 +81,10 @@ def get_invoices(
             if source_vendor is None:
                 continue
             if str(source_vendor).strip().lower() != vendor_code.strip().lower():
+                continue
+
+        if allowed_codes is not None:
+            if str(record.get("SUPPLIER") or "").strip().lower() not in allowed_codes:
                 continue
 
         if po_number:

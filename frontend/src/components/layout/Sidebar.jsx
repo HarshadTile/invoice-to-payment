@@ -1,6 +1,6 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
+import { CHANNEL_LABEL } from '../../data/constants';
 import { ensureNavExpanded, setSidebarCollapsed, toggleNavExpanded } from '../../features/ui/uiSlice';
 import { askLogout } from '../../features/auth/logoutPrompt';
 import { selectHasTicketAccess, selectPerm } from '../../features/auth/authSlice';
@@ -9,6 +9,7 @@ import {
   Settings, Sliders, Users, Shield, Bell, User, LogOut, ChevronRight,
 } from '../common/icons.jsx';
 import logo from '../../assets/mahindra-logo.png';
+import useEnabledChannels from '../../features/settings/useEnabledChannels';
 
 function NavItem({ icon, label, active, badge, onClick, hasChildren, open }) {
   return (
@@ -33,12 +34,13 @@ export default function Sidebar() {
   const location = useLocation();
   const { authType, channelScope } = useSelector((s) => s.auth);
   const perm = useSelector(selectPerm);
+  const enabledChannels = useEnabledChannels();
   const hasTicketAccess = useSelector(selectHasTicketAccess);
   const expandedNav = useSelector((s) => s.ui.expandedNav);
   const collapsed = useSelector((s) => s.ui.sidebarCollapsed);
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
   const isOpen = (id) => expandedNav.includes(id);
-  const logout = () => dispatch(askLogout());
+  const logout = () => dispatch(askLogout(`/login?account=${authType === 'supplier' ? 'supplier' : 'internal'}`));
   // In the icon-only rail a group's children have nowhere to show, so opening a group
   // widens the sidebar first.
   const toggleGroup = (id) => () => {
@@ -71,11 +73,11 @@ export default function Sidebar() {
 
   // Channel-locked: show only that one channel. HQ: show all 4.
   const channelsToShow = isChannelLocked
-    ? CHANNELS.filter((c) => c.key === channelScope)
-    : CHANNELS;
+    ? enabledChannels.filter((c) => c.key === channelScope)
+    : enabledChannels;
 
   const channelLabel = CHANNEL_LABEL[channelScope] || channelScope;
-  const canUseSettings = perm.manageConfig || perm.manageUsers || perm.manageRoles || perm.viewAuditLog;
+  const canUseSettings = perm.manageSuppliers || (isHQ && (perm.manageConfig || perm.manageUsers || perm.manageRoles || perm.viewAuditLog));
 
   return (
     <aside className="sidebar">
@@ -94,7 +96,7 @@ export default function Sidebar() {
           {isChannelLocked ? (
             // Only one channel to show — a dropdown that expands to itself is just an
             // extra click, so this account's single channel is its own direct link.
-            <NavItem
+            channelsToShow.length > 0 && <NavItem
               icon={<Layers />}
               label={channelLabel}
               active={isActive(`/app/channel/${channelScope}`)}
@@ -137,24 +139,25 @@ export default function Sidebar() {
               <p className="nav-section">Reports &amp; admin</p>
               <NavItem icon={<BarChart3 />} label="Vendor Status Reports" active={isActive('/app/outputs')} onClick={() => navigate('/app/outputs')} />
               <NavItem icon={<History />} label="Logs / History" active={isActive('/app/logs')} onClick={() => navigate('/app/logs')} />
-              {canUseSettings && (
-                <NavItem
-                  icon={<Settings />}
-                  label="Settings"
-                  hasChildren
-                  open={isOpen('settings')}
-                  onClick={toggleGroup('settings')}
-                />
-              )}
-              {canUseSettings && isOpen('settings') && (
-                <div className="nav-children lvl1">
-                  {perm.manageConfig && <NavItem icon={<Sliders />} label="Integration Settings" active={isActive('/app/settings/integrations')} onClick={() => navigate('/app/settings/integrations')} />}
-                  {perm.viewAuditLog && <NavItem icon={<History />} label="Audit Logs" active={isActive('/app/settings/auditLogs')} onClick={() => navigate('/app/settings/auditLogs')} />}
-                  {perm.manageUsers && <NavItem icon={<Users />} label="Users" active={isActive('/app/settings/users')} onClick={() => navigate('/app/settings/users')} />}
-                  {perm.manageRoles && <NavItem icon={<Shield />} label="Roles & Permissions" active={isActive('/app/settings/roles')} onClick={() => navigate('/app/settings/roles')} />}
-                </div>
-              )}
             </>
+          )}
+          {canUseSettings && (
+            <NavItem
+              icon={<Settings />}
+              label="Settings"
+              hasChildren
+              open={isOpen('settings')}
+              onClick={toggleGroup('settings')}
+            />
+          )}
+          {canUseSettings && isOpen('settings') && (
+            <div className="nav-children lvl1">
+              {isHQ && perm.manageConfig && <NavItem icon={<Sliders />} label="Integration Settings" active={isActive('/app/settings/integrations')} onClick={() => navigate('/app/settings/integrations')} />}
+              {isHQ && perm.viewAuditLog && <NavItem icon={<History />} label="Audit Logs" active={isActive('/app/settings/auditLogs')} onClick={() => navigate('/app/settings/auditLogs')} />}
+              {isHQ && perm.manageUsers && <NavItem icon={<Users />} label="User Management" active={isActive('/app/settings/users')} onClick={() => navigate('/app/settings/users')} />}
+              {perm.manageSuppliers && <NavItem icon={<Building />} label="Supplier Management" active={isActive('/app/settings/suppliers')} onClick={() => navigate('/app/settings/suppliers')} />}
+              {isHQ && perm.manageRoles && <NavItem icon={<Shield />} label="Roles & Permissions" active={isActive('/app/settings/roles')} onClick={() => navigate('/app/settings/roles')} />}
+            </div>
           )}
           <NavItem icon={<User />} label="Profile" active={isActive('/app/profile')} onClick={() => navigate('/app/profile')} />
           <NavItem icon={<LogOut />} label="Logout" onClick={logout} />

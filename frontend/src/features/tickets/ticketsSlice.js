@@ -109,7 +109,7 @@ export default ticketsSlice.reducer;
 /* ---- write-through thunks (public API used by components) ---- */
 
 export const submitTicket = (payload) => async (dispatch) => {
-  const { ticket, seq } = await api.post('/v1/tickets', payload);
+  const { ticket, seq } = await api.post('/v1/tickets/create-ticket', payload);
   dispatch(prependTicket({ ticket, seq }));
   return ticket;
 };
@@ -121,7 +121,7 @@ function reconcile(dispatch, updated) {
 
 export const postComment = (payload) => async (dispatch) => {
   dispatch(postCommentLocal(payload));
-  const updated = await api.post(`/v1/tickets/${payload.id}/comments`, {
+  const updated = await api.post(`/v1/tickets/${payload.id}/add-comment`, {
     author: payload.author, role: payload.role, text: payload.text, date: today(),
   });
   reconcile(dispatch, updated);
@@ -134,7 +134,7 @@ function statusThunk(localAction, boardMove) {
     const suffix = boardMove ? ' (moved on board)' : '';
     const body = { status, activity: [{ date: today(), text: `Status changed to ${status}${suffix}.` }] };
     if (status === 'Resolved') body.resolvedDate = today();
-    const updated = await api.patch(`/tickets/${id}`, body);
+    const updated = await api.patch(`/tickets/${id}/update-ticket`, body);
     reconcile(dispatch, updated);
     return updated;
   };
@@ -146,7 +146,7 @@ export const moveStatus = statusThunk(moveStatusLocal, true);
 export const setPriority = ({ id, priority }) => async (dispatch, getState) => {
   const old = getState().tickets.items.find((t) => t.id === id)?.priority;
   dispatch(setPriorityLocal({ id, priority }));
-  const updated = await api.patch(`/tickets/${id}`, {
+  const updated = await api.patch(`/tickets/${id}/update-ticket`, {
     priority,
     activity: [{ date: today(), text: `Priority changed from ${old} to ${priority}.` }],
   });
@@ -157,7 +157,7 @@ export const setPriority = ({ id, priority }) => async (dispatch, getState) => {
 export const setAssignee = ({ id, assignee }) => async (dispatch, getState) => {
   const old = getState().tickets.items.find((t) => t.id === id)?.assignee;
   dispatch(setAssigneeLocal({ id, assignee }));
-  const updated = await api.patch(`/tickets/${id}`, {
+  const updated = await api.patch(`/tickets/${id}/update-ticket`, {
     assignee,
     activity: [{ date: today(), text: `Reassigned from ${old} to ${assignee}.` }],
   });

@@ -13,10 +13,13 @@ import AuditLogsPanel from '../components/audit/AuditLogsPanel.jsx';
 import ModalShell from '../components/modals/ModalShell.jsx';
 import UserFormModal from '../components/modals/UserFormModal.jsx';
 import ResetPasswordModal from '../components/modals/ResetPasswordModal.jsx';
+import UserSetupLinkModal from '../components/modals/UserSetupLinkModal.jsx';
+import PasswordLinkExpirySettings from '../components/PasswordLinkExpirySettings.jsx';
+import ChannelAvailabilitySettings from '../components/ChannelAvailabilitySettings.jsx';
 import { Plus, Edit, Trash, Key, Inbox, ChevronRight } from '../components/common/icons.jsx';
 
 // Mirrors ADMIN_LOCKED_CAPABILITIES on the server (app/core/permissions.py).
-const ADMIN_LOCKED = ['manageUsers', 'manageConfig', 'manageRoles'];
+const ADMIN_LOCKED = ['manageUsers', 'manageConfig', 'manageRoles', 'manageSuppliers'];
 const CAPS = [
   ['createTrace', 'Search Invoice(s)'],
   ['importExport', 'Export Data'],
@@ -24,6 +27,7 @@ const CAPS = [
   ['manageUsers', 'Manage Users'],
   ['manageRoles', 'Manage Roles & Permissions'],
   ['viewAuditLog', 'View Audit Logs'],
+  ['manageSuppliers', 'Manage Suppliers'],
 ];
 
 export default function SettingsPage() {
@@ -45,6 +49,7 @@ function IntegrationsTab() {
   const rows = useSelector((s) => s.settings.integrations);
   return (
     <div className="card">
+      <ChannelAvailabilitySettings />
       <div className="table-scroll">
         <table>
           <thead><tr><th>Platform</th><th>Status</th><th>Last Synced</th></tr></thead>
@@ -53,7 +58,7 @@ function IntegrationsTab() {
               <tr key={i}><td>{r[0]}</td><td><Badge tone={r[1] === 'Connected' ? 'green' : 'red'}>{r[1]}</Badge></td><td>{r[2]}</td></tr>
             ))}
             {!rows.length && (
-              <tr><td colSpan={3} style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)' }}>No integration status data available.</td></tr>
+              <tr><td colSpan={3} style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)' }}>No integration status data available.</td></tr>
             )}
           </tbody>
         </table>
@@ -75,6 +80,7 @@ function UsersTab() {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [resetUser, setResetUser] = useState(null);
+  const [setupLink, setSetupLink] = useState(null);
 
   const load = () => usersApi.list().then(setUsers).catch((err) => setLoadError(err.message));
   useEffect(() => { load(); }, []);
@@ -85,15 +91,15 @@ function UsersTab() {
 
   async function handleSave(values) {
     if (formUser) {
-      const updated = await usersApi.update(formUser.id, values);
+      const { setupLink: url, expiresAt, linkType, expiryMinutes, ...updated } = await usersApi.update(formUser.id, values);
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-      if (updated.emailLink === 'sent') dispatch(pushToast(`${updated.name} updated. A sign-in link was sent to ${updated.email}.`));
-      else if (updated.emailLink === 'failed') dispatch(pushToast(`${updated.name} updated, but the email to ${updated.email} couldn't be sent. Use the key icon to resend.`));
-      else dispatch(pushToast(`${updated.name} updated.`));
+      if (url) setSetupLink({ user: updated, setupLink: url, expiresAt, linkType, expiryMinutes });
+      dispatch(pushToast(`${updated.name} updated.${url ? ' Share the new password link privately.' : ''}`));
     } else {
-      const created = await usersApi.create(values);
+      const { setupLink: url, expiresAt, linkType, expiryMinutes, ...created } = await usersApi.create(values);
       setUsers((prev) => [...(prev || []), created]);
-      dispatch(pushToast(`Invite sent to ${created.email}.`));
+      setSetupLink({ user: created, setupLink: url, expiresAt, linkType, expiryMinutes });
+      dispatch(pushToast('User created. Share the setup link privately.'));
     }
     setFormUser(undefined);
   }
@@ -113,15 +119,15 @@ function UsersTab() {
   }
 
   async function handleResetPassword() {
-    await usersApi.resetPassword(resetUser.id);
-    dispatch(pushToast(resetUser.status === 'Invited'
-      ? `Invite resent to ${resetUser.email}.`
-      : `Reset link sent to ${resetUser.email}.`));
+    const link = await usersApi.resetPassword(resetUser.id);
+    setSetupLink({ user: resetUser, ...link });
+    dispatch(pushToast('New password link generated. Earlier links no longer work.'));
     setResetUser(null);
   }
 
   return (
     <div className="card">
+      {perm.manageUsers && <PasswordLinkExpirySettings />}
       <div className="toolbar">
         <div className="toolbar-left">
           <input
@@ -139,7 +145,7 @@ function UsersTab() {
       {loadError && <div className="form-error" role="alert">Couldn't load users: {loadError}</div>}
 
       {users === null && !loadError ? (
-        <p style={{ color: 'var(--text-muted)', fontSize: 13, padding: '20px 0' }}>Loading users…</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', padding: '1.25rem 0' }}>Loading users…</p>
       ) : (
         <div className="table-scroll">
           <table className="data-table">
@@ -181,8 +187,9 @@ function UsersTab() {
                             onClick={() => setFormUser(u)}><Edit /></button>
                           <button
                             type="button" className="kebab"
-                            title={u.status === 'Invited' ? 'Resend invite' : 'Reset password'}
-                            aria-label={`${u.status === 'Invited' ? 'Resend invite to' : 'Reset password for'} ${u.name}`}
+                            title={u.status === 'Invited' ? 'Generate new setup link' : 'Generate reset link'}
+                            aria-label={`${u.status === 'Invited' ? 'Generate setup link for' : 'Generate reset link for'} ${u.name}`}
+                            disabled={u.status === 'Inactive'}
                             onClick={() => setResetUser(u)}
                           ><Key /></button>
                           <button
@@ -209,6 +216,7 @@ function UsersTab() {
       {resetUser && (
         <ResetPasswordModal user={resetUser} onClose={() => setResetUser(null)} onReset={handleResetPassword} />
       )}
+      {setupLink && <UserSetupLinkModal {...setupLink} onClose={() => setSetupLink(null)} />}
 
       {pendingDelete && (
         <ModalShell
@@ -240,8 +248,8 @@ function RolesTab() {
   return (
     <>
       <div className="card">
-        <h3 style={{ margin: '0 0 4px' }}>Application roles</h3>
-        <p className="card-hint" style={{ margin: '0 0 12px' }}>
+        <h3 style={{ margin: '0 0 0.25rem' }}>Application roles</h3>
+        <p className="card-hint" style={{ margin: '0 0 0.75rem' }}>
           What each role can do in the app. Changes apply immediately, are checked by the server and are recorded in the audit log.
         </p>
         <div className="table-scroll">

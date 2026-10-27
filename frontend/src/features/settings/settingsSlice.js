@@ -1,14 +1,19 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { ROLE_MATRIX } from '../../data/constants';
+import { ROLE_MATRIX, DEFAULT_CHANNEL_AVAILABILITY } from '../../data/constants';
 import { api } from '../../api/client';
 
 // Seeded with the static defaults so selectors work before bootstrap; replaced
 // by hydrateSettings once the API responds.
 const initialState = {
+  channelAvailability: { ...DEFAULT_CHANNEL_AVAILABILITY },
   roleMatrix: JSON.parse(JSON.stringify(ROLE_MATRIX)),
   integrations: [],
   senderEmail: 'i2ptracker@company.com',
   twoFactorOn: false,
+  inviteLinkExpiryMinutes: 10080,
+  resetLinkExpiryMinutes: 1440,
+  supplierInviteLinkExpiryMinutes: 10080,
+  supplierResetLinkExpiryMinutes: 1440,
 };
 
 const settingsSlice = createSlice({
@@ -17,10 +22,15 @@ const settingsSlice = createSlice({
   reducers: {
     hydrateSettings(state, action) {
       const p = action.payload || {};
+      if (p.channelAvailability) state.channelAvailability = { ...DEFAULT_CHANNEL_AVAILABILITY, ...p.channelAvailability };
       if (p.roleMatrix) state.roleMatrix = p.roleMatrix;
       if (p.integrations) state.integrations = p.integrations;
       if (p.senderEmail != null) state.senderEmail = p.senderEmail;
       if (p.twoFactorOn != null) state.twoFactorOn = p.twoFactorOn;
+      if (p.inviteLinkExpiryMinutes != null) state.inviteLinkExpiryMinutes = p.inviteLinkExpiryMinutes;
+      if (p.resetLinkExpiryMinutes != null) state.resetLinkExpiryMinutes = p.resetLinkExpiryMinutes;
+      if (p.supplierInviteLinkExpiryMinutes != null) state.supplierInviteLinkExpiryMinutes = p.supplierInviteLinkExpiryMinutes;
+      if (p.supplierResetLinkExpiryMinutes != null) state.supplierResetLinkExpiryMinutes = p.supplierResetLinkExpiryMinutes;
     },
     togglePermissionLocal(state, action) {
       const { role, cap } = action.payload;

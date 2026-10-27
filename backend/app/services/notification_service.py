@@ -59,5 +59,5 @@ def add_for_oversight_team(
 
 def recipient_filter(query, user: dict):
     if user["auth_type"] == "supplier":
-        return query.filter(Notification.recipient_key == f"supplier:{user['vendor_code']}")
+        return query.filter(Notification.recipient_key.in_([f"supplier:{c}" for c in user["vendor_codes"]]))
     return query.filter(Notification.user_id == user["user_id"])

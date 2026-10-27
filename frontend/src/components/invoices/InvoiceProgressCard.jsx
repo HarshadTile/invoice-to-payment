@@ -41,16 +41,16 @@ export default function InvoiceProgressCard({ inv }) {
   };
 
   return (
-    <div className="card" style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+    <div className="card" style={{ marginBottom: '0.875rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.875rem' }}>
         <div>
-          <button type="button" className="link-hero" style={{ fontSize: 15 }} onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no, poItem: inv.poItem } }))}>{inv.no}</button>
-          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>{CHANNEL_LABEL[inv.channel]} : PO {inv.po} : {inv.amount}</div>
+          <button type="button" className="link-hero" style={{ fontSize: '0.9375rem' }} onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no, poItem: inv.poItem } }))}>{inv.no}</button>
+          <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', marginTop: '0.125rem' }}>{CHANNEL_LABEL[inv.channel]} : PO {inv.po} : {inv.amount}</div>
         </div>
         <span className={`chip ${cs.tone}`}>{cs.label}</span>
       </div>
-      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Progress</label>
-      <div style={{ display: 'flex', alignItems: 'flex-start', margin: '10px 0 4px', overflowX: 'auto' }}>
+      <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Progress</label>
+      <div style={{ display: 'flex', alignItems: 'flex-start', margin: '0.625rem 0 0.25rem', overflowX: 'auto' }}>
         {stages.map((s, i) => {
           const idx = i + 1;
           const st = idx < done || (idx === done && inv.status === 'Paid') ? 'done' : idx === done ? 'current' : 'todo';
@@ -58,23 +58,23 @@ export default function InvoiceProgressCard({ inv }) {
           const dotFg = st === 'todo' ? 'var(--text-muted)' : '#fff';
           const dateStr = getStageDate(s);
           return (
-            <div key={i} style={{ flex: 1, minWidth: 88, textAlign: 'center', position: 'relative' }}>
-              {i > 0 && <div style={{ position: 'absolute', top: 11, left: '-50%', width: '100%', height: 2, background: st === 'done' ? 'var(--green)' : idx <= done ? 'var(--blue)' : '#E2E8F0', zIndex: 0 }} />}
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: dotBg, color: dotFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, margin: '0 auto', position: 'relative', zIndex: 1 }}>{st === 'done' ? '✓' : idx}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.3 }}>{s}</div>
-              {dateStr && <div style={{ fontSize: 9.5, color: 'var(--text)', fontWeight: 600, marginTop: 3 }}>{dateStr}</div>}
+            <div key={i} style={{ flex: 1, minWidth: '5.5rem', textAlign: 'center', position: 'relative' }}>
+              {i > 0 && <div style={{ position: 'absolute', top: '0.6875rem', left: '-50%', width: '100%', height: '0.125rem', background: st === 'done' ? 'var(--green)' : idx <= done ? 'var(--blue)' : '#E2E8F0', zIndex: 0 }} />}
+              <div style={{ width: '1.375rem', height: '1.375rem', borderRadius: '50%', background: dotBg, color: dotFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6875rem', fontWeight: 700, margin: '0 auto', position: 'relative', zIndex: 1 }}>{st === 'done' ? '✓' : idx}</div>
+              <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)', marginTop: '0.3125rem', lineHeight: 1.3 }}>{s}</div>
+              {dateStr && <div style={{ fontSize: '0.59375rem', color: 'var(--text)', fontWeight: 600, marginTop: '0.1875rem' }}>{dateStr}</div>}
             </div>
           );
         })}
       </div>
       {failed && (
-        <div role="alert" style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: 'var(--brand-tint)', color: 'var(--brand-dark)', fontSize: 12.5, lineHeight: 1.4 }}>
+        <div role="alert" style={{ marginTop: '0.625rem', padding: '0.625rem 0.75rem', borderRadius: '0.5rem', background: 'var(--brand-tint)', color: 'var(--brand-dark)', fontSize: '0.78125rem', lineHeight: 1.4 }}>
           <b>{inv.status}</b> · {failureNote}
         </div>
       )}
-      <div className="validation-row" style={{ marginTop: 10 }}><span>UTR No.</span><span>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</span></div>
-      {inv.shortPayReason && !failed && <div className="validation-row"><span>Reason for Less Paid</span><span style={{ textAlign: 'right', maxWidth: 280 }}>{inv.shortPayReason}</span></div>}
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+      <div className="validation-row" style={{ marginTop: '0.625rem' }}><span>UTR No.</span><span>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</span></div>
+      {inv.shortPayReason && !failed && <div className="validation-row"><span>Reason for Less Paid</span><span style={{ textAlign: 'right', maxWidth: '17.5rem' }}>{inv.shortPayReason}</span></div>}
+      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
         <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'raiseTicket', ctx: { no: inv.no, poItem: inv.poItem } }))}>Raise a Query</button>
         <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no, poItem: inv.poItem } }))}>View Full Detail</button>
       </div>

@@ -20,7 +20,7 @@ function PortalRedirect({ to, message }) {
 /** Gate for the internal (HQ / Internal Team) side of the app. */
 export function RequireInternal() {
   const { loggedIn, authType } = useSelector((s) => s.auth);
-  if (!loggedIn) return <Navigate to="/login" replace />;
+  if (!loggedIn) return <Navigate to="/login?account=internal" replace />;
   if (authType !== 'internal') return <PortalRedirect
     to="/supplier/home"
     message="You're signed in as a supplier. You've been redirected to My Invoices. Log out to sign in to the internal portal."
@@ -31,7 +31,7 @@ export function RequireInternal() {
 /** Gate for the supplier side of the app. */
 export function RequireSupplier() {
   const { loggedIn, authType } = useSelector((s) => s.auth);
-  if (!loggedIn) return <Navigate to="/login" replace />;
+  if (!loggedIn) return <Navigate to="/login?account=supplier" replace />;
   if (AUTH_BYPASS) return <Outlet />;
   if (authType !== 'supplier') return <PortalRedirect
     to="/app/invoices"

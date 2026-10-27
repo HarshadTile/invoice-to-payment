@@ -157,12 +157,14 @@ def get_gcp_invoice_list(
     invoice_number: str | None = None,
     po_number: str | None = None,
     po_item: int | None = None,
+    vendor_codes: list[str] | None = None,
 ):
     rows, total = get_gcp_invoices(
         page=page,
         page_size=page_size,
         status=status,
         vendor_code=vendor_code,
+        vendor_codes=vendor_codes,
         invoice_number=invoice_number,
         po_number=po_number,
         po_item=po_item,

@@ -7,10 +7,11 @@ tickets, settings, the audit log) lives in a SQL database.
 ## Requirements
 
 - Python 3.11+
-- Either MySQL 8+/9 running locally, **or** no database server at all (use
-  SQLite — see below). There's no seeded database or `.env` committed to this
-  repo, so a fresh checkout needs both of the one-time steps below before
-  anything will show data.
+- MySQL 8+/9 running locally. The historical Inquiry Desk migrations use
+  MySQL-specific SQL; a fresh application setup cannot migrate on SQLite.
+  SQLite is used only by the isolated feature test helper described below.
+- There's no seeded database or `.env` committed to this repo, so a fresh
+  checkout needs the one-time setup steps below before anything will show data.
 
 ## First-time setup
 
@@ -32,15 +33,7 @@ notepad .env
 ```
 
 The code falls back to MySQL (`mysql+pymysql://root:root@localhost:3306/mahindra_i2p`)
-if `.env` doesn't exist and `DATABASE_URL` isn't set some other way. If you
-don't have MySQL, use a local SQLite file instead — no server needed:
-
-```
-DATABASE_URL=sqlite:///./data/app.db
-```
-
-`data/app.db` is created automatically on first use and is not (and should
-not be) committed to git.
+if `.env` doesn't exist and `DATABASE_URL` isn't set some other way.
 
 To use MySQL, create the database first:
 
@@ -99,21 +92,19 @@ to actually call this backend instead of a different, unrelated server.
 
 ## Tests
 
-```powershell
-$env:DATABASE_URL = "sqlite:///./data/app.db"
-pytest
-```
-
-The suite creates its own throwaway accounts (`users_api_admin`,
-`users_api_viewer`, `temp_user_*`) directly in whatever database
-`DATABASE_URL` points at and doesn't fully clean up after itself. Don't run
-it against a database you care about — point it at a scratch SQLite file if
-you want to keep your local dev data clean:
+For isolated password-link, user-management, and permission tests, run:
 
 ```powershell
-$env:DATABASE_URL = "sqlite:///./data/test.db"
-pytest
+.\.venv\Scripts\python.exe -m pytest --noconftest -p link_tests.support link_tests tests/test_password_reset.py tests/test_users_api.py tests/test_audit_log.py tests/test_permissions.py tests/test_timestamps.py -q -p no:cacheprovider
 ```
+
+This creates and removes a unique temporary SQLite database without using the
+application database. MySQL-specific concurrency checks are skipped in this run.
+The legacy default `pytest` entry point instead drops and recreates the fixed
+MySQL database `mahindra_i2p_test`; it ignores a SQLite `DATABASE_URL` override.
+Only use that full-suite entry point when this fixed database is disposable.
+See [manual user setup links](docs/manual-user-setup-links.md) for the feature
+workflow and LAN testing steps.
 
 ## Database migrations (Alembic)
 
@@ -161,6 +152,10 @@ blindly applying whatever `--autogenerate` proposes, since it will also
 suggest dropping those tables.
 
 ## User management and roles
+
+User invitations and password resets use copyable one-time links, with no SMTP
+credentials required. See [manual user setup links](docs/manual-user-setup-links.md)
+for the admin workflow, LAN configuration, production URL and isolated test command.
 
 - Accounts, roles and portal (channel) access are managed from the app itself
   — Settings → Users, once signed in as a role with the `manageUsers`

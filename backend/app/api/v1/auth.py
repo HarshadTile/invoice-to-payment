@@ -2,7 +2,8 @@ from datetime import datetime
 from typing import Optional
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy import and_, func, or_
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError as JWTError
 from pydantic import BaseModel
@@ -10,15 +11,33 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import write_audit
 from app.core.database import get_db
-from app.core.password_reset import issue_password_reset
+from app.core.channels import channel_availability, require_enabled_channel
+from app.core.password_reset import token_digest
 from app.core.security import create_access_token, get_password_hash, verify_password
+from app.models.supplier import Supplier, SupplierSetupToken
 from app.models.user import PasswordResetToken, User
 from app.repositories.gcp_invoice import get_all_cached_invoices
+from app.services.supplier_service import (
+    GENERIC_LOGIN_ERROR,
+    build_session,
+    clear_failures,
+    is_locked,
+    is_managed_supplier_token,
+    load_active_supplier,
+    register_failure,
+    vendor_codes_of,
+)
 
 router = APIRouter()
 security = HTTPBearer()
 
 VALID_CHANNEL_SCOPES = {"all", "msetuSrm", "poPortal", "manual", "mfoxPortal"}
+
+
+@router.get('/portal-availability')
+def public_portal_availability(response: Response, db: Session = Depends(get_db)):
+    response.headers['Cache-Control'] = 'no-store'
+    return {'channelAvailability': channel_availability(db)}
 
 
 def _ticket_role(user: User) -> str:
@@ -70,6 +89,85 @@ def supplier_login(request: SupplierLoginRequest, db: Session = Depends(get_db))
     }
 
 
+class SupplierPasswordLoginRequest(BaseModel):
+    pan: str
+    password: str
+
+
+@router.post("/supplier/login-with-password")
+def supplier_login_with_password(request: SupplierPasswordLoginRequest, db: Session = Depends(get_db)):
+    """PAN + password sign-in for suppliers created on the Suppliers screen. The original
+    vendor-code login above is unchanged and keeps working alongside this one."""
+    pan = request.pan.strip().upper()
+    actor = f"Supplier {pan}"
+    supplier = db.query(Supplier).filter(Supplier.pan == pan).first()
+    if not supplier or supplier.status != "Active" or not supplier.password_hash:
+        write_audit(db, actor, "Failed login", "unknown PAN, not active, or no password set")
+        raise HTTPException(status_code=401, detail=GENERIC_LOGIN_ERROR)
+    if is_locked(supplier):
+        write_audit(db, actor, "Failed login", "PAN is locked after too many wrong attempts")
+        raise HTTPException(status_code=401, detail=GENERIC_LOGIN_ERROR)
+    if not verify_password(request.password, supplier.password_hash):
+        register_failure(db, supplier)
+        write_audit(db, actor, "Failed login", "wrong password")
+        raise HTTPException(status_code=401, detail=GENERIC_LOGIN_ERROR)
+
+    require_enabled_channel(db, supplier.channel)
+    clear_failures(db, supplier)
+    session = build_session(supplier)
+    write_audit(db, actor, "Logged in", f"{supplier.name}, supplier portal")
+    return session
+
+
+def _valid_setup_record(db: Session, token: str) -> SupplierSetupToken:
+    invalid = HTTPException(
+        status_code=400,
+        detail="This link is invalid or has expired. Ask the team for a new one.",
+    )
+    record = db.query(SupplierSetupToken).filter(SupplierSetupToken.token == token).first()
+    if not record or record.used or record.expires_at < datetime.utcnow():
+        raise invalid
+    supplier = db.get(Supplier, record.supplier_id)
+    if not supplier or supplier.status != "Invited":
+        raise invalid
+    return record
+
+
+@router.get("/supplier/check-setup-link")
+def check_setup_link(token: str, db: Session = Depends(get_db)):
+    record = _valid_setup_record(db, token)
+    return {"valid": True, "name": db.get(Supplier, record.supplier_id).name}
+
+
+class SupplierSetupRequest(BaseModel):
+    token: str
+    pan: str
+    password: str
+
+
+@router.post("/supplier/complete-supplier-setup")
+def complete_supplier_setup(request: SupplierSetupRequest, db: Session = Depends(get_db)):
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    record = _valid_setup_record(db, request.token)
+    supplier = db.get(Supplier, record.supplier_id)
+    actor = f"Supplier {supplier.pan}"
+    if is_locked(supplier):
+        raise HTTPException(status_code=400, detail="Too many wrong attempts. Try again in 15 minutes.")
+    if request.pan.strip().upper() != supplier.pan:
+        register_failure(db, supplier)
+        write_audit(db, actor, "Failed setup", "PAN did not match the setup link")
+        raise HTTPException(status_code=400, detail="That PAN doesn't match this link.")
+
+    supplier.password_hash = get_password_hash(request.password)
+    supplier.status = "Active"
+    supplier.failed_attempts, supplier.locked_until = 0, None
+    record.used = True
+    db.commit()
+    write_audit(db, actor, "Completed setup", f"{supplier.name} set a password")
+    return {"msg": "Password set. You can now sign in with your PAN and password."}
+
+
 class InternalLoginRequest(BaseModel):
     username: str
     password: str
@@ -89,7 +187,7 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
         write_audit(db, user, "Failed login", "account not activated yet (invite pending)")
         raise HTTPException(
             status_code=403,
-            detail="This account hasn't been activated yet. Check your email for the invite link, or ask an admin to resend it.",
+            detail="This account hasn't been activated yet. Use your password setup link, or ask an administrator for a new one.",
         )
     if user.status != "Active":
         write_audit(db, user, "Failed login", "account is deactivated")
@@ -126,6 +224,7 @@ def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db))
                 detail="This account can only sign in to its assigned portal.",
             )
 
+    require_enabled_channel(db, final_scope)
     login_by = "username" if user.username.lower() == login_id else "email"
     scope_data = {
         "channelScope": final_scope,
@@ -169,6 +268,23 @@ def get_current_user(
 ):
     """Return one canonical, server-verified identity for service-layer use."""
     auth_type = payload.get("auth_type")
+    if auth_type == "supplier" and is_managed_supplier_token(payload):
+        supplier = load_active_supplier(db, payload)
+        codes = vendor_codes_of(supplier)
+        return {
+            "auth_type": "supplier",
+            "supplier_id": supplier.id,
+            "vendor_code": codes[0] if codes else "",
+            "vendor_codes": codes,
+            "company": supplier.name or "Vendor",
+            "pan": supplier.pan,
+            "user_id": None,
+            "name": supplier.name or "Vendor",
+            "ticket_role": "SUPPLIER",
+            "channel_scope": None,
+            "allowed_channels": [],
+        }
+
     if auth_type == "supplier":
         vendor_code = str(payload.get("sub") or "").strip()
         if not vendor_code:
@@ -177,6 +293,7 @@ def get_current_user(
         company = scope.get("company") or "Vendor"
         return {
             "auth_type": "supplier",
+            "supplier_id": None,
             "vendor_code": vendor_code,
             "vendor_codes": [vendor_code],
             "company": company,
@@ -244,6 +361,16 @@ def get_ticket_user(user: dict = Depends(get_current_user)) -> dict:
 
 @router.get("/me")
 def get_me(user: dict = Depends(get_current_user)):
+    if user["auth_type"] == "supplier" and user.get("supplier_id"):
+        return {
+            "auth": {
+                "authType": "supplier",
+                "pan": user["pan"],
+                "company": user["company"],
+                "vcodes": user["vendor_codes"],
+                "vcode": user["vendor_code"],
+            }
+        }
     if user["auth_type"] == "supplier":
         return {
             "auth": {
@@ -276,14 +403,7 @@ class ForgotPasswordRequest(BaseModel):
 
 @router.post("/forgot-password")
 def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    email = request.email.strip().lower()
-    user = db.query(User).filter(User.email == email).first()
-    response = {"msg": "If that email has an account, a reset link has been sent to it."}
-    if not user or user.status != "Active":
-        return response
-    issue_password_reset(db, user, admin_initiated=False)
-    write_audit(db, user, "Requested password reset", f"({user.username}) via Forgot password")
-    return response
+    return {"msg": "Contact your administrator to request a password reset link."}
 
 
 class ResetPasswordRequest(BaseModel):
@@ -291,36 +411,72 @@ class ResetPasswordRequest(BaseModel):
     password: str
 
 
+class PasswordLinkInfoRequest(BaseModel):
+    token: str
+
+
+@router.post("/password-link-info")
+def password_link_info(request: PasswordLinkInfoRequest, response: Response, db: Session = Depends(get_db)):
+    """Reveal the sign-in identity only to the holder of a valid, unused link."""
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    record = db.query(PasswordResetToken).filter(
+        or_(PasswordResetToken.token == token_digest(request.token), and_(
+            func.length(PasswordResetToken.token) < 64, PasswordResetToken.token == request.token,
+        )),
+        PasswordResetToken.used.is_(False),
+        PasswordResetToken.expires_at > datetime.utcnow(),
+    ).first()
+    user = db.get(User, record.user_id) if record else None
+    if not user or user.status not in ("Invited", "Active"):
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired. Request a new one.")
+    return {"email": user.email, "name": user.name, "linkType": "invite" if user.status == "Invited" else "reset"}
+
+
 @router.post("/reset-password")
-def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+def reset_password(request: ResetPasswordRequest, response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
     if len(request.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
     record = db.query(PasswordResetToken).filter(
-        PasswordResetToken.token == request.token
+        or_(PasswordResetToken.token == token_digest(request.token), and_(
+            func.length(PasswordResetToken.token) < 64, PasswordResetToken.token == request.token,
+        ))
     ).first()
-    if not record or record.used or record.expires_at < datetime.utcnow():
+    if not record:
         raise HTTPException(
             status_code=400,
             detail="This reset link is invalid or has expired. Request a new one.",
         )
-    user = db.query(User).filter(User.id == record.user_id).first()
-    if not user:
+    # Lock user first (the same order as link issuance), then refresh the token.
+    user = db.query(User).filter(User.id == record.user_id).populate_existing().with_for_update().first()
+    record = db.query(PasswordResetToken).filter(PasswordResetToken.id == record.id).populate_existing().with_for_update().first()
+    if (not user or user.status not in ("Invited", "Active") or not record
+            or record.used or record.expires_at <= datetime.utcnow()):
         raise HTTPException(
             status_code=400,
             detail="This reset link is invalid or has expired. Request a new one.",
         )
 
     was_invited = user.status == "Invited"
+    claimed = db.query(PasswordResetToken).filter(
+        PasswordResetToken.id == record.id, PasswordResetToken.used.is_(False),
+        PasswordResetToken.expires_at > datetime.utcnow(),
+    ).update({"used": True}, synchronize_session=False)
+    if claimed != 1:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired. Request a new one.")
     user.password_hash = get_password_hash(request.password)
     if was_invited:
         user.status = "Active"
-    record.used = True
-    db.commit()
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.id, PasswordResetToken.used.is_(False),
+    ).update({"used": True}, synchronize_session=False)
     write_audit(
         db,
         user,
         "Activated invite" if was_invited else "Reset own password",
-        f"({user.username}) via emailed link",
+        f"({user.email}) via one-time password link",
     )
     return {"msg": "Password updated. You can now sign in with your new password."}
 
@@ -336,7 +492,8 @@ def logout(credentials: HTTPAuthorizationCredentials | None = Depends(optional_s
         try:
             payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
             if payload.get("auth_type") == "supplier":
-                write_audit(db, f"Supplier {payload.get('sub')}", "Logged out", "supplier portal")
+                who = (payload.get("scope") or {}).get("pan") if is_managed_supplier_token(payload) else payload.get("sub")
+                write_audit(db, f"Supplier {who}", "Logged out", "supplier portal")
             else:
                 user = db.query(User).filter(User.id == int(payload.get("sub"))).first()
                 if user:

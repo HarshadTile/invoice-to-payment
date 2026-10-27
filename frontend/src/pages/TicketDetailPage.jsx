@@ -122,7 +122,7 @@ export default function TicketDetailPage() {
   async function downloadAttachment(attachment) {
     setError('');
     try {
-      const response = await fetch(`/api/v1/tickets/${id}/attachments/${attachment.id}`, {
+      const response = await fetch(`/api/v1/tickets/${id}/download-attachment/${attachment.id}`, {
         headers: api.authHeaders(),
       });
       if (!response.ok) throw new Error('Download failed.');

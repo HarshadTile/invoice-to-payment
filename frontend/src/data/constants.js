@@ -4,11 +4,11 @@
    same role matrix, same status vocabulary. */
 
 export const ROLE_MATRIX = {
-  Admin: { importExport: true, createTrace: true, manageConfig: true, manageUsers: true, manageRoles: true, viewAuditLog: true },
-  'Invoice Team': { importExport: true, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
-  Approver: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
-  Accounts: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
-  Viewer: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false },
+  Admin: { importExport: true, createTrace: true, manageConfig: true, manageUsers: true, manageRoles: true, viewAuditLog: true, manageSuppliers: true },
+  'Invoice Team': { importExport: true, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false, manageSuppliers: true },
+  Approver: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false, manageSuppliers: false },
+  Accounts: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false, manageSuppliers: false },
+  Viewer: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false, manageSuppliers: false },
 };
 
 // Every channel the data model knows about. The Manual (e-mail) channel is kept here so
@@ -39,6 +39,7 @@ const ALL_CHANNELS = [
 
 // Channels offered in the UI: sidebar, filters, tabs, dashboards. Manual isn't one of them.
 export const CHANNELS = ALL_CHANNELS.filter((c) => c.key !== 'manual');
+export const DEFAULT_CHANNEL_AVAILABILITY = { msetuSrm: true, poPortal: true, mfoxPortal: false };
 
 export const CHANNEL_LABEL = Object.fromEntries(ALL_CHANNELS.map((c) => [c.key, c.label]));
 

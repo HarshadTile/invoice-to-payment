@@ -1,3 +1,5 @@
+from urllib.parse import parse_qs, urlsplit
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -43,13 +45,28 @@ as_viewer = TestClient(app, headers=_auth("internal", viewer_id, {"channelScope"
 as_supplier = TestClient(app, headers=_auth("supplier", "DIM00505AA", {"company": "Vendor"}))
 
 
+_issued_tokens = {}
+
+
 @pytest.fixture(autouse=True)
-def no_real_email(monkeypatch):
-    """Every test in this file creates users, which now always sends an invite email —
-    never let that hit real SMTP/network. Individual tests can still inspect `sent`."""
-    sent = []
-    monkeypatch.setattr("app.core.password_reset.send_email", lambda **kwargs: sent.append(kwargs))
-    return sent
+def issued_links(monkeypatch):
+    """Observe real issuance, and fail if any SMTP delivery is attempted."""
+    from app.core import password_reset
+    original = password_reset._issue_token
+    generated = []
+    _issued_tokens.clear()
+
+    def capture(db, user, lifetime_minutes, kind):
+        result = original(db, user, lifetime_minutes, kind)
+        _issued_tokens[user.id] = parse_qs(urlsplit(result["setupLink"]).query)["token"][0]
+        generated.append({"email": user.email, **result})
+        return result
+
+    monkeypatch.setattr(password_reset, "_issue_token", capture)
+    def forbidden_email(**kwargs):
+        raise AssertionError("User management must not send email")
+    monkeypatch.setattr("app.core.email.send_email", forbidden_email)
+    return generated
 
 
 def _cleanup(username):
@@ -63,11 +80,7 @@ def _cleanup(username):
 
 
 def _latest_token(user_id):
-    db = SessionLocal()
-    row = (db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user_id)
-           .order_by(PasswordResetToken.id.desc()).first())
-    db.close()
-    return row.token
+    return _issued_tokens[user_id]
 
 
 def _activate(user_id, password="Passw0rd!"):
@@ -89,7 +102,7 @@ def test_supplier_token_cannot_reach_users_api():
     assert as_supplier.get("/api/v1/users/").status_code == 403
 
 
-def test_new_account_is_invited_not_active_until_the_link_is_used(no_real_email):
+def test_new_account_is_invited_not_active_until_the_link_is_used(issued_links):
     _cleanup("temp_user_1")
     created = as_admin.post("/api/v1/users/", json={
         "username": "temp_user_1", "name": "Temp One", "email": "temp1@example.com",
@@ -99,8 +112,8 @@ def test_new_account_is_invited_not_active_until_the_link_is_used(no_real_email)
     body = created.json()
     assert body["status"] == "Invited"
     user_id = body["id"]
-    assert len(no_real_email) == 1
-    assert no_real_email[0]["to"] == "temp1@example.com"
+    assert len(issued_links) == 1
+    assert issued_links[0]["email"] == "temp1@example.com"
 
     # An invited account cannot log in — with a clear reason, not a generic error
     blocked = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_1", "password": "anything"})
@@ -117,20 +130,20 @@ def test_new_account_is_invited_not_active_until_the_link_is_used(no_real_email)
 
 def test_admin_can_update_and_delete_a_user():
     _cleanup("temp_user_1b")
-    created = as_admin.post("/api/v1/users/", json={
+    created = as_admin.post("/api/v1/users/add-user", json={
         "username": "temp_user_1b", "name": "Temp One B", "email": "temp1b@example.com",
         "role": "Approver", "channelScope": "msetuSrm",
     })
     user_id = created.json()["id"]
 
-    updated = as_admin.patch(f"/api/v1/users/{user_id}", json={"status": "Inactive", "role": "Viewer"})
+    updated = as_admin.patch(f"/api/v1/users/{user_id}/update-user", json={"status": "Inactive", "role": "Viewer"})
     assert updated.status_code == 200
     assert updated.json()["status"] == "Inactive"
     assert updated.json()["role"] == "Viewer"
 
-    deleted = as_admin.delete(f"/api/v1/users/{user_id}")
+    deleted = as_admin.delete(f"/api/v1/users/{user_id}/delete-user")
     assert deleted.status_code == 200
-    assert not any(u["id"] == user_id for u in as_admin.get("/api/v1/users/").json())
+    assert not any(u["id"] == user_id for u in as_admin.get("/api/v1/users/list-users").json())
 
 
 def test_create_rejects_unknown_role_and_duplicate_email():
@@ -223,7 +236,7 @@ def test_a_locked_account_cannot_sign_in_to_a_different_portal():
 def test_an_all_access_account_may_preview_any_single_channel():
     # Admin has channel_scope "all"; narrowing its own session to one channel is just a
     # view preference, not a widening of access, so the login form may still offer it.
-    for portal in ("msetuSrm", "poPortal", "mfoxPortal", "all"):
+    for portal in ("msetuSrm", "poPortal", "all"):
         response = anonymous.post("/api/v1/auth/login", json={
             "username": admin_username, "password": "Passw0rd!", "channelScope": portal,
         })
@@ -298,9 +311,9 @@ def test_deactivated_user_cannot_log_in_or_use_an_existing_token():
     as_admin.delete(f"/api/v1/users/{user_id}")
 
 
-def test_admin_reset_password_emails_a_link_rather_than_setting_one_directly(no_real_email):
+def test_admin_reset_password_returns_a_link_rather_than_setting_one_directly(issued_links):
     # The admin action must never set or see the new password itself — only the account
-    # holder does, by following the emailed link to the public /auth/reset-password endpoint.
+    # holder does, by following the shared link to the public /auth/reset-password endpoint.
     _cleanup("temp_user_6")
     created = as_admin.post("/api/v1/users/", json={
         "username": "temp_user_6", "name": "Temp Six", "email": "temp6@example.com",
@@ -311,8 +324,8 @@ def test_admin_reset_password_emails_a_link_rather_than_setting_one_directly(no_
 
     triggered = as_admin.post(f"/api/v1/users/{user_id}/reset-password")
     assert triggered.status_code == 200
-    assert len(no_real_email) == 2  # the invite, then this reset
-    assert no_real_email[-1]["to"] == "temp6@example.com"
+    assert len(issued_links) == 2  # the invite, then this reset
+    assert issued_links[-1]["email"] == "temp6@example.com"
 
     completed = anonymous.post("/api/v1/auth/reset-password", json={"token": _latest_token(user_id), "password": "BrandNew1!"})
     assert completed.status_code == 200
@@ -326,7 +339,7 @@ def test_admin_reset_password_emails_a_link_rather_than_setting_one_directly(no_
     as_admin.delete(f"/api/v1/users/{user_id}")
 
 
-def test_admin_reset_on_a_still_invited_user_resends_the_invite_instead(no_real_email):
+def test_admin_reset_on_a_still_invited_user_resends_the_invite_instead(issued_links):
     _cleanup("temp_user_14")
     created = as_admin.post("/api/v1/users/", json={
         "username": "temp_user_14", "name": "Temp Fourteen", "email": "temp14@example.com",
@@ -337,7 +350,7 @@ def test_admin_reset_on_a_still_invited_user_resends_the_invite_instead(no_real_
 
     resent = as_admin.post(f"/api/v1/users/{user_id}/reset-password")
     assert resent.status_code == 200
-    assert len(no_real_email) == 2  # the original invite, then this resend
+    assert len(issued_links) == 2  # the original invite, then this resend
 
     # Still only usable via the (new) invite link, not yet a normal account
     still_invited = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_14", "password": "anything"})
@@ -397,7 +410,7 @@ def test_deleting_a_user_also_removes_their_reset_tokens():
     db.close()
 
 
-def test_changing_an_email_revokes_old_links_and_sends_a_fresh_one_to_the_new_address(no_real_email):
+def test_changing_an_email_revokes_old_links_and_returns_a_fresh_one(issued_links):
     _cleanup("temp_user_email_1")
     created = as_admin.post("/api/v1/users/", json={
         "username": "temp_user_email_1", "name": "Email One", "email": "old1@example.com",
@@ -405,7 +418,7 @@ def test_changing_an_email_revokes_old_links_and_sends_a_fresh_one_to_the_new_ad
     })
     user_id = created.json()["id"]
     old_token = _latest_token(user_id)
-    no_real_email.clear()
+    issued_links.clear()
 
     updated = as_admin.patch(f"/api/v1/users/{user_id}", json={"email": "new1@example.com"})
     assert updated.status_code == 200
@@ -413,13 +426,13 @@ def test_changing_an_email_revokes_old_links_and_sends_a_fresh_one_to_the_new_ad
 
     # The link sent to the old address is dead; a new one went to the new address.
     assert anonymous.post("/api/v1/auth/reset-password", json={"token": old_token, "password": "BrandNew1!"}).status_code == 400
-    assert [m["to"] for m in no_real_email] == ["new1@example.com"]
-    assert updated.json()["emailLink"] == "sent"
+    assert [m["email"] for m in issued_links] == ["new1@example.com"]
+    assert updated.json()["setupLink"].startswith("http")
     assert anonymous.post("/api/v1/auth/reset-password", json={"token": _latest_token(user_id), "password": "BrandNew1!"}).status_code == 200
     _cleanup("temp_user_email_1")
 
 
-def test_editing_something_other_than_the_email_sends_nothing(no_real_email):
+def test_editing_something_other_than_the_email_sends_nothing(issued_links):
     _cleanup("temp_user_email_2")
     created = as_admin.post("/api/v1/users/", json={
         "username": "temp_user_email_2", "name": "Email Two", "email": "old2@example.com",
@@ -427,15 +440,15 @@ def test_editing_something_other_than_the_email_sends_nothing(no_real_email):
     })
     user_id = created.json()["id"]
     token = _latest_token(user_id)
-    no_real_email.clear()
+    issued_links.clear()
 
     as_admin.patch(f"/api/v1/users/{user_id}", json={"name": "Renamed"})
-    assert no_real_email == []
+    assert issued_links == []
     assert _latest_token(user_id) == token
     _cleanup("temp_user_email_2")
 
 
-def test_an_email_send_failure_does_not_undo_the_email_change(monkeypatch):
+def test_email_change_works_even_when_smtp_is_unavailable(monkeypatch):
     _cleanup("temp_user_email_3")
     created = as_admin.post("/api/v1/users/", json={
         "username": "temp_user_email_3", "name": "Email Three", "email": "old3@example.com",
@@ -445,16 +458,16 @@ def test_an_email_send_failure_does_not_undo_the_email_change(monkeypatch):
 
     def boom(**kwargs):
         raise OSError("smtp down")
-    monkeypatch.setattr("app.core.password_reset.send_email", boom)
+    monkeypatch.setattr("app.core.email.send_email", boom)
 
     updated = as_admin.patch(f"/api/v1/users/{user_id}", json={"email": "new3@example.com"})
     assert updated.status_code == 200
     assert updated.json()["email"] == "new3@example.com"
-    assert updated.json()["emailLink"] == "failed"
+    assert updated.json()["setupLink"].startswith("http")
     _cleanup("temp_user_email_3")
 
 
-def test_changing_an_active_users_email_also_notifies_the_old_address(no_real_email):
+def test_changing_an_active_users_email_returns_a_reset_link_without_email(issued_links):
     _cleanup("temp_user_email_4")
     created = as_admin.post("/api/v1/users/", json={
         "username": "temp_user_email_4", "name": "Email Four", "email": "old4@example.com",
@@ -462,11 +475,11 @@ def test_changing_an_active_users_email_also_notifies_the_old_address(no_real_em
     })
     user_id = created.json()["id"]
     _activate(user_id)
-    no_real_email.clear()
+    issued_links.clear()
 
     updated = as_admin.patch(f"/api/v1/users/{user_id}", json={"email": "new4@example.com"})
-    assert updated.json()["emailLink"] == "sent"
-    assert sorted(m["to"] for m in no_real_email) == ["new4@example.com", "old4@example.com"]
+    assert updated.json()["setupLink"].startswith("http")
+    assert sorted(m["email"] for m in issued_links) == ["new4@example.com"]
     _cleanup("temp_user_email_4")
 
 

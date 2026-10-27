@@ -1,131 +1,122 @@
-import { useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { vendorCodesFor } from '../utils/businessLogic';
+import { useSelector } from 'react-redux';
+import { useScope } from '../features/ui/scope';
 import { runtime } from '../data/runtime';
 import { CHANNEL_LABEL } from '../data/constants';
-import { pushToast } from '../features/ui/uiSlice';
-import { authApi } from '../api/authApi';
+import { Building, Mail, Shield, User } from '../components/common/icons.jsx';
 
+const TICKET_ROLE_LABEL = {
+  ADMIN: 'Admin',
+  CHANNEL_LEAD: 'Channel Lead',
+  ASSIGNEE: 'Assignee',
+  NO_ACCESS: 'No Inquiry Desk access',
+};
+
+/** Profile: a banner with who you are, then cards for contact, work and access details. Read-only. */
 export default function ProfilePage() {
-  const { authType, currentUser, supplierQuery, supplierPAN, supplierLoginVcode, channelScope, role } = useSelector((s) => s.auth);
-  const dispatch = useDispatch();
-  const [sendingReset, setSendingReset] = useState(false);
-
-  async function requestPasswordReset() {
-    setSendingReset(true);
-    try {
-      await authApi.forgotPassword(currentUser.email);
-      dispatch(pushToast(`If ${currentUser.email} has an account, a reset link has been sent to it.`));
-    } catch (err) {
-      dispatch(pushToast(err.message || 'Something went wrong. Please try again.'));
-    } finally {
-      setSendingReset(false);
-    }
-  }
+  const { authType, currentUser, supplierQuery, supplierPAN, supplierVendorCodes, channelScope, role, ticketRole } = useSelector((s) => s.auth);
+  const scope = useScope();
 
   if (authType === 'supplier') {
-    const pan = runtime.invoices.find((invoice) => invoice.vcode === supplierLoginVcode)?.pan || supplierPAN || '-';
-    const codes = vendorCodesFor(supplierQuery);
+    const pan = supplierPAN || runtime.invoices.find((invoice) => invoice.vcode === supplierVendorCodes?.[0])?.pan || '-';
+    const codes = [...new Set(supplierVendorCodes || [])];
+    const selectedCode = codes.length === 1 ? codes[0] : (codes.includes(scope.vcode) ? scope.vcode : '');
+    const filterLabel = selectedCode || 'All assigned vendor codes';
+    const initials = String(supplierQuery || 'S').trim().slice(0, 2).toUpperCase();
     return (
-      <>
-        <div className="card" style={{ maxWidth: 960, margin: '0 auto', padding: 28 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 24, paddingBottom: 22, borderBottom: '1px solid var(--border-soft)' }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>
-                Supplier Account
-              </div>
-              <h2 style={{ fontSize: 22, lineHeight: 1.4, margin: 0, overflowWrap: 'anywhere' }}>{supplierQuery}</h2>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: 12, marginBottom: 20 }}>
-            <ProfileInfo label="Signed-in Vendor Code" value={supplierLoginVcode} mono />
-            <ProfileInfo label="PAN" value={pan} mono />
-          </div>
-
-          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
-              <h3 style={{ margin: 0 }}>Vendor codes</h3>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{codes.length} {codes.length === 1 ? 'code' : 'codes'}</span>
-            </div>
-            <p style={{ margin: '0 0 14px', fontSize: 12.5, lineHeight: 1.6, color: 'var(--text-muted)' }}>Codes associated with your supplier account. Invoice access is limited to your signed-in vendor code.</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+      <section className="pf-page">
+        <Banner initials={initials} name={supplierQuery} subtitle="Supplier account" chips={[{ text: `Viewing ${filterLabel}`, tone: 'brand', mono: !!selectedCode }]} />
+        <div className="pf-cards">
+          <InfoCard icon={<Building />} title="Account">
+            <Row label="Vendor code filter" value={filterLabel} mono={!!selectedCode} />
+            <Row label="PAN" value={pan} mono />
+          </InfoCard>
+          <InfoCard icon={<Shield />} title="Vendor codes" hint={`${codes.length} ${codes.length === 1 ? 'code' : 'codes'}`}>
+            <p className="pf-note">These vendor codes are assigned to your supplier account. Use the vendor-code selector in the top bar to filter invoices.</p>
+            <div className="pf-codes">
               {codes.map((c) => (
-                <span
-                  key={c}
-                  className={`chip mono ${c === supplierLoginVcode ? '' : 'gray'}`}
-                  style={c === supplierLoginVcode ? { background: 'var(--brand-tint)', color: 'var(--brand)' } : undefined}
-                >
-                  {c}{c === supplierLoginVcode ? ' · Current login' : ''}
+                <span key={c} className={`pf-code${c === selectedCode ? ' current' : ''}`}>
+                  {c}{c === selectedCode && <i>Selected</i>}
                 </span>
               ))}
             </div>
-          </div>
+          </InfoCard>
         </div>
-      </>
+      </section>
     );
   }
 
   const accessScope = channelScope === 'all' ? 'All channels (HQ / Admin)' : `${CHANNEL_LABEL[channelScope] || channelScope} only`;
+  const ticketAccess = ticketRole ? (TICKET_ROLE_LABEL[String(ticketRole).toUpperCase()] || ticketRole) : '';
 
   return (
-    <>
-      <div className="profile-grid">
-        <div className="card profile-hero">
-          <div className="avatar" aria-hidden="true">{currentUser.initials}</div>
-          <h2 className="profile-name">{currentUser.name}</h2>
-          {(currentUser.title || role) && <p className="profile-title">{currentUser.title || role}</p>}
-          {currentUser.dept && <p className="profile-dept">{currentUser.dept}</p>}
-          <div style={{ marginTop: 18 }}><span className="chip gray">Internal account</span></div>
-        </div>
-
-        <div className="card">
-          <section className="profile-section">
-            <h3>Account details</h3>
-            <p>Contact your administrator to update your details or portal access.</p>
-            <div className="pf-grid">
-              <ProfileField label="Full name" value={currentUser.fullName || currentUser.name} />
-              <ProfileField label="Email" value={currentUser.email} />
-              <ProfileField label="Job title" value={currentUser.title} />
-              <ProfileField label="Department" value={currentUser.dept} />
-              <ProfileField label="Role" value={role} />
-              <ProfileField label="Portal access" value={accessScope} />
-            </div>
-          </section>
-
-          <section className="profile-section">
-            <h3>Security</h3>
-            <p>Keep your account protected.</p>
-            <div className="pf-row">
-              <div>
-                <div className="pf-row-title">Password</div>
-                <div className="pf-row-desc">Send a password reset link to your registered email address.</div>
-              </div>
-              <button type="button" className="btn" onClick={requestPasswordReset} disabled={sendingReset || !currentUser.email}>
-                {sendingReset ? 'Sending…' : 'Send reset link'}
-              </button>
-            </div>
-          </section>
-        </div>
+    <section className="pf-page">
+      <Banner
+        initials={currentUser.initials} name={currentUser.name}
+        subtitle={[currentUser.title || role, currentUser.dept].filter(Boolean).join(' · ')}
+        chips={[{ text: role }, { text: channelScope === 'all' ? 'All channels' : CHANNEL_LABEL[channelScope] || channelScope }].filter((c) => c.text)}
+      />
+      <div className="pf-cards">
+        <InfoCard icon={<Mail />} title="Contact">
+          <Row label="Full name" value={currentUser.fullName || currentUser.name} />
+          <Row label="Email" value={currentUser.email} />
+        </InfoCard>
+        {/* Job title and department aren't entered when a user is added, so most accounts have neither:
+            show this card only when there is something to show */}
+        {(currentUser.title || currentUser.dept) && (
+          <InfoCard icon={<User />} title="Work">
+            {currentUser.title && <Row label="Job title" value={currentUser.title} />}
+            {currentUser.dept && <Row label="Department" value={currentUser.dept} />}
+          </InfoCard>
+        )}
+        <InfoCard icon={<Shield />} title="Access">
+          <Row label="Role" value={role} />
+          <Row label="Portal access" value={accessScope} />
+          {ticketAccess && <Row label="Inquiry Desk" value={ticketAccess} />}
+        </InfoCard>
       </div>
-    </>
+      <p className="pf-footnote">Contact your administrator to update your details or access.</p>
+    </section>
   );
 }
 
-function ProfileField({ label, value, wide = false }) {
+function Banner({ initials, name, subtitle, chips = [] }) {
   return (
-    <div className={`pf-field${wide ? ' wide' : ''}`}>
-      <div className="pf-label">{label}</div>
-      <div className="pf-value">{value || <span style={{ color: 'var(--text-muted)' }}>Not set</span>}</div>
+    <div className="pf-banner">
+      <div className="pf-cover" aria-hidden="true" />
+      <div className="pf-identity">
+        <div className="avatar pf-avatar" aria-hidden="true">{initials}</div>
+        <div className="pf-who">
+          <h2>{name}</h2>
+          {subtitle && <p>{subtitle}</p>}
+        </div>
+        {chips.length > 0 && (
+          <div className="pf-chips">
+            {chips.map((c) => <span key={c.text} className={`pf-chip${c.tone === 'brand' ? ' brand' : ''}${c.mono ? ' mono' : ''}`}>{c.text}</span>)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function ProfileInfo({ label, value, mono = false }) {
+function InfoCard({ icon, title, hint, wide = false, children }) {
   return (
-    <div style={{ background: '#FAFBFC', border: '1px solid var(--border-soft)', borderRadius: 9, padding: '12px 14px' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 6 }}>{label}</div>
-      <div className={mono ? 'mono' : undefined} style={{ fontSize: 14, color: 'var(--text)', overflowWrap: 'anywhere' }}>{value}</div>
+    <section className={`pf-card${wide ? ' wide' : ''}`}>
+      <header>
+        <span className="pf-card-icon" aria-hidden="true">{icon}</span>
+        <h3>{title}</h3>
+        {hint && <span className="pf-card-hint">{hint}</span>}
+      </header>
+      <div className="pf-card-body">{children}</div>
+    </section>
+  );
+}
+
+function Row({ label, value, mono = false }) {
+  return (
+    <div className="pf-row">
+      <span className="pf-label">{label}</span>
+      <span className={`pf-value${mono ? ' mono' : ''}`}>{value || <span className="pf-empty">Not set</span>}</span>
     </div>
   );
 }

@@ -7,7 +7,10 @@ from datetime import datetime, timezone
 from app.api.v1.auth import get_current_user_token
 from app.core.audit import AUDIT_TABLE_KEY
 from app.core.database import get_db
+from app.core.password_reset import link_expiry_settings
+from app.core.channels import channel_availability
 from app.core.permissions import has_capability, normalize_matrix
+from app.services.supplier_service import is_managed_supplier_token, supplier_vendor_codes_from_token
 from app.models.ticket import Ticket, TicketComment
 from app.models.settings import TableRow, AppSettings
 from app.models.sync_log import SyncLog
@@ -15,10 +18,7 @@ from app.models.user import User
 from app.schemas.sync_log import SyncLogResponse
 from collections import defaultdict
 
-router = APIRouter(
-    prefix="/workspace",
-    tags=["Workspace"],
-)
+router = APIRouter(tags=["Workspace"])
 
 
 def _serialize_comment(c: TicketComment) -> dict:
@@ -94,7 +94,12 @@ def _serialize_ticket(t: Ticket) -> dict:
     }
 
 
-@router.get("")
+@router.get("/workspace", include_in_schema=False)
+@router.get(
+    "/load-workspace-data",
+    operation_id="loadWorkspaceData",
+    summary="Load workspace data",
+)
 def get_workspace_data(
     payload: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db)
@@ -106,8 +111,10 @@ def get_workspace_data(
     query = db.query(Ticket).options(joinedload(Ticket.comments))
     
     if auth_type == "supplier":
-        vcode = payload.get("sub")
-        query = query.filter(Ticket.raised_by == vcode)
+        if is_managed_supplier_token(payload):
+            query = query.filter(Ticket.vendor_code.in_(supplier_vendor_codes_from_token(db, payload)))
+        else:
+            query = query.filter(Ticket.raised_by == payload.get("sub"))
     
     tickets_db = query.all()
     tickets = [_serialize_ticket(t) for t in tickets_db]
@@ -135,12 +142,16 @@ def get_workspace_data(
     # Query Settings
     settings_db = db.query(AppSettings).filter(AppSettings.id == 1).first()
     settings_dict = {}
+    if is_internal:
+        settings_dict.update(link_expiry_settings(db))
+        settings_dict['channelAvailability'] = channel_availability(db)
+        settings_dict["roleMatrix"] = normalize_matrix(settings_db.role_matrix_json if settings_db else None)
     if settings_db and is_internal:
-        settings_dict = {
+        settings_dict.update({
             "roleMatrix": normalize_matrix(settings_db.role_matrix_json),
             "twoFactorOn": settings_db.two_factor,
             "senderEmail": settings_db.sender_email
-        }
+        })
     
 
     # Query Sync Log

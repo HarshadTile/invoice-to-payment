@@ -33,7 +33,7 @@ export default function VendorCodePage() {
     Promise.all(Array.from({ length: pages - 1 }, (_, index) => {
       const next = new URLSearchParams(params);
       next.set('page', String(index + 2));
-      return api.get(`/v1/tickets?${next}`);
+      return api.get(`/v1/tickets/list-tickets?${next}`);
     })).then((results) => {
       if (!cancelled) setExtraTickets({ source: ticketPage, items: results.flatMap((page) => page.items) });
     }).catch(() => {
@@ -72,10 +72,10 @@ export default function VendorCodePage() {
   const amount = Object.entries(byCurrency).map(([currency, value]) => `${currency}${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`).join(' + ') || '-';
   return (
     <>
-      <div className="card" style={{ marginBottom: 12, padding: '12px 18px' }}>
-        <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+      <div className="card" style={{ marginBottom: '0.75rem', padding: '0.75rem 1.125rem' }}>
+        <div className="row" style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
           {[['Supplier Name', supplier], ['PAN', code ? panFor(supplier) : '-'], ['Vendor Code', code || `All Vendors (${codes.length})`]].map(([label, value], index) => (
-            <div key={label} className="form-field" style={{ flex: '1 1 200px', marginBottom: 0 }}>
+            <div key={label} className="form-field" style={{ flex: '1 1 12.5em', marginBottom: '0rem' }}>
               <label htmlFor={`visibility-field-${index}`}>{label}</label><input id={`visibility-field-${index}`} value={value} readOnly />
             </div>
           ))}
@@ -92,11 +92,11 @@ export default function VendorCodePage() {
         <StatCard label="Total Invoice Amount" value={amount}
           sub={knownAmounts < inRange.length ? `Amount available for ${knownAmounts} of ${inRange.length} invoices` : 'Total of available invoice amounts'} />
       </div>
-      <div style={{ margin: '20px 0 14px' }}>
-        <h3 style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 600, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
+      <div style={{ margin: '1.25rem 0 0.875rem' }}>
+        <h3 style={{ margin: '0 0 0.375rem', fontSize: '1.125rem', fontWeight: 600, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
           Invoice Status : <span style={{ color: 'var(--brand-dark)', fontWeight: 700 }}>{supplier}</span>
         </h3>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+        <p style={{ margin: '0rem', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
           Summary based on the selected year, channel, vendor and invoice dates. Select a card to filter the invoice list.
         </p>
       </div>

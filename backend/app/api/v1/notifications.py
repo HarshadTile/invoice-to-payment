@@ -33,7 +33,7 @@ def _scoped_notifications(db: Session, user: dict):
         user,
     ).filter(Ticket.legacy_unlinked.is_(False))
     if user["auth_type"] == "supplier":
-        return query.filter(Ticket.vendor_code == user["vendor_code"])
+        return query.filter(Ticket.vendor_code.in_(user["vendor_codes"]))
     if user["ticket_role"] == "ADMIN":
         return query
     if user["ticket_role"] == "CHANNEL_LEAD":
@@ -63,7 +63,13 @@ class SlaPolicyIn(BaseModel):
     active: bool = True
 
 
-@router.get("/notifications", response_model=list[NotificationOut])
+@router.get("/notifications", response_model=list[NotificationOut], include_in_schema=False)
+@router.get(
+    "/notifications/list-notifications",
+    response_model=list[NotificationOut],
+    operation_id="listNotifications",
+    summary="List notifications for the current user",
+)
 def list_notifications(
     unread: bool = False,
     limit: int = Query(100, ge=1, le=200),
@@ -83,14 +89,24 @@ def list_notifications(
     return [_notification_out(db, item) for item in rows]
 
 
-@router.get("/notifications/unread-count")
+@router.get(
+    "/notifications/unread-notification-count",
+    operation_id="getUnreadNotificationCount",
+    summary="Get the unread notification count",
+)
+@router.get("/notifications/unread-count", include_in_schema=False)
 def unread_notification_count(user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
     """Exact number of unread notifications, however many there are (the list is paged)."""
     count = _scoped_notifications(db, user).filter(Notification.read_at.is_(None)).count()
     return {"unread": count}
 
 
-@router.post("/notifications/read-all")
+@router.post("/notifications/read-all", include_in_schema=False)
+@router.post(
+    "/notifications/mark-all-as-read",
+    operation_id="markAllNotificationsAsRead",
+    summary="Mark all notifications as read",
+)
 def read_all_notifications(user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
     rows = _scoped_notifications(db, user).filter(Notification.read_at.is_(None)).all()
     now = datetime.utcnow()
@@ -100,7 +116,12 @@ def read_all_notifications(user: dict = Depends(get_ticket_user), db: Session = 
     return {"read": len(rows)}
 
 
-@router.post("/notifications/{notification_id}/read")
+@router.post("/notifications/{notification_id}/read", include_in_schema=False)
+@router.post(
+    "/notifications/{notification_id}/mark-as-read",
+    operation_id="markNotificationAsRead",
+    summary="Mark one notification as read",
+)
 def read_notification(
     notification_id: int,
     user: dict = Depends(get_ticket_user),
@@ -114,7 +135,12 @@ def read_notification(
     return {"read": True}
 
 
-@router.post("/notifications/ticket/{ticket_id}/read")
+@router.post("/notifications/ticket/{ticket_id}/read", include_in_schema=False)
+@router.post(
+    "/notifications/ticket/{ticket_id}/mark-notifications-as-read",
+    operation_id="markTicketNotificationsAsRead",
+    summary="Mark a ticket's notifications as read",
+)
 def read_ticket_notifications(
     ticket_id: str,
     user: dict = Depends(get_ticket_user),
@@ -138,13 +164,23 @@ def _require_admin(user: dict):
         raise HTTPException(status_code=403, detail={"error": {"code": "FORBIDDEN", "message": "Admin access required."}})
 
 
-@router.get("/admin/sla-policies")
+@router.get("/admin/sla-policies", include_in_schema=False)
+@router.get(
+    "/admin/list-sla-policies",
+    operation_id="listSlaPolicies",
+    summary="List SLA policies",
+)
 def list_sla_policies(user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
     _require_admin(user)
     return db.query(SlaPolicy).order_by(SlaPolicy.channel, SlaPolicy.priority).all()
 
 
-@router.put("/admin/sla-policies")
+@router.put("/admin/sla-policies", include_in_schema=False)
+@router.put(
+    "/admin/update-sla-policies",
+    operation_id="updateSlaPolicies",
+    summary="Update SLA policies",
+)
 def replace_sla_policies(
     policies: list[SlaPolicyIn],
     user: dict = Depends(get_ticket_user),

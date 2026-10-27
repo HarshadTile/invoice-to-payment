@@ -140,6 +140,8 @@ def add_activity(
 
 def actor_key(user: dict) -> str:
     if user["auth_type"] == "supplier":
+        if user.get("supplier_id"):
+            return f"supplier:id{user['supplier_id']}"
         return f"supplier:{user['vendor_code']}"
     return f"user:{user['user_id']}"
 

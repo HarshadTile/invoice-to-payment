@@ -68,7 +68,7 @@ def _check_creation_rate(db: Session, user: dict):
     since = datetime.utcnow() - timedelta(hours=1)
     query = db.query(func.count(Ticket.id)).filter(Ticket.created_at >= since)
     if user["auth_type"] == "supplier":
-        query = query.filter(Ticket.vendor_code == user["vendor_code"], Ticket.source == "SUPPLIER")
+        query = query.filter(Ticket.vendor_code.in_(user["vendor_codes"]), Ticket.source == "SUPPLIER")
     else:
         query = query.filter(Ticket.raised_by == str(user["user_id"]), Ticket.source == "INTERNAL")
     if query.scalar() >= CREATE_LIMIT_PER_HOUR:
@@ -237,7 +237,7 @@ def create_ticket(db: Session, user: dict, ticket_in, idempotency_key: str | Non
             return format_ticket(db, user, existing)
     _check_creation_rate(db, user)
     context = _invoice_context(ticket_in.invoice_no)
-    if user["auth_type"] == "supplier" and context["vendor_code"] != user["vendor_code"]:
+    if user["auth_type"] == "supplier" and context["vendor_code"].strip().lower() not in {c.lower() for c in user["vendor_codes"]}:
         _error(404, "NOT_FOUND", "Invoice not found.")
     if not can_create(user, context["channel"]):
         _error(403, "FORBIDDEN", "Only suppliers can raise a query.")
@@ -257,7 +257,7 @@ def create_ticket(db: Session, user: dict, ticket_in, idempotency_key: str | Non
         status="OPEN",
         awaiting="STAFF",
         source="SUPPLIER" if user["auth_type"] == "supplier" else "INTERNAL",
-        raised_by=user["vendor_code"] if user["auth_type"] == "supplier" else str(user["user_id"]),
+        raised_by=context["vendor_code"] if user["auth_type"] == "supplier" else str(user["user_id"]),
         assignee="",
         raised_date=now.strftime("%Y-%m-%d"),
         sla_hours=math.ceil(sla_service.get_policy(db, context["channel"], ticket_in.priority)[0] / 60),

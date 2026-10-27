@@ -1,19 +1,20 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
 import { runtime } from '../../data/runtime';
 import { getFiscalYear } from '../../utils/businessLogic';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
 import { pushToast, setScopeFilter, toggleSidebar, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
 import { useScope } from '../../features/ui/scope';
-import { Bell, HelpCircle, ChevronDown, Menu } from '../common/icons.jsx';
+import { HelpCircle, ChevronDown, Menu } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
 import NotificationBell from './NotificationBell.jsx';
+import useEnabledChannels from '../../features/settings/useEnabledChannels';
 
 const SETTINGS_LABEL = {
   integrations: 'Integration Settings', auditLogs: 'Audit Logs',
-  users: 'Users', roles: 'Roles & Permissions',
+  users: 'User Management', suppliers: 'Supplier Management', roles: 'Roles & Permissions',
 };
 
 function crumbFor(pathname, params, lockedChannelLabel) {
@@ -52,10 +53,11 @@ function TopbarVendorDropdown({ scope, onUpdate }) {
       .sort((a, b) => a.vendor.localeCompare(b.vendor));
   }, []);
 
-  const filtered = typeQ.trim()
+  const normalizedQuery = typeQ.trim().toLowerCase();
+  const filtered = normalizedQuery
     ? vendors.filter((v) =>
-        v.vendor.toLowerCase().includes(typeQ.toLowerCase()) ||
-        v.vcode.toLowerCase().includes(typeQ.toLowerCase()),
+        v.vendor.toLowerCase().includes(normalizedQuery) ||
+        v.vcode.toLowerCase().includes(normalizedQuery),
       )
     : vendors;
 
@@ -78,11 +80,11 @@ function TopbarVendorDropdown({ scope, onUpdate }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          height: 38, maxWidth: 210, padding: '0 10px 0 12px',
+          display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
+          height: '2.375rem', maxWidth: '13.125rem', padding: '0 0.625rem 0 0.75rem',
           background: currentVcode ? '#EFF6FF' : '#F0F1F4',
-          border: `1px solid ${currentVcode ? '#3B82F6' : 'var(--border)'}`,
-          borderRadius: 9, fontSize: 12.5, fontWeight: 500,
+          border: `0.0625rem solid ${currentVcode ? '#3B82F6' : 'var(--border)'}`,
+          borderRadius: '0.5625rem', fontSize: '0.78125rem', fontWeight: 500,
           color: currentVcode ? '#1D4ED8' : 'var(--text-body)',
           cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden',
         }}
@@ -94,41 +96,97 @@ function TopbarVendorDropdown({ scope, onUpdate }) {
           {selectedLabel ?? 'All Vendors'}
         </span>
         {currentVcode
-          ? <span onClick={(e) => { e.stopPropagation(); pick(''); }} style={{ opacity: .7, fontSize: 15, lineHeight: 1, flexShrink: 0 }} aria-label="Clear vendor filter">×</span>
+          ? <span onClick={(e) => { e.stopPropagation(); pick(''); }} style={{ opacity: .7, fontSize: '0.9375rem', lineHeight: 1, flexShrink: 0 }} aria-label="Clear vendor filter">×</span>
           : <ChevronDown size={13} style={{ flexShrink: 0, opacity: .6 }} />
         }
       </button>
 
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 60,
-          width: 280, background: '#fff',
-          border: '1px solid var(--border)', borderRadius: 10,
-          boxShadow: '0 12px 34px rgba(23,24,26,.13)', overflow: 'hidden',
+          position: 'absolute', top: 'calc(100% + 0.375rem)', right: '0rem', zIndex: 60,
+          width: '17.5rem', background: '#fff',
+          border: '0.0625rem solid var(--border)', borderRadius: '0.625rem',
+          boxShadow: '0 0.75rem 2.125rem rgba(23,24,26,.13)', overflow: 'hidden',
         }}>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border-soft)' }}>
-            <input autoFocus className="search-box" style={{ width: '100%', height: 34, fontSize: 12.5 }}
+          <div style={{ padding: '0.5rem 0.625rem', borderBottom: '0.0625em solid var(--border-soft)' }}>
+            <input autoFocus className="search-box" style={{ width: '100%', height: '2.125rem', fontSize: '0.78125rem' }}
               placeholder="Search vendor name or code…" value={typeQ} onChange={(e) => setTypeQ(e.target.value)} />
           </div>
-          <div style={{ maxHeight: 260, overflowY: 'auto' }} role="listbox">
+          <div style={{ maxHeight: '16.25rem', overflowY: 'auto' }} role="listbox">
             <button type="button" role="option" aria-selected={!currentVcode} onClick={() => pick('')}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', border: 'none',
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5625rem 0.875rem', border: 'none',
                 background: !currentVcode ? 'var(--brand-tint)' : 'none', color: !currentVcode ? 'var(--brand-dark)' : 'var(--text-body)',
-                fontWeight: !currentVcode ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>
+                fontWeight: !currentVcode ? 700 : 500, fontSize: '0.8125rem', cursor: 'pointer' }}>
               All Vendors
             </button>
-            {filtered.length === 0 && <p style={{ padding: '10px 14px', fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>No vendors match "{typeQ}"</p>}
+            {filtered.length === 0 && <p style={{ padding: '0.625rem 0.875rem', fontSize: '0.78125rem', color: 'var(--text-muted)', margin: '0rem' }}>No vendors match "{typeQ.trim()}"</p>}
             {filtered.map((v) => (
               <button key={v.vcode} type="button" role="option" aria-selected={currentVcode === v.vcode} onClick={() => pick(v.vcode)}
-                style={{ display: 'flex', flexDirection: 'column', width: '100%', textAlign: 'left', padding: '8px 14px', border: 'none',
+                style={{ display: 'flex', flexDirection: 'column', width: '100%', textAlign: 'left', padding: '0.5rem 0.875rem', border: 'none',
                   background: currentVcode === v.vcode ? 'var(--brand-tint)' : 'none', cursor: 'pointer' }}
                 onMouseEnter={(e) => { if (currentVcode !== v.vcode) e.currentTarget.style.background = 'var(--gray-bg)'; }}
                 onMouseLeave={(e) => { if (currentVcode !== v.vcode) e.currentTarget.style.background = 'none'; }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: currentVcode === v.vcode ? 'var(--brand-dark)' : 'var(--text-body)' }}>{v.vendor}</span>
-                <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)', marginTop: 1 }}>{v.vcode}</span>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: currentVcode === v.vcode ? 'var(--brand-dark)' : 'var(--text-body)' }}>{v.vendor}</span>
+                <span style={{ fontSize: '0.6875rem', fontFamily: 'monospace', color: 'var(--text-muted)', marginTop: '0.0625rem' }}>{v.vcode}</span>
               </button>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SupplierVendorCodeDropdown({ codes, scope, onUpdate }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const selected = codes.length === 1 ? codes[0] : (codes.includes(scope.vcode) ? scope.vcode : '');
+  const choices = codes.length > 1 ? [{ value: '', label: 'All vendor codes' }, ...codes.map((code) => ({ value: code, label: code }))] : codes.map((code) => ({ value: code, label: code }));
+  const selectedLabel = choices.find((choice) => choice.value === selected)?.label || codes[0];
+
+  useEffect(() => {
+    const close = (event) => { if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false); };
+    const escape = (event) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', escape);
+    };
+  }, []);
+
+  function pick(value) {
+    onUpdate('vcode', value);
+    setOpen(false);
+  }
+
+  return (
+    <div className="topbar-supplier-code" ref={wrapRef}>
+      <button
+        type="button"
+        className="topbar-supplier-code-trigger"
+        data-open={open}
+        aria-label="Filter supplier invoices by vendor code"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>{selectedLabel}</span><ChevronDown size={14} />
+      </button>
+      {open && (
+        <div className="topbar-supplier-code-menu" role="listbox" aria-label="Vendor codes">
+          {choices.map((choice) => (
+            <button
+              key={choice.value || 'all'}
+              type="button"
+              role="option"
+              aria-selected={selected === choice.value}
+              className={selected === choice.value ? 'selected' : ''}
+              onClick={() => pick(choice.value)}
+            >
+              {choice.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -143,7 +201,7 @@ function TopbarChannelDropdown({ scope, onUpdate }) {
   const currentKey        = scope.channel;
 
   // Only shown for HQ, so all channels are allowed
-  const allowedChannels = CHANNELS;
+  const allowedChannels = useEnabledChannels();
 
   const selectedLabel = currentKey ? allowedChannels.find((c) => c.key === currentKey)?.label ?? currentKey : null;
 
@@ -166,11 +224,11 @@ function TopbarChannelDropdown({ scope, onUpdate }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          height: 38, maxWidth: 180, padding: '0 10px 0 12px',
+          display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
+          height: '2.375rem', maxWidth: '11.25rem', padding: '0 0.625rem 0 0.75rem',
           background: currentKey ? '#EFF6FF' : '#F0F1F4',
-          border: `1px solid ${currentKey ? '#3B82F6' : 'var(--border)'}`,
-          borderRadius: 9, fontSize: 12.5, fontWeight: 500,
+          border: `0.0625rem solid ${currentKey ? '#3B82F6' : 'var(--border)'}`,
+          borderRadius: '0.5625rem', fontSize: '0.78125rem', fontWeight: 500,
           color: currentKey ? '#1D4ED8' : 'var(--text-body)',
           cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden',
         }}
@@ -182,34 +240,34 @@ function TopbarChannelDropdown({ scope, onUpdate }) {
           {selectedLabel ?? 'All Channels'}
         </span>
         {currentKey
-          ? <span onClick={(e) => { e.stopPropagation(); pick(''); }} style={{ opacity: .7, fontSize: 15, lineHeight: 1, flexShrink: 0 }} aria-label="Clear channel filter">×</span>
+          ? <span onClick={(e) => { e.stopPropagation(); pick(''); }} style={{ opacity: .7, fontSize: '0.9375rem', lineHeight: 1, flexShrink: 0 }} aria-label="Clear channel filter">×</span>
           : <ChevronDown size={13} style={{ flexShrink: 0, opacity: .6 }} />
         }
       </button>
 
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 60,
-          width: 220, background: '#fff',
-          border: '1px solid var(--border)', borderRadius: 10,
-          boxShadow: '0 12px 34px rgba(23,24,26,.13)', overflow: 'hidden',
+          position: 'absolute', top: 'calc(100% + 0.375rem)', right: '0rem', zIndex: 60,
+          width: '13.75rem', background: '#fff',
+          border: '0.0625rem solid var(--border)', borderRadius: '0.625rem',
+          boxShadow: '0 0.75rem 2.125rem rgba(23,24,26,.13)', overflow: 'hidden',
         }}>
           {allowedChannels.length > 5 && (
-            <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border-soft)' }}>
-              <input autoFocus className="search-box" style={{ width: '100%', height: 34, fontSize: 12.5 }}
+            <div style={{ padding: '0.5rem 0.625rem', borderBottom: '0.0625em solid var(--border-soft)' }}>
+              <input autoFocus className="search-box" style={{ width: '100%', height: '2.125rem', fontSize: '0.78125rem' }}
                 placeholder="Search channel…" value={typeQ} onChange={(e) => setTypeQ(e.target.value)} />
             </div>
           )}
-          <div style={{ maxHeight: 260, overflowY: 'auto' }} role="listbox">
+          <div style={{ maxHeight: '16.25rem', overflowY: 'auto' }} role="listbox">
             <button type="button" role="option" aria-selected={!currentKey} onClick={() => pick('')}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', border: 'none',
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5625rem 0.875rem', border: 'none',
                 background: !currentKey ? 'var(--brand-tint)' : 'none', color: !currentKey ? 'var(--brand-dark)' : 'var(--text-body)',
-                fontWeight: !currentKey ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>
+                fontWeight: !currentKey ? 700 : 500, fontSize: '0.8125rem', cursor: 'pointer' }}>
               All Channels
             </button>
             {filtered.map((c) => (
               <button key={c.key} type="button" role="option" aria-selected={currentKey === c.key} onClick={() => pick(c.key)}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', border: 'none', fontSize: 13,
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5625rem 0.875rem', border: 'none', fontSize: '0.8125rem',
                   background: currentKey === c.key ? 'var(--brand-tint)' : 'none',
                   color: currentKey === c.key ? 'var(--brand-dark)' : 'var(--text-body)',
                   fontWeight: currentKey === c.key ? 700 : 500, cursor: 'pointer' }}
@@ -255,11 +313,11 @@ function TopbarFiscalYearDropdown({ scope, onUpdate, defaultFY }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          height: 38, maxWidth: 160, padding: '0 10px 0 12px',
+          display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
+          height: '2.375rem', maxWidth: '10rem', padding: '0 0.625rem 0 0.75rem',
           background: !isAll ? '#EFF6FF' : '#F0F1F4',
-          border: `1px solid ${!isAll ? '#3B82F6' : 'var(--border)'}`,
-          borderRadius: 9, fontSize: 12.5, fontWeight: 500,
+          border: `0.0625rem solid ${!isAll ? '#3B82F6' : 'var(--border)'}`,
+          borderRadius: '0.5625rem', fontSize: '0.78125rem', fontWeight: 500,
           color: !isAll ? '#1D4ED8' : 'var(--text-body)',
           cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden',
         }}
@@ -267,16 +325,16 @@ function TopbarFiscalYearDropdown({ scope, onUpdate, defaultFY }) {
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{isAll ? 'All Years' : `FY ${currentFY}`}</span>
         {!isAll && multiYear
-          ? <span onClick={(e) => { e.stopPropagation(); pick('all'); }} style={{ opacity: .7, fontSize: 15, lineHeight: 1, flexShrink: 0 }} aria-label="Clear filter">×</span>
+          ? <span onClick={(e) => { e.stopPropagation(); pick('all'); }} style={{ opacity: .7, fontSize: '0.9375rem', lineHeight: 1, flexShrink: 0 }} aria-label="Clear filter">×</span>
           : <ChevronDown size={13} style={{ flexShrink: 0, opacity: .6 }} />
         }
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 60, width: 140, background: '#fff', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 12px 34px rgba(23,24,26,.13)', overflow: 'hidden' }}>
-          <div style={{ maxHeight: 260, overflowY: 'auto' }} role="listbox">
-            {multiYear && <button type="button" role="option" aria-selected={isAll} onClick={() => pick('all')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', border: 'none', background: isAll ? 'var(--brand-tint)' : 'none', color: isAll ? 'var(--brand-dark)' : 'var(--text-body)', fontWeight: isAll ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>All Years</button>}
+        <div style={{ position: 'absolute', top: 'calc(100% + 0.375rem)', right: '0rem', zIndex: 60, width: '8.75rem', background: '#fff', border: '0.0625rem solid var(--border)', borderRadius: '0.625rem', boxShadow: '0 0.75rem 2.125rem rgba(23,24,26,.13)', overflow: 'hidden' }}>
+          <div style={{ maxHeight: '16.25rem', overflowY: 'auto' }} role="listbox">
+            {multiYear && <button type="button" role="option" aria-selected={isAll} onClick={() => pick('all')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5625rem 0.875rem', border: 'none', background: isAll ? 'var(--brand-tint)' : 'none', color: isAll ? 'var(--brand-dark)' : 'var(--text-body)', fontWeight: isAll ? 700 : 500, fontSize: '0.8125rem', cursor: 'pointer' }}>All Years</button>}
             {fyOptions.map((fy) => (
-              <button key={fy} type="button" role="option" aria-selected={currentFY === fy} onClick={() => pick(fy)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', border: 'none', fontSize: 13, background: currentFY === fy ? 'var(--brand-tint)' : 'none', color: currentFY === fy ? 'var(--brand-dark)' : 'var(--text-body)', fontWeight: currentFY === fy ? 700 : 500, cursor: 'pointer' }} onMouseEnter={(e) => { if (currentFY !== fy) e.currentTarget.style.background = 'var(--gray-bg)'; }} onMouseLeave={(e) => { if (currentFY !== fy) e.currentTarget.style.background = 'none'; }}>{fy}</button>
+              <button key={fy} type="button" role="option" aria-selected={currentFY === fy} onClick={() => pick(fy)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5625rem 0.875rem', border: 'none', fontSize: '0.8125rem', background: currentFY === fy ? 'var(--brand-tint)' : 'none', color: currentFY === fy ? 'var(--brand-dark)' : 'var(--text-body)', fontWeight: currentFY === fy ? 700 : 500, cursor: 'pointer' }} onMouseEnter={(e) => { if (currentFY !== fy) e.currentTarget.style.background = 'var(--gray-bg)'; }} onMouseLeave={(e) => { if (currentFY !== fy) e.currentTarget.style.background = 'none'; }}>{fy}</button>
             ))}
           </div>
         </div>
@@ -287,10 +345,9 @@ function TopbarFiscalYearDropdown({ scope, onUpdate, defaultFY }) {
 
 export default function Topbar() {
   const dispatch = useDispatch();
-  const navigate = useNavigate();
   const location = useLocation();
   const params   = useParams();
-  const { authType, channelScope } = useSelector((s) => s.auth);
+  const { authType, channelScope, supplierVendorCodes } = useSelector((s) => s.auth);
   const sidebarCollapsed = useSelector((s) => s.ui.sidebarCollapsed);
 
   const crumb = crumbFor(location.pathname, params, authType === 'internal' && channelScope !== 'all' ? (CHANNEL_LABEL[channelScope] || channelScope) : '');
@@ -323,6 +380,9 @@ export default function Topbar() {
         {authType === 'supplier' && (
           <TopbarFiscalYearDropdown scope={scope} onUpdate={updateScope} defaultFY={getFiscalYear(new Date().toISOString())} />
         )}
+        {authType === 'supplier' && supplierVendorCodes.length > 0 && (
+          <SupplierVendorCodeDropdown codes={supplierVendorCodes} scope={scope} onUpdate={updateScope} />
+        )}
         {/* Internal users: financial year filter, shown on every page next to Channel and Vendor; defaults to the current FY */}
         {authType === 'internal' && (
           <TopbarFiscalYearDropdown scope={scope} onUpdate={updateScope} defaultFY={getFiscalYear(new Date().toISOString())} />
@@ -333,11 +393,11 @@ export default function Topbar() {
             {isChannelLocked ? (
               <div
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  height: 38, padding: '0 12px',
+                  display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
+                  height: '2.375rem', padding: '0 0.75rem',
                   background: '#F0F1F4',
-                  border: '1px solid var(--border)',
-                  borderRadius: 9, fontSize: 12.5, fontWeight: 600,
+                  border: '0.0625rem solid var(--border)',
+                  borderRadius: '0.5625rem', fontSize: '0.78125rem', fontWeight: 600,
                   color: 'var(--text-body)', whiteSpace: 'nowrap',
                 }}
                 title="Your scope is locked to this channel"

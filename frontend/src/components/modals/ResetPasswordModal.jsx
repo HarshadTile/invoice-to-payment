@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import ModalShell from './ModalShell.jsx';
+import { useSelector } from 'react-redux';
+import { formatLinkExpiry } from '../../utils/linkExpiry';
 
 /**
- * Confirms emailing this account a link to set a password — the admin triggering this
+ * Confirms generating a shareable link to set a password — the admin triggering this
  * never sets or sees it themselves; only the account holder does, via that link.
- * For a still-pending ("Invited") account, this resends their original invite instead.
+ * For a pending ("Invited") account, this replaces their setup link.
  */
 export default function ResetPasswordModal({ user, onClose, onReset }) {
   const isInvite = user.status === 'Invited';
+  const expiryMinutes = useSelector((state) => isInvite ? state.settings.inviteLinkExpiryMinutes : state.settings.resetLinkExpiryMinutes) ?? (isInvite ? 10080 : 1440);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -25,14 +28,14 @@ export default function ResetPasswordModal({ user, onClose, onReset }) {
 
   return (
     <ModalShell
-      title={isInvite ? `Resend Invite: ${user.name}` : `Reset Password: ${user.name}`}
+      title={isInvite ? `New Setup Link: ${user.name}` : `Reset Password: ${user.name}`}
       width={440}
       onClose={busy ? () => {} : onClose}
       foot={(
         <>
           <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
           <button type="button" className="btn primary" onClick={send} disabled={busy}>
-            {busy ? 'Sending…' : isInvite ? 'Resend Invite' : 'Send Reset Link'}
+            {busy ? 'Generating…' : 'Generate Link'}
           </button>
         </>
       )}
@@ -40,13 +43,13 @@ export default function ResetPasswordModal({ user, onClose, onReset }) {
       {error && <div className="form-error" role="alert">{error}</div>}
       {isInvite ? (
         <p className="modal-copy">
-          Resend the invite to <b>{user.name}</b> at <b>{user.email}</b>? Their earlier invite link stops
-          working and this new one takes over — they'll set their own password by following it.
+          Generate a new setup link for <b>{user.name}</b> ({user.email})? Their earlier link will stop
+          working. Copy and share the new link so they can set their password. It expires in {formatLinkExpiry(expiryMinutes)}.
         </p>
       ) : (
         <p className="modal-copy">
-          Send a password reset link to <b>{user.name}</b> at <b>{user.email}</b>?
-          They'll set their own new password by following the link — you won't see or choose it here.
+          Generate a password reset link for <b>{user.name}</b> ({user.email})?
+          Copy and share it privately. It expires in {formatLinkExpiry(expiryMinutes)} and replaces earlier links. No email is sent.
         </p>
       )}
     </ModalShell>

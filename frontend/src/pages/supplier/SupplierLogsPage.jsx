@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
-import { getFiscalYear } from '../../utils/businessLogic';
+import { getFiscalYear, timestampedExportName } from '../../utils/businessLogic';
 import { useScope } from '../../features/ui/scope';
 import { api } from '../../api/client';
 import {
@@ -31,7 +31,7 @@ export default function SupplierLogsPage() {
   const [queryError, setQueryError] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    api.get('/v1/tickets/supplier-log')
+    api.get('/v1/tickets/supplier-activity-log')
       .then((data) => { if (!cancelled) setQueryEntries(Array.isArray(data) ? data : []); })
       .catch(() => { if (!cancelled) setQueryError(true); });
     return () => { cancelled = true; };
@@ -61,7 +61,7 @@ export default function SupplierLogsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${code}-activity-log.csv`;
+    link.download = `${timestampedExportName('Logs')}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -75,7 +75,7 @@ export default function SupplierLogsPage() {
           searchPlaceholder="Search invoice, PO or details"
         />
         {queryError && (
-          <p style={{ color: 'var(--text-muted)', fontSize: 12.5, margin: '0 0 10px' }}>Your query history couldn't be loaded right now. Invoice and payment activity is shown below.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.78125rem', margin: '0 0 0.625rem' }}>Your query history couldn't be loaded right now. Invoice and payment activity is shown below.</p>
         )}
         <div className="table-scroll">
           <table>
@@ -99,7 +99,7 @@ export default function SupplierLogsPage() {
                   <td style={{ color: 'var(--text-muted)' }}>{row.detail || '-'}</td>
                 </tr>
               )) : (
-                <tr><td colSpan={6} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>
+                <tr><td colSpan={6} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem' }}>
                   {filtersActive ? 'No activity matches these filters.' : `No activity yet on ${code}.`}
                 </td></tr>
               )}
