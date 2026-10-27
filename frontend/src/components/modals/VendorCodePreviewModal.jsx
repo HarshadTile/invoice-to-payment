@@ -41,7 +41,7 @@ export default function VendorCodePreviewModal({ ctx }) {
     >
       <div className="validation-row"><span>Supplier</span><span style={{ fontWeight: 700 }}>{supplier}</span></div>
       <div className="validation-row"><span>PAN</span><span>{panFor(supplier)}</span></div>
-      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em', display: 'block', margin: '14px 0 8px' }}>On This Vendor Code</label>
+      <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em', display: 'block', margin: '0.875rem 0 0.5rem' }}>On This Vendor Code</label>
       <div className="validation-row"><span>Total Invoices</span><span>{invoices.length}</span></div>
       <div className="validation-row"><span>Purchase Orders</span><span>{poCount}</span></div>
       <div className="validation-row"><span>Open Queries</span><span>{openIssues}</span></div>

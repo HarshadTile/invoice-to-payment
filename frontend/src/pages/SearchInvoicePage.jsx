@@ -65,12 +65,12 @@ function FilterChip({ label, value, onRemove, tone = 'brand' }) {
   }[tone] ?? styles.brand;
   return (
     <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      padding: '3px 8px 3px 10px', borderRadius: 20,
-      background: styles.bg, border: `1px solid ${styles.border}`,
-      fontSize: 12, fontWeight: 600, color: styles.color,
+      display: 'inline-flex', alignItems: 'center', gap: '0.3125rem',
+      padding: '0.1875rem 0.5rem 0.1875rem 0.625rem', borderRadius: '1.25rem',
+      background: styles.bg, border: `0.0625em solid ${styles.border}`,
+      fontSize: '0.75rem', fontWeight: 600, color: styles.color,
     }}>
-      <span style={{ opacity: .65, fontWeight: 400, fontSize: 11 }}>{label}:</span>
+      <span style={{ opacity: .65, fontWeight: 400, fontSize: '0.6875rem' }}>{label}:</span>
       {value}
       <button
         type="button"
@@ -78,8 +78,8 @@ function FilterChip({ label, value, onRemove, tone = 'brand' }) {
         aria-label={`Remove ${label} filter`}
         style={{
           background: 'none', border: 'none', cursor: 'pointer',
-          color: styles.btnColor, fontSize: 15, lineHeight: 1,
-          padding: '0 1px', marginLeft: 1, opacity: .8,
+          color: styles.btnColor, fontSize: '0.9375rem', lineHeight: 1,
+          padding: '0 0.0625rem', marginLeft: '0.0625rem', opacity: .8,
         }}
       >×</button>
     </span>
@@ -218,18 +218,18 @@ export default function SearchInvoicePage() {
         </nav>
       )}
       {/* ── Filter card ─────────────────────────────────────────── */}
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
 
         {/* Search input */}
-        <div style={{ position: 'relative', marginBottom: 12 }}>
+        <div style={{ position: 'relative', marginBottom: '0.75rem' }}>
           <Search
             size={16}
-            style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }}
+            style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }}
           />
           <input
             ref={inputRef}
             className="search-box"
-            style={{ width: '100%', height: 44, paddingLeft: 40, paddingRight: query ? 36 : 14, fontSize: 14 }}
+            style={{ width: '100%', height: '2.75rem', paddingLeft: '2.5rem', paddingRight: query ? '2.25rem' : '0.875rem', fontSize: '0.875rem' }}
             placeholder="Invoice no, PO no, PO item, UTR or vendor"
             value={query}
             onChange={(e) => handleQuery(e.target.value)}
@@ -240,7 +240,7 @@ export default function SearchInvoicePage() {
             <button
               type="button"
               onClick={() => { handleQuery(''); inputRef.current?.focus(); }}
-              style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: '0 4px' }}
+              style={{ position: 'absolute', right: '0.625rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.25rem', lineHeight: 1, padding: '0 0.25rem' }}
               aria-label="Clear search"
             >&times;</button>
           )}
@@ -248,7 +248,7 @@ export default function SearchInvoicePage() {
 
         {/* ── Active scope chips (search tokens, vendor, channel, financial year) ── */}
         {(parsed.any || parsed.invoice || parsed.po || parsed.item || parsed.utr || vendorLabel || channelLabel || nextHint) && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.75rem' }}>
             {parsed.any && <FilterChip label="Search" value={parsed.any} tone="brand"
               onRemove={() => handleQuery('')} />}
             {parsed.invoice && <FilterChip label="Invoice" value={parsed.invoice} tone="brand"
@@ -265,7 +265,7 @@ export default function SearchInvoicePage() {
             {channelLabel && <FilterChip label="Channel" value={channelLabel} tone="blue"
               onRemove={() => dispatch(setScopeFilter({ key: 'channel', value: '' }))} />}
             {nextHint && !parsed.item && (
-              <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', alignSelf: 'center' }}>
+              <span style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', fontStyle: 'italic', alignSelf: 'center' }}>
                 {nextHint}
               </span>
             )}
@@ -273,29 +273,29 @@ export default function SearchInvoicePage() {
         )}
 
         {/* ── Status + date range (same layout as My Invoices) ── */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
-          <div style={{ flex: '1 1 190px', minWidth: 0 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.625rem', alignItems: 'flex-end' }}>
+          <div style={{ flex: '1 1 11.875em', minWidth: '0rem' }}>
             <Dropdown label="Status" ariaLabel="Filter by status" value={status} options={statusOptions} onChange={handleStatus} />
           </div>
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 160px' }}>
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date From</span>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.1875rem', flex: '1 1 10em' }}>
+            <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date From</span>
             <input type="date" className="search-box" style={{ width: '100%' }} value={dateFrom} max={dateTo || undefined}
               onChange={(e) => handleDateFrom(e.target.value)} />
           </label>
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 160px' }}>
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date To</span>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.1875rem', flex: '1 1 10em' }}>
+            <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date To</span>
             <input type="date" className="search-box" style={{ width: '100%' }} value={dateTo} min={dateFrom || undefined}
               onChange={(e) => handleDateTo(e.target.value)} />
           </label>
 
-          <div style={{ display: 'flex', gap: 8, flex: '0 0 auto' }}>
-            <button type="button" className="btn" style={{ height: 38, whiteSpace: 'nowrap' }}
+          <div style={{ display: 'flex', gap: '0.5rem', flex: '0 0 auto' }}>
+            <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap' }}
               title="Back to the default view: last 90 days, all financial years" onClick={showLast90Days}>&#8634; Last 90 days</button>
-            <button type="button" className="btn" style={{ height: 38, whiteSpace: 'nowrap' }}
+            <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap' }}
               title="Remove the date limit and the financial year limit" onClick={showAllDates}>All dates</button>
-            <button type="button" className="btn" style={{ height: 38, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}
               title="Remove all filters and show every invoice" onClick={clearAll}><X size={14} />Clear</button>
           </div>
         </div>

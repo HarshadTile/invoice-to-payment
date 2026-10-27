@@ -23,21 +23,21 @@ export default function SupplierInvoiceDetailModal({ ctx }) {
         <button type="button" className="btn" onClick={() => dispatch(closeModal())}>Close</button>
       )}
     >
-      <div style={{ textAlign: 'center', padding: '2px 0 16px' }}>
-        <div style={{ fontSize: 11.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700 }}>{CHANNEL_LABEL[inv.channel]}</div>
-        <div style={{ fontSize: 15.5, fontWeight: 700, color: 'var(--text)', marginTop: 8, lineHeight: 1.4 }}>{currentStageName(inv)}</div>
-        <div style={{ marginTop: 12 }}><Badge tone={cs.tone}>{cs.label}</Badge></div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>{cs.reason}</div>
+      <div style={{ textAlign: 'center', padding: '0.125rem 0 1rem' }}>
+        <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700 }}>{CHANNEL_LABEL[inv.channel]}</div>
+        <div style={{ fontSize: '0.96875rem', fontWeight: 700, color: 'var(--text)', marginTop: '0.5rem', lineHeight: 1.4 }}>{currentStageName(inv)}</div>
+        <div style={{ marginTop: '0.75rem' }}><Badge tone={cs.tone}>{cs.label}</Badge></div>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem', maxWidth: '22.5rem', marginLeft: 'auto', marginRight: 'auto' }}>{cs.reason}</div>
       </div>
       <div className="validation-row"><span>Vendor Code</span><span className="mono">{inv.vcode}</span></div>
       <div className="validation-row"><span>PO No</span><span>{inv.po}</span></div>
       <div className="validation-row"><span>Amount</span><span>{inv.amount}</span></div>
       <div className="validation-row"><span>UTR No.</span><span>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</span></div>
-      {inv.shortPayReason && <div className="validation-row"><span>Reason for Less Paid</span><span style={{ textAlign: 'right', maxWidth: 260 }}>{inv.shortPayReason}</span></div>}
+      {inv.shortPayReason && <div className="validation-row"><span>Reason for Less Paid</span><span style={{ textAlign: 'right', maxWidth: '16.25rem' }}>{inv.shortPayReason}</span></div>}
       {siblingInvoices.length > 0 && (
         <>
-          <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Other Invoices on PO {inv.po}</label>
-          <div style={{ marginTop: 8 }}>
+          <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Other Invoices on PO {inv.po}</label>
+          <div style={{ marginTop: '0.5rem' }}>
             {siblingInvoices.map((s, rowIndex) => (
               <div className="validation-row" key={`${s.no}-${rowIndex}`}><span>{s.no}</span><Badge tone={combinedStatusFor(s).tone}>{combinedStatusFor(s).label}</Badge></div>
             ))}

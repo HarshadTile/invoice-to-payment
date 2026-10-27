@@ -5,7 +5,7 @@ import PagerFoot from '../common/PagerFoot.jsx';
 import Badge from './Badge.jsx';
 import SortDateTh from './SortDateTh.jsx';
 import { dateValue } from '../../utils/dateSort';
-import { Download, Inbox, Mail } from './icons.jsx';
+import { Download, Inbox } from './icons.jsx';
 
 const PAGE_SIZE = 20;
 
@@ -19,12 +19,12 @@ function renderCell(v) {
 
 /**
  * A generic read-only table over an array-of-arrays row store (tablesSlice): search,
- * pagination, optional export, optional statusCol (invoice/vendor-code quick links + notify).
+ * pagination, optional export, optional statusCol (invoice/vendor-code quick links).
  * Rows are derived from system data, never entered or edited by hand here.
  */
 export default function EditableTable({
   tableKey, cols, rows, canImportExport = true, statusCol = false, tableClass,
-  onViewInvoice, onViewVendorCode, onNotify,
+  onViewInvoice, onViewVendorCode,
 }) {
   const dispatch = useDispatch();
   const search = useSelector((s) => s.ui.search[tableKey] || '');
@@ -52,7 +52,7 @@ export default function EditableTable({
     <div>
       <div className="toolbar">
         <div className="toolbar-left">
-          <input className="search-box" style={{ width: 260 }} placeholder="Search this table..." value={search} onChange={(e) => dispatch(setSearch({ key: tableKey, value: e.target.value }))} />
+          <input className="search-box" style={{ width: '16.25rem' }} placeholder="Search this table..." value={search} onChange={(e) => dispatch(setSearch({ key: tableKey, value: e.target.value }))} />
         </div>
         <div className="toolbar-right">
           {canImportExport && (
@@ -67,12 +67,11 @@ export default function EditableTable({
               {cols.map((c, ci) => (isDateCol(c)
                 ? <SortDateTh key={c} label={c} dir={sort.col === ci ? sort.dir : null} onToggle={() => toggleSort(ci)} />
                 : <th key={c}>{c}</th>))}
-              {statusCol && <th>Notify</th>}
             </tr>
           </thead>
           <tbody>
             {pageRows.length === 0 && (
-              <tr><td colSpan={cols.length + (statusCol ? 1 : 0)}>
+              <tr><td colSpan={cols.length}>
                 <div className="empty-state">
                   <Inbox />
                   <b>Nothing to show</b>
@@ -89,7 +88,6 @@ export default function EditableTable({
                     if (statusCol && ci === vcodeIdx) return <td key={ci}><button type="button" className="link-hero" title={`Preview ${c}`} onClick={() => onViewVendorCode && onViewVendorCode(c)}>{c}</button></td>;
                     return <td key={ci}>{renderCell(c)}</td>;
                   })}
-                  {statusCol && <td><button type="button" className="kebab" title="Notify Supplier: preview To / CC" aria-label="Notify supplier" onClick={() => onNotify && onNotify(r[0])}><Mail /></button></td>}
                 </tr>
               );
             })}

@@ -88,17 +88,17 @@ export default function AddSupplierModal({ onClose, onCreated }) {
             placeholder="Search by name, PAN or vendor code"
             value={query} onChange={(e) => { setQuery(e.target.value); setSearching(Boolean(e.target.value.trim())); }}
           />
-          <div style={{ marginTop: 12, maxHeight: 280, overflowY: 'auto' }}>
+          <div style={{ marginTop: '0.75rem', maxHeight: '17.5rem', overflowY: 'auto' }}>
             {searching && <p className="modal-copy">Searching…</p>}
             {!searching && query.trim() && shownResults.length === 0 && <p className="modal-copy">No vendor matches “{query.trim()}”.</p>}
             {shownResults.map((r) => (
               <button
                 key={r.pan} type="button" className="btn" disabled={r.alreadyRegistered}
-                style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 6 }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: '0.375rem' }}
                 onClick={() => pick(r)}
               >
                 <b>{r.name}</b> · <span style={{ fontFamily: 'monospace' }}>{r.pan}</span>
-                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)' }}>
+                <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   {r.vendorCodes.join(', ')}{r.alreadyRegistered ? ' — already registered' : ''}
                 </span>
               </button>

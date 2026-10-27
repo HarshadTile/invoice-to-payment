@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
-import { currentHandlerFor, currentStageName, downloadCSV } from '../../utils/businessLogic';
+import { currentHandlerFor, currentStageName, downloadCSV, timestampedExportName } from '../../utils/businessLogic';
 import { matchesInvoiceQuery } from '../../utils/invoiceQuery';
 import { setSearch, setTablePage, toggleSelectRow, setSelectAll, clearSelection, openModal, pushToast } from '../../features/ui/uiSlice';
 import Badge from '../common/Badge.jsx';
@@ -11,7 +11,7 @@ import SortDateTh from '../common/SortDateTh.jsx';
 import { useDateColumnSort } from '../../utils/dateSort';
 import { invoiceDateLabel } from '../../utils/invoiceDates';
 import { totalsByCurrency } from '../../utils/amounts';
-import { Mail, Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
+import { Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
 
 const PAGE_SIZE = 10;
 const EMPTY_SELECTION = Object.freeze([]);
@@ -21,17 +21,17 @@ const DATE_COLUMNS = { invoice: (inv) => inv.rawDate, status: (inv) => inv.date 
 // Pinned columns are given an exact width: the next pinned column's `left` offset is the sum of
 // the widths before it, so a column that grew or shrank with its content left a gap or an
 // overlap and let the columns scrolling underneath show through.
-const CHECK_COL_W = 34;
-const INVOICE_COL_W = 150;
-const fixedWidth = (w) => ({ width: w, minWidth: w, maxWidth: w, boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis' });
+const CHECK_COL_W = 2.125;
+const INVOICE_COL_W = 9.375;
+const fixedWidth = (w) => ({ width: `${w}rem`, minWidth: `${w}rem`, maxWidth: `${w}rem`, boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis' });
 
 // Shared sticky-left style for the first two data columns
 const stickyCell = (left, isHead = false) => ({
   position: 'sticky',
-  left,
+  left: `${left}rem`,
   zIndex: isHead ? 3 : 1,
   background: isHead ? '#F7F8FA' : '#fff',
-  boxShadow: 'inset -1px 0 0 var(--border-soft)',
+  boxShadow: 'inset -0.0625rem 0 0 var(--border-soft)',
 });
 
 /**
@@ -41,7 +41,7 @@ const stickyCell = (left, isHead = false) => ({
  * filteredCount: pass current filtered count to label the Export button accurately
  * lead: optional heading shown on the left of the toolbar (the Export button stays on the right)
  */
-export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount, lead, showFilteredAmount = false }) {
+export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount, lead, showFilteredAmount = false, exportName }) {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const [searchParams] = useSearchParams();
@@ -80,14 +80,16 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
     dispatch(openModal({ kind: action, ctx: { no, poItem } }));
   };
   const openVendorCode = (code) => dispatch(openModal({ kind: 'vendorCodePreview', ctx: { code } }));
-  const openNotify     = (no, poItem) => dispatch(openModal({ kind: 'notifyPreview',  ctx: { no, poItem } }));
   const openRaiseTicket= (no, poItem) => dispatch(openModal({ kind: 'raiseTicket',    ctx: { no, poItem } }));
 
-  // Suppliers see one vendor code, so vendor columns are noise; owner and "notify" are internal-only.
+  // Suppliers see one vendor code, so vendor columns are noise.
   const supplierView = mode === 'supplierSafe' && isSupplierUser;
   const colCount = (bulk ? 1 : 0) + (supplierView ? 10 : 13);
   const exportCount = filteredCount ?? filtered.length;
   const exportLabel = `Export to Excel (${exportCount})`;
+  const portalExportNames = { msetuSrm: 'Msetu_SRM', poPortal: 'PO_Portal', mfoxPortal: 'MFOX' };
+  const channelKey = tableKey.match(/^channel-(msetuSrm|poPortal|mfoxPortal)(?:-|$)/)?.[1];
+  const regularExportName = exportName || portalExportNames[channelKey] || 'Invoices';
 
   const exportCols = supplierView
     ? ['Invoice No', 'Channel', 'PO No', 'Invoice Date', 'Amount', 'Status', 'Current Stage', 'UTR No', 'Status Date']
@@ -97,8 +99,9 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
     const owner = currentHandlerFor(inv);
     return [inv.no, inv.vendor, inv.vcode, CHANNEL_LABEL[inv.channel], inv.po, invoiceDateLabel(inv), inv.amount, inv.status, currentStageName(inv), owner.name, inv.utr, inv.date];
   };
-  const exportInvoices = (list, filenameLabel) => {
-    downloadCSV(filenameLabel, exportCols, list.map(toExportRow));
+  const exportInvoices = (list, isSelected = false) => {
+    const filename = timestampedExportName(isSelected ? 'Selected_Invoices' : regularExportName);
+    downloadCSV(filename, exportCols, list.map(toExportRow));
     dispatch(pushToast(`Exported ${list.length} invoice${list.length === 1 ? '' : 's'} to Excel.`));
   };
 
@@ -108,14 +111,14 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
         <div className="toolbar-left">
           {lead}
           {!hideSearch && (
-            <div style={{ position: 'relative', width: 'clamp(260px, 34vw, 420px)' }}>
+            <div style={{ position: 'relative', width: 'clamp(16.25rem, 34vw, 26.25rem)' }}>
               <Search
                 size={14}
-                style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }}
+                style={{ position: 'absolute', left: '0.6875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }}
               />
               <input
                 className="search-box"
-                style={{ width: '100%', paddingLeft: 32, paddingRight: search ? 30 : 12, fontSize: 13 }}
+                style={{ width: '100%', paddingLeft: '2rem', paddingRight: search ? '1.875rem' : '0.75rem', fontSize: '0.8125rem' }}
                 placeholder="Invoice no, PO no, PO item, UTR or vendor…"
                 title="Type one thing to search invoice, PO, item and UTR, or use commas to match each in order: invoice, PO, item, UTR"
                 aria-label="Search invoice, PO, item, UTR or vendor - or comma-separated by position"
@@ -127,7 +130,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
                   type="button"
                   onClick={() => dispatch(setSearch({ key: tableKey, value: '' }))}
                   aria-label="Clear search"
-                  style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 17, lineHeight: 1, padding: '0 4px' }}
+                  style={{ position: 'absolute', right: '0.4375rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.0625rem', lineHeight: 1, padding: '0 0.25rem' }}
                 >&times;</button>
               )}
             </div>
@@ -139,14 +142,9 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
           {bulk && selected.length > 0 ? (
             <>
               <button type="button" className="btn"
-                title={`Send status notification email for ${selected.length} selected invoice(s)`}
-                onClick={() => { dispatch(pushToast(`Status email sent for ${selected.length} invoice${selected.length === 1 ? '' : 's'}.`)); dispatch(clearSelection(tableKey)); }}>
-                <Mail />Notify Selected
-              </button>
-              <button type="button" className="btn"
                 title={`Export ${selected.length} selected invoice(s) to Excel`}
                 onClick={() => {
-                  exportInvoices(invoices.filter((inv) => selected.includes(inv.no)), `${tableKey}_selected`);
+                  exportInvoices(invoices.filter((inv) => selected.includes(inv.no)), true);
                   dispatch(clearSelection(tableKey));
                 }}>
                 <Download />Export Selected to Excel
@@ -155,7 +153,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
           ) : (
             <button type="button" className="btn"
               title={`Export the ${exportCount} currently filtered invoice(s) to Excel`}
-              onClick={() => exportInvoices(filtered, tableKey)}>
+              onClick={() => exportInvoices(filtered)}>
               <Download />{exportLabel}
             </button>
           )}
@@ -163,7 +161,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
       </div>
 
       <div className="table-scroll">
-        <table className="data-table">
+        <table className="data-table invoice-list-table">
           <thead>
             <tr>
               {bulk && (
@@ -180,7 +178,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               {/* Sticky: Invoice No */}
               <th scope="col" style={{ ...fixedWidth(INVOICE_COL_W), ...stickyCell(bulk ? CHECK_COL_W : 0, true) }}>Invoice No</th>
               {/* Sticky: Vendor */}
-              {!supplierView && <th scope="col" style={{ ...stickyCell((bulk ? CHECK_COL_W : 0) + INVOICE_COL_W, true), minWidth: 140 }}>Vendor</th>}
+              {!supplierView && <th scope="col" style={{ ...stickyCell((bulk ? CHECK_COL_W : 0) + INVOICE_COL_W, true), minWidth: '8.75rem' }}>Vendor</th>}
 
               {!supplierView && <th scope="col">Vendor Code</th>}
               <th scope="col">Channel</th>
@@ -192,7 +190,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               {/* Renamed from "Handled By" which was truncating */}
               {!supplierView && <th scope="col">Owner</th>}
               <th scope="col">UTR No</th>
-              <SortDateTh label="Status Date" dir={dirFor('status')} onToggle={() => toggleDate('status')} />
+              <SortDateTh label="Status Date" className="invoice-status-date" dir={dirFor('status')} onToggle={() => toggleDate('status')} />
               <th scope="col" className="col-actions">Actions</th>
             </tr>
           </thead>
@@ -229,7 +227,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
 
                   {/* Sticky: Vendor */}
                   {!supplierView && (
-                    <td style={{ ...stickyCell((bulk ? CHECK_COL_W : 0) + INVOICE_COL_W), whiteSpace: 'normal', minWidth: 140, maxWidth: 200 }}>
+                    <td style={{ ...stickyCell((bulk ? CHECK_COL_W : 0) + INVOICE_COL_W), whiteSpace: 'normal', minWidth: '8.75rem', maxWidth: '12.5rem' }}>
                       {inv.vendor}
                     </td>
                   )}
@@ -246,7 +244,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
                   <td className="cell-muted" style={{ whiteSpace: 'nowrap' }}>{invoiceDateLabel(inv)}</td>
                   <td className="num mono">{inv.amount}</td>
                   <td><Badge tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge></td>
-                  <td className="cell-muted" style={{ whiteSpace: 'normal', minWidth: 150 }}>{currentStageName(inv)}</td>
+                  <td className="cell-muted" style={{ whiteSpace: 'normal', minWidth: '9.375rem' }}>{currentStageName(inv)}</td>
                   {!supplierView && (
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {owner.name}
@@ -254,18 +252,10 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
                     </td>
                   )}
                   <td>{inv.utr === '-' ? <span className="cell-dim">Not yet visible</span> : inv.utr}</td>
-                  <td className="cell-muted">{inv.date}</td>
+                  <td className="cell-muted invoice-status-date">{inv.date}</td>
 
                   <td className="col-actions">
                     <div className="row-actions">
-                      {!supplierView && (
-                        <button
-                          type="button" className="kebab"
-                          title="Notify supplier — preview email recipients (To / CC)"
-                          aria-label={`Notify supplier for invoice ${inv.no}`}
-                          onClick={() => openNotify(inv.no, inv.poItem)}
-                        ><Mail /></button>
-                      )}
                       {isSupplierUser && (
                         <button
                           type="button" className="kebab"
@@ -293,12 +283,12 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
         <div role="status" aria-label="Filtered invoice amount" className="filtered-invoice-amount">
           <div>
             <div style={{ fontWeight: 600 }}>Filtered Invoice Amount</div>
-            <div className="cell-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            <div className="cell-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
               {filtered.length.toLocaleString()} matching invoice{filtered.length === 1 ? '' : 's'} across all pages
               {amountSummary.known < filtered.length && ` · Amount available for ${amountSummary.known} of ${filtered.length} invoices`}
             </div>
           </div>
-          <strong style={{ fontSize: 19, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{amountSummary.value}</strong>
+          <strong style={{ fontSize: '1.1875rem', fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{amountSummary.value}</strong>
         </div>
       )}
       <PagerFoot

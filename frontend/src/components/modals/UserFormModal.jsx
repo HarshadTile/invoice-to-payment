@@ -92,7 +92,7 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
         </div>
       </div>
       {!editing && (
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '-6px 0 14px' }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '-0.375rem 0 0.875rem' }}>
           They sign in with this email. After creating the user, copy and share their one-time password setup link.
         </p>
       )}
@@ -146,7 +146,7 @@ export default function UserFormModal({ user, roles, onClose, onSave }) {
             {user.status === 'Invited' ? (
               <>
                 <input value="Invited — hasn't set a password yet" readOnly />
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 0' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.375rem 0 0' }}>
                   Use the key icon on their row to generate a new setup link.
                 </p>
               </>

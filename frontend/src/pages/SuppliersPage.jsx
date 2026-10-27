@@ -91,7 +91,7 @@ export default function SuppliersPage() {
       <div className="toolbar">
         <div className="toolbar-left">
           <input
-            className="search-box" style={{ width: 400, maxWidth: "100%" }} placeholder="Search suppliers by name, PAN or vendor code..." aria-label="Search suppliers"
+            className="search-box" style={{ width: '25rem', maxWidth: '100%' }} placeholder="Search suppliers by name, PAN or vendor code..." aria-label="Search suppliers"
             value={search} onChange={(e) => setSearch(e.target.value)}
           />
         </div>
@@ -105,7 +105,7 @@ export default function SuppliersPage() {
       {loadError && <div className="form-error" role="alert">Couldn't load suppliers: {loadError}</div>}
 
       {suppliers === null && !loadError ? (
-        <p style={{ color: 'var(--text-muted)', fontSize: 13, padding: '20px 0' }}>Loading suppliers…</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', padding: '1.25rem 0' }}>Loading suppliers…</p>
       ) : (
         <div className="table-scroll">
           <table className="data-table">

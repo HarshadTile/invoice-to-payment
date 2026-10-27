@@ -54,12 +54,12 @@ export default function SupplierHomePage() {
     const opened = codeInvoices.filter((i) => i.no === openNo && (!openItem || String(i.poItem) === openItem));
     return (
       <>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.875rem', flexWrap: 'wrap' }}>
           <button type="button" className="btn" onClick={() => update({ open: null, item: null }, { replace: false })}>← All Invoices</button>
         </div>
         {opened.length
           ? opened.map((inv, rowIndex) => <InvoiceProgressCard key={`${inv.no}-${inv.poItem}-${rowIndex}`} inv={inv} />)
-          : <div className="card"><p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>Invoice {openNo} was not found for this vendor code.</p></div>}
+          : <div className="card"><p style={{ fontSize: '0.78125rem', color: 'var(--text-muted)', margin: '0rem' }}>Invoice {openNo} was not found for this vendor code.</p></div>}
       </>
     );
   }

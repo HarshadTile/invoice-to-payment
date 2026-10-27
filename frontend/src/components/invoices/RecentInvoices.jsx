@@ -5,7 +5,7 @@ import Badge from '../common/Badge.jsx';
 import SortDateTh from '../common/SortDateTh.jsx';
 import { useDateColumnSort } from '../../utils/dateSort';
 import { invoiceDateLabel } from '../../utils/invoiceDates';
-import { Mail, Eye, Inbox } from '../common/icons.jsx';
+import { Eye, Inbox } from '../common/icons.jsx';
 
 /**
  * Compact, read-only "recent invoices" list for the dashboard.
@@ -19,7 +19,6 @@ export default function RecentInvoices({ rows = [] }) {
   const { sorted, toggle, dirFor } = useDateColumnSort(rows, DATE_COLUMNS);
   const openStage = (no, poItem) => dispatch(openModal({ kind: 'stageSimple', ctx: { no, poItem } }));
   const openVendorCode = (code) => dispatch(openModal({ kind: 'vendorCodePreview', ctx: { code } }));
-  const openNotify = (no, poItem) => dispatch(openModal({ kind: 'notifyPreview', ctx: { no, poItem } }));
 
   return (
     <div className="recent-invoices">
@@ -54,7 +53,6 @@ export default function RecentInvoices({ rows = [] }) {
                 <td className="cell-muted">{inv.date}</td>
                 <td className="col-actions">
                   <div className="row-actions">
-                    <button type="button" className="kebab" title="Notify supplier: preview To / CC" aria-label="Notify supplier" onClick={() => openNotify(inv.no, inv.poItem)}><Mail /></button>
                     <button type="button" className="kebab" title="Open current stage" aria-label="View invoice" onClick={() => openStage(inv.no, inv.poItem)}><Eye /></button>
                   </div>
                 </td>

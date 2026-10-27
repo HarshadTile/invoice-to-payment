@@ -30,7 +30,7 @@ export default function OutputsPage() {
 
   return (
     <>
-      <div className="row" style={{ marginBottom: 18 }}>
+      <div className="row" style={{ marginBottom: '1.125rem' }}>
         <StatCard
           label="Completed Invoices" value={completed.length}
           onClick={showInvoices} active={view === 'invoices' && !activeSupplier}
@@ -48,7 +48,7 @@ export default function OutputsPage() {
             <table>
               <thead><tr><th scope="col">Supplier</th><th scope="col" className="num">Completed invoices</th></tr></thead>
               <tbody>
-                {suppliers.length === 0 && <tr><td colSpan={2} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No completed invoices in this view.</td></tr>}
+                {suppliers.length === 0 && <tr><td colSpan={2} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>No completed invoices in this view.</td></tr>}
                 {suppliers.map((s) => (
                   <tr key={s.name}>
                     <td><button type="button" className="link-hero" onClick={() => pickSupplier(s.name)}>{s.name}</button></td>
@@ -66,14 +66,14 @@ export default function OutputsPage() {
             <span className="card-hint">{shown.length} invoice{shown.length === 1 ? '' : 's'}</span>
           </h3>
           {activeSupplier && (
-            <div style={{ margin: '0 0 12px' }}>
-              <span className="chip blue" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ margin: '0 0 0.75rem' }}>
+              <span className="chip blue" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}>
                 Supplier: {activeSupplier}
-                <button type="button" onClick={() => setSupplier('')} aria-label="Remove supplier filter" style={{ border: 0, background: 'none', padding: 0, display: 'inline-flex', cursor: 'pointer', color: 'inherit' }}><X size={12} /></button>
+                <button type="button" onClick={() => setSupplier('')} aria-label="Remove supplier filter" style={{ border: 0, background: 'none', padding: '0rem', display: 'inline-flex', cursor: 'pointer', color: 'inherit' }}><X size={12} /></button>
               </span>
             </div>
           )}
-          <InvoiceTable invoices={shown} tableKey="completedInvoices" mode="simple" bulk />
+          <InvoiceTable invoices={shown} tableKey="completedInvoices" mode="simple" bulk exportName="Vendor_Status_Report" />
         </div>
       )}
     </>

@@ -32,7 +32,7 @@ export default function ExportModal({ ctx }) {
           </tbody>
         </table>
       </div>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>{rows.length} total rows will be exported.</p>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.625rem' }}>{rows.length} total rows will be exported.</p>
     </ModalShell>
   );
 }
