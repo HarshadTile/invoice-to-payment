@@ -13,7 +13,6 @@ import AuditLogsPanel from '../components/audit/AuditLogsPanel.jsx';
 import ModalShell from '../components/modals/ModalShell.jsx';
 import UserFormModal from '../components/modals/UserFormModal.jsx';
 import ResetPasswordModal from '../components/modals/ResetPasswordModal.jsx';
-import UserSetupLinkModal from '../components/modals/UserSetupLinkModal.jsx';
 import PasswordLinkExpirySettings from '../components/PasswordLinkExpirySettings.jsx';
 import ChannelAvailabilitySettings from '../components/ChannelAvailabilitySettings.jsx';
 import { Plus, Edit, Trash, Key, Inbox, ChevronRight } from '../components/common/icons.jsx';
@@ -21,13 +20,13 @@ import { Plus, Edit, Trash, Key, Inbox, ChevronRight } from '../components/commo
 // Mirrors ADMIN_LOCKED_CAPABILITIES on the server (app/core/permissions.py).
 const ADMIN_LOCKED = ['manageUsers', 'manageConfig', 'manageRoles', 'manageSuppliers'];
 const CAPS = [
-  ['createTrace', 'Search Invoice(s)'],
-  ['importExport', 'Export Data'],
-  ['manageConfig', 'Manage Integration Settings'],
-  ['manageUsers', 'Manage Users'],
-  ['manageRoles', 'Manage Roles & Permissions'],
-  ['viewAuditLog', 'View Audit Logs'],
-  ['manageSuppliers', 'Manage Suppliers'],
+  ['createTrace', 'Search invoices'],
+  ['importExport', 'Export data'],
+  ['manageConfig', 'Manage integration settings'],
+  ['manageUsers', 'Manage users'],
+  ['manageRoles', 'Manage roles and permissions'],
+  ['viewAuditLog', 'View audit logs'],
+  ['manageSuppliers', 'Manage suppliers'],
 ];
 
 export default function SettingsPage() {
@@ -80,7 +79,6 @@ function UsersTab() {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [resetUser, setResetUser] = useState(null);
-  const [setupLink, setSetupLink] = useState(null);
 
   const load = () => usersApi.list().then(setUsers).catch((err) => setLoadError(err.message));
   useEffect(() => { load(); }, []);
@@ -91,15 +89,13 @@ function UsersTab() {
 
   async function handleSave(values) {
     if (formUser) {
-      const { setupLink: url, expiresAt, linkType, expiryMinutes, ...updated } = await usersApi.update(formUser.id, values);
+      const { emailSent, ...updated } = await usersApi.update(formUser.id, values);
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-      if (url) setSetupLink({ user: updated, setupLink: url, expiresAt, linkType, expiryMinutes });
-      dispatch(pushToast(`${updated.name} updated.${url ? ' Share the new password link privately.' : ''}`));
+      dispatch(pushToast(`${updated.name} updated.${emailSent === true ? ' Account email sent.' : emailSent === false ? ' Email could not be sent; check SMTP and use Send Access Email to retry.' : ''}`));
     } else {
-      const { setupLink: url, expiresAt, linkType, expiryMinutes, ...created } = await usersApi.create(values);
+      const { emailSent, ...created } = await usersApi.create(values);
       setUsers((prev) => [...(prev || []), created]);
-      setSetupLink({ user: created, setupLink: url, expiresAt, linkType, expiryMinutes });
-      dispatch(pushToast('User created. Share the setup link privately.'));
+      dispatch(pushToast(`User created.${emailSent ? ' Invitation email sent.' : ' Invitation email could not be sent; check SMTP and use Send Access Email to retry.'}`));
     }
     setFormUser(undefined);
   }
@@ -119,9 +115,8 @@ function UsersTab() {
   }
 
   async function handleResetPassword() {
-    const link = await usersApi.resetPassword(resetUser.id);
-    setSetupLink({ user: resetUser, ...link });
-    dispatch(pushToast('New password link generated. Earlier links no longer work.'));
+    const result = await usersApi.resetPassword(resetUser.id);
+    dispatch(pushToast(result.emailSent ? `Access email sent to ${resetUser.email}.` : 'Email could not be sent; check SMTP configuration and try again.'));
     setResetUser(null);
   }
 
@@ -187,8 +182,8 @@ function UsersTab() {
                             onClick={() => setFormUser(u)}><Edit /></button>
                           <button
                             type="button" className="kebab"
-                            title={u.status === 'Invited' ? 'Generate new setup link' : 'Generate reset link'}
-                            aria-label={`${u.status === 'Invited' ? 'Generate setup link for' : 'Generate reset link for'} ${u.name}`}
+                            title="Send account setup or password reset email"
+                            aria-label={`Send access email to ${u.name}`}
                             disabled={u.status === 'Inactive'}
                             onClick={() => setResetUser(u)}
                           ><Key /></button>
@@ -216,8 +211,6 @@ function UsersTab() {
       {resetUser && (
         <ResetPasswordModal user={resetUser} onClose={() => setResetUser(null)} onReset={handleResetPassword} />
       )}
-      {setupLink && <UserSetupLinkModal {...setupLink} onClose={() => setSetupLink(null)} />}
-
       {pendingDelete && (
         <ModalShell
           title="Remove User"
@@ -248,13 +241,10 @@ function RolesTab() {
   return (
     <>
       <div className="card">
-        <h3 style={{ margin: '0 0 0.25rem' }}>Application roles</h3>
-        <p className="card-hint" style={{ margin: '0 0 0.75rem' }}>
-          What each role can do in the app. Changes apply immediately, are checked by the server and are recorded in the audit log.
-        </p>
+        <h3 style={{ margin: '0 0 0.25rem' }}>Role permissions</h3>
         <div className="table-scroll">
           <table className="perm-table">
-            <thead><tr><th>Capability</th>{roles.map((r) => <th key={r}>{r}</th>)}</tr></thead>
+            <thead><tr><th>Permission</th>{roles.map((r) => <th key={r}>{r}</th>)}</tr></thead>
             <tbody>
               {CAPS.map(([capKey, capLabel]) => (
                 <tr key={capKey}>
@@ -265,7 +255,9 @@ function RolesTab() {
                         type="button"
                         className={`check-toggle${roleMatrix[r][capKey] ? ' on' : ''}`}
                         disabled={r === 'Admin' && ADMIN_LOCKED.includes(capKey)}
-                        title={r === 'Admin' && ADMIN_LOCKED.includes(capKey) ? 'Admin always keeps this, so someone can always fix a mistake.' : undefined}
+                        aria-label={`Allow ${r} to ${capLabel.toLowerCase()}`}
+                        aria-pressed={!!roleMatrix[r][capKey]}
+                        title={r === 'Admin' && ADMIN_LOCKED.includes(capKey) ? 'This permission is always enabled for Admin.' : undefined}
                         onClick={() => dispatch(togglePermission({ role: r, cap: capKey }))
                           .catch((err) => dispatch(pushToast(err.message || 'Could not save that change.')))}
                       >{roleMatrix[r][capKey] ? '✓' : ''}</button>

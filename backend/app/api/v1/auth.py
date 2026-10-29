@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 from typing import Optional
 
 import jwt
@@ -6,13 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import and_, func, or_
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError as JWTError
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from app.core.audit import write_audit
 from app.core.database import get_db
+from app.core.email import is_configured as smtp_is_configured, send_email
+from app.core.email_templates import password_reset_email
 from app.core.channels import channel_availability, require_enabled_channel
-from app.core.password_reset import token_digest
+from app.core.password_reset import issue_password_reset, token_digest
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.supplier import Supplier, SupplierSetupToken
 from app.models.user import PasswordResetToken, User
@@ -30,6 +33,7 @@ from app.services.supplier_service import (
 
 router = APIRouter()
 security = HTTPBearer()
+logger = logging.getLogger(__name__)
 
 VALID_CHANNEL_SCOPES = {"all", "msetuSrm", "poPortal", "manual", "mfoxPortal"}
 
@@ -398,12 +402,30 @@ def get_me(user: dict = Depends(get_current_user)):
 
 
 class ForgotPasswordRequest(BaseModel):
-    email: str
+    email: EmailStr
 
 
 @router.post("/forgot-password")
-def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    return {"msg": "Contact your administrator to request a password reset link."}
+def forgot_password(request: ForgotPasswordRequest, response: Response, db: Session = Depends(get_db)):
+    """Send reset instructions without revealing whether an account exists."""
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    user = db.query(User).filter(
+        func.lower(User.email) == str(request.email).strip().lower(),
+        User.status == "Active",
+    ).first()
+    if user and smtp_is_configured():
+        try:
+            link = issue_password_reset(db, user, admin_initiated=False)
+            db.commit()
+            text, html = password_reset_email(
+                user.name, link["setupLink"], link["expiryMinutes"], admin_initiated=False,
+            )
+            send_email(user.email, "Reset your Invoice to Payment Tracker password", text, html)
+        except Exception:
+            db.rollback()
+            logger.exception("Forgot-password email delivery failed")
+    return {"msg": "If an active account matches that email, password reset instructions will be sent."}
 
 
 class ResetPasswordRequest(BaseModel):

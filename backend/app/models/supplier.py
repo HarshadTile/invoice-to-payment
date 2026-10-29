@@ -13,6 +13,7 @@ class Supplier(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     pan = Column(String(10), unique=True, nullable=False, index=True)
     name = Column(String(255), nullable=False, default="")
+    email = Column(String(191), nullable=True)
     channel = Column(String(32), nullable=False)
     status = Column(String(16), nullable=False, default="Invited")  # Invited | Active | Inactive
     password_hash = Column(String(255), nullable=True)

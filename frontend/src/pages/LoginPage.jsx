@@ -148,15 +148,13 @@ export default function LoginPage() {
 
   return (
     <div className="lgn-page">
-      <AppHeader onNotify={notify} />
+      <AppHeader />
 
       <div className="lgn-hero">
         <BrandPanel />
 
         <section className="lgn-hero-right">
-          <AuthCard
-            onNotify={notify}
-          >
+          <AuthCard>
             <AccountTypeSelector value={tab} onChange={selectAccountType} />
             {alerts}
 

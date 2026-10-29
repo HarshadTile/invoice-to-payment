@@ -74,7 +74,7 @@ export default function SupplierSetupPage() {
 
   return (
     <div className="lgn-page">
-      <AppHeader onNotify={() => {}} />
+      <AppHeader />
       <div className="lgn-hero">
         <BrandPanel />
         <section className="lgn-hero-right">

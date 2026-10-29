@@ -7,14 +7,13 @@ import { pushToast } from '../features/ui/uiSlice';
 import Badge from '../components/common/Badge.jsx';
 import ModalShell from '../components/modals/ModalShell.jsx';
 import AddSupplierModal from '../components/modals/AddSupplierModal.jsx';
-import SetupLinkModal from '../components/modals/SetupLinkModal.jsx';
-import SupplierCodesModal from '../components/modals/SupplierCodesModal.jsx';
+import SupplierEditModal from '../components/modals/SupplierEditModal.jsx';
 import PasswordLinkExpirySettings from '../components/PasswordLinkExpirySettings.jsx';
 import { Plus, Edit, Trash, Key, Inbox } from '../components/common/icons.jsx';
 
 const TONE = { Active: 'green', Invited: 'amber', Inactive: 'gray' };
 
-/** Suppliers: create from the invoice data, share the setup link, change codes, deactivate. */
+/** Suppliers: create accounts, send access emails, change codes, and deactivate. */
 export default function SuppliersPage() {
   const dispatch = useDispatch();
   const perm = useSelector(selectPerm);
@@ -25,8 +24,7 @@ export default function SuppliersPage() {
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
-  const [linkFor, setLinkFor] = useState(null); // { supplier, link }
-  const [editCodes, setEditCodes] = useState(null);
+  const [editSupplier, setEditSupplier] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
@@ -76,7 +74,11 @@ export default function SuppliersPage() {
     }
   }
 
-  const showLink = () => (result) => { replace(result); setLinkFor({ supplier: result, link: result.setupLink }); };
+  const showEmailStatus = (result) => {
+    const { emailSent, ...updated } = result;
+    replace(updated);
+    toast(emailSent ? `Access email sent to ${result.email}.` : `Email could not be sent to ${result.email || 'supplier'}. Check SMTP and contact email.`);
+  };
 
   async function remove() {
     const target = pendingDelete;
@@ -114,6 +116,7 @@ export default function SuppliersPage() {
             <thead>
               <tr>
                 <th scope="col">Supplier</th>
+                <th scope="col">Contact email</th>
                 <th scope="col">PAN</th>
                 <th scope="col">Vendor codes</th>
                 <th scope="col">Channel</th>
@@ -123,8 +126,8 @@ export default function SuppliersPage() {
               </tr>
             </thead>
             <tbody>
-              {(suppliers || []).length === 0 && (
-                <tr><td colSpan={7}>
+                {(suppliers || []).length === 0 && (
+                <tr><td colSpan={8}>
                   <div className="empty-state">
                     <Inbox />
                     <b>No suppliers</b>
@@ -135,6 +138,7 @@ export default function SuppliersPage() {
               {(suppliers || []).map((s) => (
                 <tr key={s.id}>
                   <td>{s.name}</td>
+                  <td className="cell-muted">{s.email || 'Not set'}</td>
                   <td style={{ fontFamily: 'monospace' }}>{s.pan}</td>
                   <td className="cell-muted">{s.vendorCodes.join(', ')}</td>
                   <td>{CHANNEL_LABEL[s.channel] || s.channel}</td>
@@ -142,14 +146,14 @@ export default function SuppliersPage() {
                   <td className="cell-muted">{s.createdBy || '—'}</td>
                   <td className="col-actions">
                     <div className="row-actions">
-                      <button type="button" className="kebab" title="Edit vendor codes" aria-label={`Edit vendor codes of ${s.name}`}
-                        onClick={() => setEditCodes(s)}><Edit /></button>
+                      <button type="button" className="kebab" title="Edit supplier details" aria-label={`Edit supplier details for ${s.name}`}
+                        onClick={() => setEditSupplier(s)}><Edit /></button>
                       {s.status === 'Invited' ? (
-                        <button type="button" className="kebab" title="Generate a new setup link" aria-label={`Generate setup link for ${s.name}`}
-                          disabled={busyId === s.id} onClick={() => run(s, suppliersApi.generateSetupLink, showLink())}><Key /></button>
+                        <button type="button" className="kebab" title="Send setup email" aria-label={`Send setup email to ${s.name}`}
+                          disabled={busyId === s.id || !s.email} onClick={() => run(s, suppliersApi.generateSetupLink, showEmailStatus)}><Key /></button>
                       ) : (
-                        <button type="button" className="kebab" title="Reset password (issues a new setup link)" aria-label={`Reset password of ${s.name}`}
-                          disabled={busyId === s.id || s.status === 'Inactive'} onClick={() => run(s, suppliersApi.resetSupplierPassword, showLink())}><Key /></button>
+                        <button type="button" className="kebab" title="Send password reset email" aria-label={`Send password reset email to ${s.name}`}
+                          disabled={busyId === s.id || s.status === 'Inactive' || !s.email} onClick={() => run(s, suppliersApi.resetSupplierPassword, showEmailStatus)}><Key /></button>
                       )}
                       {s.status === 'Inactive' ? (
                         <button type="button" className="btn" disabled={busyId === s.id} aria-label={`Activate ${s.name}`}
@@ -175,20 +179,19 @@ export default function SuppliersPage() {
         <AddSupplierModal
           onClose={() => setAdding(false)}
           onCreated={(created) => {
-            setSuppliers((prev) => [...(prev || []), created]);
+            const { emailSent, ...supplier } = created;
+            setSuppliers((prev) => [...(prev || []), supplier]);
             setAdding(false);
-            setLinkFor({ supplier: created, link: created.setupLink });
+            toast(emailSent ? `Invitation email sent to ${supplier.email}.` : `Supplier created, but email could not be sent to ${supplier.email}. Check SMTP and use the access action to retry.`);
           }}
         />
       )}
 
-      {linkFor && <SetupLinkModal supplier={linkFor.supplier} link={linkFor.link} onClose={() => setLinkFor(null)} />}
-
-      {editCodes && (
-        <SupplierCodesModal
-          supplier={editCodes}
-          onClose={() => setEditCodes(null)}
-          onSaved={(updated) => { replace(updated); setEditCodes(null); toast(`${updated.name} vendor codes updated.`); }}
+      {editSupplier && (
+        <SupplierEditModal
+          supplier={editSupplier}
+          onClose={() => setEditSupplier(null)}
+          onSaved={(updated) => { replace(updated); setEditSupplier(null); toast(`${updated.name} details updated.`); }}
         />
       )}
 

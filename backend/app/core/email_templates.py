@@ -86,6 +86,16 @@ def invite_email(name: str, role: str, set_password_link: str, minutes: int) -> 
     return _button_email(f"Welcome to {BRAND}", intro, "Set Your Password", set_password_link, name, minutes, footer)
 
 
+def supplier_access_email(name: str, pan: str, setup_link: str, minutes: int, reset: bool = False) -> tuple[str, str]:
+    """Supplier account setup/reset message; suppliers sign in with PAN and password."""
+    action = "reset" if reset else "set up"
+    intro = f"Your Mahindra Supplier Portal password was requested to be {action}. Sign in with PAN {pan}."
+    footer = "If you weren't expecting this, you can safely ignore this email and contact your Mahindra representative."
+    heading = "Reset your supplier portal password" if reset else "Set up your supplier portal access"
+    label = "Choose a New Password" if reset else "Set Your Password"
+    return _button_email(heading, intro, label, setup_link, name, minutes, footer)
+
+
 def email_changed_email(name: str, new_email: str) -> tuple[str, str]:
     """(plain_text, html) sent to the OLD address when an admin moves an active account to a
     new one — a heads-up for the person who may not know, with no link to act on."""

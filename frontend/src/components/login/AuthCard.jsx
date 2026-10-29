@@ -1,7 +1,7 @@
 import SupportFooter from './SupportFooter.jsx';
 
 /** White authentication card: heading block + form content + support footer. */
-export default function AuthCard({ children, onNotify, subtitle }) {
+export default function AuthCard({ children, subtitle }) {
   return (
     <div className="lgn-card">
       <div className="lgn-card-head">
@@ -10,7 +10,7 @@ export default function AuthCard({ children, onNotify, subtitle }) {
         <p className="lgn-card-sub">{subtitle || 'Sign in to continue.'}</p>
       </div>
       {children}
-      <SupportFooter onNotify={onNotify} />
+      <SupportFooter />
     </div>
   );
 }

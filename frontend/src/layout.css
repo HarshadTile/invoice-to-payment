@@ -16,7 +16,11 @@
   padding:1rem 1.125rem;
   display:flex;align-items:center;justify-content:center;
   border-bottom:0.0625rem solid var(--border);
+  text-decoration:none;
+  cursor:pointer;
 }
+.brand:focus-visible{outline:0.125rem solid var(--brand);outline-offset:-0.125rem;}
+.brand:hover{background:#FAFAFB;}
 .brand img{height:2.375rem;width:auto;display:block;flex-shrink:0;}
 
 .sidebar-scroll{
@@ -236,7 +240,7 @@
   .sidebar{position:relative;z-index:40;transition:width .2s ease,min-width .2s ease;}
   .sidebar-collapsed .sidebar{width:4.5rem;min-width:4.5rem;}
   .sidebar-collapsed .brand{padding:1rem 0.625rem;}
-  .sidebar-collapsed .brand img{width:2.875rem;height:auto;}
+  .sidebar-collapsed .brand img{width:2.875rem;height:2.875rem;object-fit:cover;object-position:left center;}
   .sidebar-collapsed .sidebar-scroll{padding:0.625rem 0.5rem 0.75rem;}
   .sidebar-collapsed .nav-label,
   .sidebar-collapsed .nav-item .chev,

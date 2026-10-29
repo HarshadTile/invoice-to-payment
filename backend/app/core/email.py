@@ -1,4 +1,4 @@
-"""Minimal SMTP sender for transactional email (currently just password resets).
+"""Minimal SMTP sender for transactional account email.
 
 Reads SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / EMAIL_FROM / SMTP_USE_TLS
 from backend/.env. If SMTP_HOST isn't set, send_email() logs the message to the
@@ -8,23 +8,31 @@ machine with no email credentials configured, without a different code path.
 import logging
 import os
 import smtplib
+from pathlib import Path
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
 from dotenv import load_dotenv
 
-load_dotenv()
+BACKEND_ENV = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=BACKEND_ENV)
 
 logger = logging.getLogger("app.email")
 
 SMTP_HOST = os.getenv("SMTP_HOST")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-EMAIL_FROM = os.getenv("EMAIL_FROM", SMTP_USER)
+SMTP_USER = (os.getenv("SMTP_USER") or "").strip() or None
+# Google displays app passwords in four-character groups; remove display spaces
+# before SMTP AUTH while leaving other providers' password characters intact.
+SMTP_PASSWORD = (os.getenv("SMTP_PASSWORD") or "").replace(" ", "") or None
+EMAIL_FROM = (os.getenv("EMAIL_FROM") or SMTP_USER or "").strip()
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "Invoice to Payment Tracker")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+
+
+def is_configured() -> bool:
+    return bool(SMTP_HOST)
 
 
 def send_email(to: str, subject: str, text: str, html: str | None = None) -> None:

@@ -1,11 +1,12 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Load backend/.env (gitignored, one per machine) before reading DATABASE_URL — so a local
 # password doesn't need to be typed into a terminal or committed anywhere. See .env.example.
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env")
 
 # Fallback to standard local MySQL connection if not in env
 DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://root:root@localhost:3306/mahindra_i2p")

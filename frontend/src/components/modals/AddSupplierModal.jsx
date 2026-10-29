@@ -12,9 +12,11 @@ export default function AddSupplierModal({ onClose, onCreated }) {
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [picked, setPicked] = useState(null);
+  const [email, setEmail] = useState('');
   const [codes, setCodes] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   useEffect(() => {
     const q = query.trim();
@@ -46,11 +48,12 @@ export default function AddSupplierModal({ onClose, onCreated }) {
   async function create() {
     if (!picked) { setError('Search and pick a supplier first.'); return; }
     if (!codes.length) { setError('Tick at least one vendor code.'); return; }
+    if (!emailValid) { setError('Enter a valid supplier contact email.'); return; }
     setError('');
     setBusy(true);
     try {
       const created = await suppliersApi.addSupplier({
-        pan: picked.pan, vendorCodes: codes,
+        pan: picked.pan, email: email.trim(), vendorCodes: codes,
       });
       onCreated(created);
     } catch (err) {
@@ -68,7 +71,7 @@ export default function AddSupplierModal({ onClose, onCreated }) {
       foot={(
         <>
           <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
-          <button type="button" className="btn primary" onClick={create} disabled={busy || !picked}>
+          <button type="button" className="btn primary" onClick={create} disabled={busy || !picked || !emailValid || !codes.length}>
             {busy ? 'Creating…' : 'Create supplier'}
           </button>
         </>
@@ -115,6 +118,22 @@ export default function AddSupplierModal({ onClose, onCreated }) {
               <span className="supplier-pan">PAN <b>{picked.pan}</b></span>
             </div>
             <button type="button" className="supplier-change" onClick={() => { setPicked(null); setError(''); }}>Change</button>
+          </div>
+          <div className="supplier-contact-field">
+            <label className="supplier-contact-label" htmlFor="supplier-contact-email">
+              Contact email <span>Required</span>
+            </label>
+            <input
+              id="supplier-contact-email" className="supplier-contact-input" type="email" required
+              autoComplete="email" aria-describedby="supplier-contact-email-help"
+              aria-invalid={!!email && !emailValid}
+              placeholder="supplier@example.com"
+              value={email} onChange={(event) => setEmail(event.target.value)}
+            />
+            <small id="supplier-contact-email-help" className="supplier-contact-help">
+              Setup and password reset emails will be sent to this address.
+            </small>
+            {!!email.trim() && !emailValid && <small className="supplier-contact-error">Enter a valid email address.</small>}
           </div>
           <fieldset className="supplier-codes-fieldset">
             <legend className="supplier-codes-heading">Vendor code access <span>{codes.length} selected</span></legend>

@@ -2,6 +2,8 @@ import os
 
 os.environ["DATABASE_URL"] = "mysql+pymysql://root:root@localhost:3306/mahindra_i2p_test"
 os.environ["DISABLE_TICKET_JOBS"] = "true"
+# Never use a developer's local SMTP credentials from automated tests.
+os.environ["SMTP_HOST"] = ""
 
 import pytest
 from alembic import command

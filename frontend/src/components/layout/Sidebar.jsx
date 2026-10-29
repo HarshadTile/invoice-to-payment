@@ -1,5 +1,6 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { CHANNEL_LABEL } from '../../data/constants';
 import { ensureNavExpanded, setSidebarCollapsed, toggleNavExpanded } from '../../features/ui/uiSlice';
 import { askLogout } from '../../features/auth/logoutPrompt';
@@ -8,7 +9,7 @@ import {
   FileText, Search, Layers, Building, MessageSquare, BarChart3, History,
   Settings, Sliders, Users, Shield, Bell, User, LogOut, ChevronRight,
 } from '../common/icons.jsx';
-import logo from '../../assets/mahindra-logo.png';
+import logo from '../../assets/Mahindra Digital Engine.png';
 import useEnabledChannels from '../../features/settings/useEnabledChannels';
 
 function NavItem({ icon, label, active, badge, onClick, hasChildren, open }) {
@@ -168,9 +169,11 @@ export default function Sidebar() {
 }
 
 function Brand() {
+  const authType = useSelector((s) => s.auth.authType);
+  const home = authType === 'supplier' ? '/supplier/home' : '/app/invoices';
   return (
-    <div className="brand">
-      <img src={logo} alt="Mahindra" />
-    </div>
+    <Link className="brand" to={home} aria-label="Go to home">
+      <img src={logo} alt="Mahindra Digital Engine" />
+    </Link>
   );
 }

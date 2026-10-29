@@ -1,6 +1,7 @@
 import re
 import secrets
 from typing import Optional
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.api.v1.auth import get_current_user_token
 from app.core.audit import write_audit
 from app.core.database import get_db
+from app.core.email import is_configured as smtp_is_configured, send_email
+from app.core.email_templates import email_changed_email, invite_email, password_reset_email
 from app.core.permissions import require_capability, require_internal_user
 from app.core.password_reset import issue_invite, issue_password_reset
 from app.core.security import get_password_hash
@@ -25,6 +28,7 @@ TICKET_ROLES = ["CHANNEL_LEAD", "ASSIGNEE", "NO_ACCESS"]
 SPECIFIC_CHANNELS = [c for c in CHANNEL_SCOPES if c != "all"]
 
 require_manage_users = require_capability("manageUsers", "You don't have permission to manage users.")
+logger = logging.getLogger(__name__)
 
 
 def _effective_ticket_role(role: str, ticket_role: Optional[str]) -> str:
@@ -109,6 +113,27 @@ def _username_from_email(db: Session, email: str) -> str:
     while db.query(User).filter(User.username == candidate).first():
         candidate, suffix = f"{base}{suffix}", suffix + 1
     return candidate
+
+
+def _send_account_link(user: User, link: dict, admin_initiated: bool = True) -> bool:
+    """Email a setup/reset link. Raw links stay out of API responses."""
+    if not smtp_is_configured():
+        return False
+    if link.get("linkType") == "invite":
+        text, html = invite_email(user.name, user.role, link["setupLink"], link["expiryMinutes"])
+        subject = "Set up your Invoice to Payment Tracker account"
+    else:
+        text, html = password_reset_email(
+            user.name, link["setupLink"], link["expiryMinutes"], admin_initiated=admin_initiated,
+        )
+        subject = "Reset your Invoice to Payment Tracker password"
+    try:
+        send_email(user.email, subject, text, html)
+        return True
+    except Exception:
+        # Account changes are already committed; report delivery status so admins can retry.
+        logger.exception("Could not email account link to %s", user.email)
+        return False
 
 
 def _validate_role(role: Optional[str]):
@@ -199,9 +224,10 @@ def create_user(
         f"{new_user.name} ({new_user.email}), role {new_user.role}, "
         f"channels {', '.join(channels) if channels else 'all'}, ticket role {ticket_role}",
     )
+    email_sent = _send_account_link(new_user, link)
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
-    return {**_serialize(new_user), **link}
+    return {**_serialize(new_user), "emailSent": email_sent}
 
 
 @router.patch("/{user_id}", include_in_schema=False)
@@ -270,10 +296,19 @@ def update_user(
         write_audit(db, actor, "Updated user", f"{user.name} ({user.username}): {', '.join(changes)}")
     else:
         db.commit()
+    email_sent = None
+    if link:
+        email_sent = _send_account_link(user, link)
+        if user.status == "Active" and smtp_is_configured():
+            try:
+                text, html = email_changed_email(user.name, user.email)
+                send_email(old_email, "Your account email address changed", text, html)
+            except Exception:
+                logger.exception("Could not send account email-change notice")
     result = _serialize(user)
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
-    return {**result, **link}
+    return {**result, "emailSent": email_sent}
 
 
 def _handle_email_change(db: Session, user: User) -> dict:
@@ -307,9 +342,10 @@ def reset_password(
     else:
         link = issue_password_reset(db, user, admin_initiated=True)
         write_audit(db, actor, "Generated reset link", f"{user.name} ({user.email})")
+    email_sent = _send_account_link(user, link)
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
-    return {"msg": "Share this one-time link privately with the user.", **link}
+    return {"msg": "Account email delivery attempted.", "emailSent": email_sent}
 
 
 @router.delete("/{user_id}", include_in_schema=False)

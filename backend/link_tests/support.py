@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 _scratch = TemporaryDirectory(prefix="i2p-manual-links-tests-")
 os.environ["DATABASE_URL"] = "sqlite:///" + (Path(_scratch.name) / "tests.db").as_posix()
 os.environ["DISABLE_TICKET_JOBS"] = "true"
+os.environ["SMTP_HOST"] = ""
 os.environ["I2P_LINK_TEST_ISOLATED"] = "1"
 os.environ["FRONTEND_URL"] = "http://192.168.1.10:5173"
 

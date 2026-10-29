@@ -1,18 +1,16 @@
-"""Create suppliers from the invoice data and manage their access.
-
-Every endpoint needs an active internal user with the `manageSuppliers` capability. Paths are
-named after the action so the call is obvious from the URL. No email is sent anywhere: add,
-generate and reset return a setup link for the team to share with the supplier themselves."""
+"""Create suppliers from invoice data and manage their accounts through SMTP."""
 import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from app.api.v1.auth import _allowed_channels
 from app.core.audit import write_audit
 from app.core.database import get_db
+from app.core.email import is_configured as smtp_is_configured, send_email
+from app.core.email_templates import supplier_access_email
 from app.core.permissions import require_capability
 from app.models.supplier import Supplier, SupplierVendorCode
 from app.models.user import User
@@ -28,12 +26,17 @@ manage_suppliers = require_capability("manageSuppliers", "You don't have permiss
 
 class SupplierCreate(BaseModel):
     pan: str
+    email: EmailStr
     vendorCodes: list[str]
     channel: Optional[str] = None
 
 
 class VendorCodesUpdate(BaseModel):
     vendorCodes: list[str]
+
+
+class SupplierEmailUpdate(BaseModel):
+    email: EmailStr
 
 
 def _is_admin(actor: User) -> bool:
@@ -102,10 +105,21 @@ def _resolve_codes(db: Session, pan: str, requested: list[str], supplier_id: Opt
     return resolved
 
 
-def _with_link(db: Session, supplier: Supplier, actor: User, kind: str | None = None) -> dict:
-    body = serialize_supplier(supplier, actor.name)
-    body.update(issue_setup_link(db, supplier, kind))
-    return body
+def _send_access_email(db: Session, supplier: Supplier, kind: str | None = None) -> bool:
+    link = issue_setup_link(db, supplier, kind)
+    if not supplier.email or not smtp_is_configured():
+        return False
+    try:
+        text, html = supplier_access_email(
+            supplier.name, supplier.pan, link["setupLink"], link["expiryMinutes"],
+            reset=link["linkType"] == "reset",
+        )
+        subject = "Reset your supplier portal password" if link["linkType"] == "reset" else "Set up your supplier portal access"
+        send_email(supplier.email, subject, text, html)
+        return True
+    except Exception:
+        logger.exception("Could not send supplier access email for supplier id %s", supplier.id)
+        return False
 
 
 @router.get("/search-vendors")
@@ -159,13 +173,30 @@ def add_supplier(body: SupplierCreate, db: Session = Depends(get_db), actor: Use
     codes = _resolve_codes(db, pan, body.vendorCodes)
     entry = vendor_directory.get_vendor_by_pan(pan)
 
-    supplier = Supplier(pan=pan, name=entry["name"], channel=channel, status="Invited", created_by=actor.id)
+    supplier = Supplier(
+        pan=pan, name=entry["name"], email=str(body.email).strip().lower(),
+        channel=channel, status="Invited", created_by=actor.id,
+    )
     supplier.vendor_codes = [SupplierVendorCode(vendor_code=c) for c in codes]
     db.add(supplier)
     db.commit()
     db.refresh(supplier)
     write_audit(db, actor, "Added supplier", f"{supplier.name} (PAN {pan}), codes {', '.join(codes)}, channel {channel}")
-    return _with_link(db, supplier, actor)
+    email_sent = _send_access_email(db, supplier)
+    return {**serialize_supplier(supplier, actor.name), "emailSent": email_sent}
+
+
+@router.put("/{supplier_id}/update-supplier-email")
+def update_supplier_email(
+    supplier_id: int, body: SupplierEmailUpdate,
+    db: Session = Depends(get_db), actor: User = Depends(manage_suppliers),
+):
+    supplier = _get_or_404(db, actor, supplier_id)
+    previous_email = supplier.email
+    supplier.email = str(body.email).strip().lower()
+    db.commit()
+    write_audit(db, actor, "Changed supplier email", f"{supplier.name} (PAN {supplier.pan}): {previous_email or '(none)'} -> {supplier.email}")
+    return serialize_supplier(supplier, actor.name)
 
 
 @router.put("/{supplier_id}/update-supplier-vendor-codes")
@@ -200,7 +231,7 @@ def generate_setup_link(supplier_id: int, db: Session = Depends(get_db), actor: 
             detail="This supplier has already set a password or is inactive. Use reset password instead.",
         )
     write_audit(db, actor, "Issued supplier setup link", f"{supplier.name} (PAN {supplier.pan})")
-    return _with_link(db, supplier, actor)
+    return {**serialize_supplier(supplier, actor.name), "emailSent": _send_access_email(db, supplier)}
 
 
 @router.post("/{supplier_id}/reset-supplier-password")
@@ -212,7 +243,7 @@ def reset_supplier_password(supplier_id: int, db: Session = Depends(get_db), act
     supplier.failed_attempts, supplier.locked_until = 0, None
     db.commit()
     write_audit(db, actor, "Reset supplier password", f"{supplier.name} (PAN {supplier.pan}) - new setup link issued")
-    return _with_link(db, supplier, actor, "reset")
+    return {**serialize_supplier(supplier, actor.name), "emailSent": _send_access_email(db, supplier, "reset")}
 
 
 @router.post("/{supplier_id}/deactivate-supplier")

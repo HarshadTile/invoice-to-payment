@@ -153,9 +153,17 @@ suggest dropping those tables.
 
 ## User management and roles
 
-User invitations and password resets use copyable one-time links, with no SMTP
-credentials required. See [manual user setup links](docs/manual-user-setup-links.md)
-for the admin workflow, LAN configuration, production URL and isolated test command.
+User invitations, administrator password resets, and account email changes can be
+delivered through SMTP. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,
+`SMTP_USE_TLS`, and `EMAIL_FROM` in `backend/.env`; restart the backend after
+changing them. If SMTP is not configured or is temporarily unavailable, user
+management reports that delivery failed; configure SMTP before relying on account
+emails. Setup/reset links are kept out of the admin UI and API responses. See
+[manual user setup links](docs/manual-user-setup-links.md) for account setup details.
+
+Supplier invitations and resets use the same SMTP settings. New suppliers need a
+contact email address; existing suppliers can have one added from the Suppliers
+screen. Apply the supplier email schema change with `alembic upgrade head`.
 
 - Accounts, roles and portal (channel) access are managed from the app itself
   — Settings → Users, once signed in as a role with the `manageUsers`

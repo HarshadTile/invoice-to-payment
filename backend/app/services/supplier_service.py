@@ -31,6 +31,7 @@ def serialize_supplier(supplier: Supplier, created_by_name: str | None = None) -
         "id": supplier.id,
         "pan": supplier.pan,
         "name": supplier.name,
+        "email": supplier.email,
         "channel": supplier.channel,
         "status": supplier.status,
         "vendorCodes": vendor_codes_of(supplier),
