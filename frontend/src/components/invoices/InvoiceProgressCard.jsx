@@ -1,6 +1,7 @@
 import { useDispatch } from 'react-redux';
 import { CHANNEL_LABEL } from '../../data/constants';
-import { combinedStatusFor } from '../../utils/businessLogic';
+import { combinedStatusFor, invoiceProductType } from '../../utils/businessLogic';
+import { formatInvoiceDate } from '../../utils/invoiceDates';
 import { openModal } from '../../features/ui/uiSlice';
 
 function displayDate(value) {
@@ -8,33 +9,36 @@ function displayDate(value) {
   return new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-const LADDER = ['Invoice Uploaded', 'Pending Approval', 'Approved', 'Miro Booked', 'Payment Due', 'Paid'];
+const LADDER = ['Initial', 'Invoice Uploaded', 'Pending for Approval', 'Approved', 'Miro Booked', 'Paid'];
 
 export default function InvoiceProgressCard({ inv }) {
   const dispatch = useDispatch();
+  const identity = { no: inv.no, poItem: inv.poItem, vcode: inv.vcode, po: inv.po, channel: inv.channel, sourceId: inv.sourceId };
   const stages = LADDER;
-  const currentIndex = stages.indexOf(inv.status);
+  const currentIndex = stages.indexOf(['Pending Approval', 'Level Approved', 'Action Required'].includes(inv.status) ? 'Pending for Approval' : inv.status);
   // A rejected invoice stopped at the approval step; a deleted one never got past upload.
-  const failed = inv.status === 'Rejected' || inv.status === 'Deleted';
+  const failed = inv.status === 'Rejected' || ['Deleted', 'Entry Deleted'].includes(inv.status);
   const done = failed ? (inv.status === 'Rejected' ? 2 : 1) : (currentIndex >= 0 ? currentIndex + 1 : 1);
   const cs = combinedStatusFor(inv);
-  const failureNote = inv.shortPayReason
-    || (inv.status === 'Deleted' ? 'This invoice was deleted and will not be processed further.' : 'This invoice was rejected and will not be processed further.');
+  const failureNote = inv.rejectionReason || inv.workflow?.rejection_reason || inv.shortPayReason
+    || (['Deleted', 'Entry Deleted'].includes(inv.status) ? 'This invoice was deleted and will not be processed further.' : 'This invoice was rejected and will not be processed further.');
 
   const getStageDate = (stage) => {
     switch (stage) {
-      case 'Invoice Uploaded':
+      case 'Initial':
         return displayDate(inv.rawDate);
-      case 'Pending Approval':
+      case 'Invoice Uploaded':
+        return displayDate(inv.rawUploadDate);
+      case 'Pending for Approval':
         return null;
       case 'Approved':
         return displayDate(inv.workflow?.final_approval_date);
       case 'Miro Booked':
-        return displayDate(inv.sap?.document_date || inv.sap?.posting_date);
+        return displayDate(inv.sap?.miro_booking_date || inv.sap?.document_date);
       case 'Payment Due':
         return displayDate(inv.sap?.net_due_date);
       case 'Paid':
-        return inv.utr && inv.utr !== '-' ? `${displayDate(inv.sap?.clearing_date)} (${inv.utr})` : displayDate(inv.sap?.clearing_date);
+        return inv.utr && inv.utr !== '-' ? `${displayDate(inv.sap?.clearing_date) || '-'} (${inv.utr})` : displayDate(inv.sap?.clearing_date);
       default:
         return null;
     }
@@ -44,7 +48,7 @@ export default function InvoiceProgressCard({ inv }) {
     <div className="card" style={{ marginBottom: '0.875rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.875rem' }}>
         <div>
-          <button type="button" className="link-hero" style={{ fontSize: '0.9375rem' }} onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no, poItem: inv.poItem } }))}>{inv.no}</button>
+          <button type="button" className="link-hero" style={{ fontSize: '0.9375rem' }} onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: identity }))}>{inv.no}</button>
           <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', marginTop: '0.125rem' }}>{CHANNEL_LABEL[inv.channel]} : PO {inv.po} : {inv.amount}</div>
         </div>
         <span className={`chip ${cs.tone}`}>{cs.label}</span>
@@ -69,14 +73,18 @@ export default function InvoiceProgressCard({ inv }) {
       </div>
       {failed && (
         <div role="alert" style={{ marginTop: '0.625rem', padding: '0.625rem 0.75rem', borderRadius: '0.5rem', background: 'var(--brand-tint)', color: 'var(--brand-dark)', fontSize: '0.78125rem', lineHeight: 1.4 }}>
-          <b>{inv.status}</b> · {failureNote}
+          <b>{inv.status === 'Rejected' ? 'Rejection reason' : inv.status}</b> · {failureNote}
         </div>
       )}
-      <div className="validation-row" style={{ marginTop: '0.625rem' }}><span>UTR No.</span><span>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</span></div>
-      {inv.shortPayReason && !failed && <div className="validation-row"><span>Reason for Less Paid</span><span style={{ textAlign: 'right', maxWidth: '17.5rem' }}>{inv.shortPayReason}</span></div>}
+      <div className="validation-row" style={{ marginTop: '0.625rem' }}><span>Product Type</span><span>{invoiceProductType(inv)}</span></div>
+      <div className="validation-row"><span>PO Item</span><span>{inv.poItem === '' || inv.poItem == null ? '-' : inv.poItem}</span></div>
+      <div className="validation-row"><span>Payment Due Date</span><span>{formatInvoiceDate(inv.sap?.net_due_date)}</span></div>
+      <div className="validation-row"><span>Payment Date</span><span>{formatInvoiceDate(inv.sap?.clearing_date)}</span></div>
+      <div className="validation-row"><span>UTR No.</span><span>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</span></div>
+      {inv.shortPayReason && !inv.rejectionReason && !inv.workflow?.rejection_reason && !failed && <div className="validation-row"><span>Reason for Less Paid</span><span style={{ textAlign: 'right', maxWidth: '17.5rem' }}>{inv.shortPayReason}</span></div>}
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-        <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'raiseTicket', ctx: { no: inv.no, poItem: inv.poItem } }))}>Raise a Query</button>
-        <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: { no: inv.no, poItem: inv.poItem } }))}>View Full Detail</button>
+        <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'raiseTicket', ctx: identity }))}>Raise a Query</button>
+        <button type="button" className="btn" onClick={() => dispatch(openModal({ kind: 'supplierInvoiceDetail', ctx: identity }))}>View Full Detail</button>
       </div>
     </div>
   );

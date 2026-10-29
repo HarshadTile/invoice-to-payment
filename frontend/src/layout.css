@@ -129,6 +129,11 @@
 .topbar-supplier-code-menu button.selected{background:var(--brand-tint);color:var(--brand-dark);font-weight:650;}
 .topbar-supplier-code-menu button.selected:hover{background:var(--brand-tint);}
 .topbar-context-filters{display:flex;align-items:center;gap:0.625rem;}
+.topbar-plant-filter{width:8.5rem;min-width:0;flex:0 0 8.5rem;}
+.topbar-plant-filter .dd-btn{height:2.375rem;border:0.0625rem solid var(--border);background:#F0F1F4;font-size:0.78125rem;}
+.topbar-plant-filter .dd-btn.open{background:#fff;border-color:var(--brand);}
+.topbar-plant-filter .dd-btn.has-value{background:var(--brand-tint);border-color:#F0C7CE;}
+.topbar-plant-filter .dd-menu{left:auto;right:0;width:17.5rem;max-width:calc(100vw - 2rem);}
 
 /* global search (scoped so in-page toolbar .search-box is unaffected) */
 .topbar-search{position:relative;display:flex;align-items:center;}
@@ -176,8 +181,8 @@
 }
 .icon-btn:hover{background:var(--gray-bg);color:var(--text-body);}
 .icon-btn:focus-visible{outline:0.125rem solid var(--brand);outline-offset:0.0625rem;}
-.notification-button{position:relative;}
-.notification-count{position:absolute;top:-0.3125rem;right:-0.3125rem;min-width:1.125rem;height:1.125rem;padding:0 0.25rem;border:0.125rem solid #fff;border-radius:0.5625rem;background:var(--brand);color:#fff;font-size:0.5625rem;font-weight:700;line-height:0.875em;text-align:center;}
+.notification-button{position:relative;flex-shrink:0;overflow:visible;}
+.notification-count{position:absolute;top:-0.25rem;right:-0.25rem;display:inline-flex;align-items:center;justify-content:center;min-width:1.25rem;height:1.25rem;padding:0 0.25rem;border:0.125rem solid #fff;border-radius:999px;background:var(--brand);color:#fff;font-size:0.625rem;font-weight:700;line-height:1;white-space:nowrap;pointer-events:none;}
 .notification-menu-wrap{position:relative;flex-shrink:0;}
 .notification-menu{position:absolute;right:0;top:calc(100% + 0.625rem);z-index:70;width:max-content;min-width:18.75rem;max-width:min(23.75rem,calc(100vw - 1.5rem));background:#fff;border:0.0625rem solid var(--border);border-radius:0.5rem;box-shadow:var(--shadow-md);overflow:hidden;}
 .notification-menu-head{height:3rem;padding:0 0.875rem;display:flex;align-items:center;justify-content:space-between;border-bottom:0.0625rem solid var(--border-soft);}

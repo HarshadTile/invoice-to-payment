@@ -1,50 +1,21 @@
+import SrmInvoiceFilters from '../components/invoices/SrmInvoiceFilters.jsx';
+import { invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
+import { invoiceDateTypeLabel } from '../utils/invoiceDates';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { selectFilteredInvoices } from '../features/invoices/selectors';
+import { invoiceFiscalYear, selectFilteredInvoices } from '../features/invoices/selectors';
 import { useScope } from '../features/ui/scope';
 import { clearScopeFilters, setPageFilters, setScopeFilter } from '../features/ui/uiSlice';
-import { CHANNELS, STATUS_CHIP, APP_NOW } from '../data/constants';
+import { CHANNELS, INVOICE_FILTER_STATUSES } from '../data/constants';
 import { matchesInvoiceQuery, parseInvoiceQuery } from '../utils/invoiceQuery';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import Dropdown from '../components/common/Dropdown.jsx';
 import { ArrowLeft, Search, X } from '../components/common/icons.jsx';
 
-const ALL_STATUSES = Object.keys(STATUS_CHIP);
+const ALL_STATUSES = INVOICE_FILTER_STATUSES;
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
-function toYMD(date) { return date.toISOString().split('T')[0]; }
-
-function defaultDateFrom() {
-  const d = new Date(APP_NOW);
-  d.setDate(d.getDate() - 90);
-  return toYMD(d);
-}
-function defaultDateTo() { return toYMD(new Date(APP_NOW)); }
-
-function parseInvDate(dateStr) {
-  if (!dateStr) return '';
-  const parts = dateStr.split(' ');
-  if (parts.length !== 3) return dateStr;
-  const [d, mStr, y] = parts;
-  const monthMap = {
-    Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
-    Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
-  };
-  const m = monthMap[mStr.slice(0, 3)] || '01'; // "Sept" as well as "Sep"
-  return `${y}-${m}-${d.padStart(2, '0')}`;
-}
-
-/** Financial year (Apr–Mar) of an invoice, e.g. "2026-27". */
-function invoiceFY(inv) {
-  const ymd = inv.rawDate || parseInvDate(inv.date);
-  const y = Number(ymd.slice(0, 4));
-  const m = Number(ymd.slice(5, 7));
-  if (!y || !m) return '';
-  const start = m < 4 ? y - 1 : y;
-  return `${start}-${String(start + 1).slice(2)}`;
-}
-
 function fmtDate(ymd) {
   if (!ymd) return '';
   const [y, m, d] = ymd.split('-');
@@ -92,7 +63,8 @@ const PAGE_FILTER_KEY = 'searchInvoice';
 export default function SearchInvoicePage() {
   const dispatch = useDispatch();
   const invoices = useSelector(selectFilteredInvoices); // already narrowed to the top-bar scope
-  const { fy, channel, vcode: vendor } = useScope();
+  const { fy, channel, vcode: vendor, dateField } = useScope();
+  const dateLabel = invoiceDateTypeLabel(dateField).replace(/\b\w/g, (letter) => letter.toUpperCase());
   const savedFilters = useSelector((s) => s.ui.pageFilters[PAGE_FILTER_KEY]);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -106,11 +78,11 @@ export default function SearchInvoicePage() {
   const cameInFresh = !['q', 'status', 'date_from', 'date_to'].some((k) => searchParams.has(k));
   const restored = cameInFresh ? savedFilters : null;
 
-  // Initialise from URL (or the restored filters); default date range = last 90 days
+  // Initialise from URL (or the restored filters); dates are unrestricted unless selected
   const [query,    setQuery]    = useState(() => restored?.q      ?? getParam(searchParams, 'q'));
   const [status,   setStatus]   = useState(() => restored?.status ?? getParam(searchParams, 'status'));
-  const [dateFrom, setDateFrom] = useState(() => restored?.dateFrom ?? getParam(searchParams, 'date_from', defaultDateFrom()));
-  const [dateTo,   setDateTo]   = useState(() => restored?.dateTo   ?? getParam(searchParams, 'date_to',   defaultDateTo()));
+  const [dateFrom, setDateFrom] = useState(() => restored?.dateFrom ?? getParam(searchParams, 'date_from', ''));
+  const [dateTo,   setDateTo]   = useState(() => restored?.dateTo   ?? getParam(searchParams, 'date_to',   ''));
 
   const inputRef = useRef(null);
 
@@ -146,13 +118,6 @@ export default function SearchInvoicePage() {
   const handleDateFrom = (v) => { setDateFrom(v); sync({ date_from: v }); };
   const handleDateTo  = (v) => { setDateTo(v);   sync({ date_to: v }); };
 
-  // Same three actions as the My Invoices page
-  const showLast90Days = () => {
-    const df = defaultDateFrom(), dt = defaultDateTo();
-    setDateFrom(df); setDateTo(dt);
-    dispatch(setScopeFilter({ key: 'fy', value: null })); // back to the current fiscal year
-    sync({ date_from: df, date_to: dt });
-  };
   const showAllDates = () => {
     setDateFrom(''); setDateTo('');
     dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
@@ -173,8 +138,9 @@ export default function SearchInvoicePage() {
     if (vendor  && inv.vcode   !== vendor)  return false;
     if (channel && inv.channel !== channel) return false;
     if (!skipStatus && status && inv.status !== status) return false;
-    if (fy !== 'all' && invoiceFY(inv) !== fy) return false;
-    const invYMD = inv.rawDate || parseInvDate(inv.date);
+    if (fy !== 'all' && invoiceFiscalYear(inv) !== fy) return false;
+    const invYMD = invoiceYMD(inv, dateField);
+    if ((dateFrom || dateTo) && !invYMD) return false;
     if (dateFrom && invYMD < dateFrom) return false;
     if (dateTo   && invYMD > dateTo)   return false;
     return true;
@@ -189,18 +155,6 @@ export default function SearchInvoicePage() {
   // ── Active chips ──
   const vendorLabel  = vendor  ? (invoices.find((i) => i.vcode   === vendor )?.vendor ?? vendor)  : null;
   const channelLabel = channel ? (CHANNELS.find((c) => c.key     === channel)?.label  ?? channel) : null;
-
-  const isDefaultDate = dateFrom === defaultDateFrom() && dateTo === defaultDateTo();
-
-  // Picking a financial year replaces the default "last 90 days" window; otherwise the two would
-  // contradict each other (e.g. FY 2025-26 + a window that only covers 2026).
-  useEffect(() => {
-    if (fy !== 'all' && dateFrom === defaultDateFrom() && dateTo === defaultDateTo()) {
-      setDateFrom(''); setDateTo('');
-      sync({ date_from: '', date_to: '' });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fy]);
 
   // Comma hint
   const tokenCount = query.split(',').filter((s) => s.trim()).length;
@@ -278,21 +232,23 @@ export default function SearchInvoicePage() {
             <Dropdown label="Status" ariaLabel="Filter by status" value={status} options={statusOptions} onChange={handleStatus} />
           </div>
 
+          <SrmInvoiceFilters />
+
           <label style={{ display: 'flex', flexDirection: 'column', gap: '0.1875rem', flex: '1 1 10em' }}>
-            <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date From</span>
+            <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>{dateLabel} From</span>
             <input type="date" className="search-box" style={{ width: '100%' }} value={dateFrom} max={dateTo || undefined}
               onChange={(e) => handleDateFrom(e.target.value)} />
           </label>
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: '0.1875rem', flex: '1 1 10em' }}>
-            <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date To</span>
+            <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>{dateLabel} To</span>
             <input type="date" className="search-box" style={{ width: '100%' }} value={dateTo} min={dateFrom || undefined}
               onChange={(e) => handleDateTo(e.target.value)} />
           </label>
 
           <div style={{ display: 'flex', gap: '0.5rem', flex: '0 0 auto' }}>
-            <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap' }}
-              title="Back to the default view: last 90 days, all financial years" onClick={showLast90Days}>&#8634; Last 90 days</button>
+
+
             <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap' }}
               title="Remove the date limit and the financial year limit" onClick={showAllDates}>All dates</button>
             <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}
@@ -312,7 +268,7 @@ export default function SearchInvoicePage() {
           lead={(
             <div className="results-title">
               <b>{results.length.toLocaleString()} invoice{results.length === 1 ? '' : 's'}</b>
-              <span>{!dateFrom && !dateTo ? 'all dates' : (isDefaultDate ? 'last 90 days' : `${fmtDate(dateFrom) || 'earliest'} to ${fmtDate(dateTo) || 'latest'}`)}</span>
+              <span>{!dateFrom && !dateTo ? 'all dates' : `${fmtDate(dateFrom) || 'earliest'} to ${fmtDate(dateTo) || 'latest'}`}</span>
             </div>
           )}
         />

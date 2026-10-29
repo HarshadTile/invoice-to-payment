@@ -6,7 +6,7 @@ import { useScope } from '../features/ui/scope';
 import { selectFilteredInvoicesAnyVendor } from '../features/invoices/selectors';
 import { totalsByCurrency } from '../utils/amounts';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
-import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
+import InvoiceFilterBar, { invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
 import { selectHasTicketAccess } from '../features/auth/authSlice';
 import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
 import { api } from '../api/client';
@@ -46,17 +46,17 @@ export default function VendorCodePage() {
     && (!needsMore || (extraTickets?.source === ticketPage && !extraTickets.error));
   const ticketItems = [...(ticketPage?.items || []), ...(needsMore && extraTickets?.source === ticketPage ? extraTickets.items || [] : [])];
   const [searchParams, setSearchParams] = useSearchParams();
-  const range = scope.fyChosen ? { from: '', to: '' } : defaultInvoiceRange();
   const status = searchParams.get('status') || '';
-  const dateFrom = searchParams.has('date_from') ? searchParams.get('date_from') : range.from;
-  const dateTo = searchParams.has('date_to') ? searchParams.get('date_to') : range.to;
+  const dateFrom = searchParams.has('date_from') ? searchParams.get('date_from') : '';
+  const dateTo = searchParams.has('date_to') ? searchParams.get('date_to') : '';
   const update = (changes) => {
     const next = new URLSearchParams(searchParams);
     Object.entries(changes).forEach(([k, v]) => { if (v === null) next.delete(k); else next.set(k, v); });
     setSearchParams(next, { replace: true });
   };
   const inRange = invoices.filter((i) => {
-    const ymd = invoiceYMD(i);
+    const ymd = invoiceYMD(i, scope.dateField);
+    if ((dateFrom || dateTo) && !ymd) return false;
     return (!dateFrom || ymd >= dateFrom) && (!dateTo || ymd <= dateTo);
   });
   const openTickets = ticketItems.filter((t) => ['OPEN', 'IN_PROGRESS'].includes(t.status)
@@ -103,7 +103,6 @@ export default function VendorCodePage() {
       <InvoiceFilterBar status={status} dateFrom={dateFrom} dateTo={dateTo}
         onStatusChange={(v) => update({ status: v || null, kpi: null })}
         onDateFrom={(v) => update({ date_from: v })} onDateTo={(v) => update({ date_to: v })}
-        onLast90Days={() => { const last90 = defaultInvoiceRange(); update({ date_from: last90.from, date_to: last90.to }); }}
         onAllDates={() => update({ date_from: '', date_to: '' })}
         onClear={() => update({ status: null, kpi: null, date_from: '', date_to: '' })}
         statusCountBase={inRange} resultCount={shown.length} rangeLabel={rangeLabel}

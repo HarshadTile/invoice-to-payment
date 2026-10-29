@@ -2,14 +2,14 @@ import { useState, useRef, useMemo, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useParams } from 'react-router-dom';
 import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
-import { runtime } from '../../data/runtime';
 import { getFiscalYear } from '../../utils/businessLogic';
-import { selectScopedInvoices } from '../../features/invoices/selectors';
+import { invoiceFiscalYear, selectScopedInvoices } from '../../features/invoices/selectors';
 import { pushToast, setScopeFilter, toggleSidebar, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
 import { useScope } from '../../features/ui/scope';
 import { HelpCircle, ChevronDown, Menu } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
 import NotificationBell from './NotificationBell.jsx';
+import TopbarPlantDropdown from './TopbarPlantDropdown.jsx';
 import useEnabledChannels from '../../features/settings/useEnabledChannels';
 
 const SETTINGS_LABEL = {
@@ -42,28 +42,21 @@ function TopbarVendorDropdown({ scope, onUpdate }) {
   const [typeQ, setTypeQ] = useState('');
   const wrapRef           = useRef(null);
   const currentVcode      = scope.vcode;
+  const invoices = useSelector(selectScopedInvoices);
 
   const vendors = useMemo(() => {
     const seen = new Map();
-    runtime.invoices.forEach((inv) => {
+    invoices.forEach((inv) => {
       if (!seen.has(inv.vcode)) seen.set(inv.vcode, inv.vendor);
     });
     return [...seen.entries()]
       .map(([vcode, vendor]) => ({ vendor, vcode }))
       .sort((a, b) => a.vendor.localeCompare(b.vendor));
-  }, []);
+  }, [invoices]);
 
-  const normalizedQuery = typeQ.trim().toLowerCase();
-  const filtered = normalizedQuery
-    ? vendors.filter((v) =>
-        v.vendor.toLowerCase().includes(normalizedQuery) ||
-        v.vcode.toLowerCase().includes(normalizedQuery),
-      )
-    : vendors;
-
-  const selectedLabel = currentVcode
-    ? vendors.find((v) => v.vcode === currentVcode)?.vendor ?? currentVcode
-    : null;
+  const query = typeQ.trim().toLowerCase();
+  const filtered = query ? vendors.filter((vendor) => vendor.vcode.toLowerCase().includes(query)
+    || vendor.vendor.toLowerCase().includes(query)) : vendors;
 
   function pick(vcode) { onUpdate('vcode', vcode); setOpen(false); setTypeQ(''); }
 
@@ -93,7 +86,7 @@ function TopbarVendorDropdown({ scope, onUpdate }) {
         title="Filter by vendor"
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
-          {selectedLabel ?? 'All Vendors'}
+          {currentVcode || 'Vendor Code'}
         </span>
         {currentVcode
           ? <span onClick={(e) => { e.stopPropagation(); pick(''); }} style={{ opacity: .7, fontSize: '0.9375rem', lineHeight: 1, flexShrink: 0 }} aria-label="Clear vendor filter">×</span>
@@ -110,16 +103,17 @@ function TopbarVendorDropdown({ scope, onUpdate }) {
         }}>
           <div style={{ padding: '0.5rem 0.625rem', borderBottom: '0.0625em solid var(--border-soft)' }}>
             <input autoFocus className="search-box" style={{ width: '100%', height: '2.125rem', fontSize: '0.78125rem' }}
-              placeholder="Search vendor name or code…" value={typeQ} onChange={(e) => setTypeQ(e.target.value)} />
+              aria-label="Search vendor name or code" placeholder="Search vendor name or code…"
+              value={typeQ} onChange={(event) => setTypeQ(event.target.value)} />
           </div>
           <div style={{ maxHeight: '16.25rem', overflowY: 'auto' }} role="listbox">
             <button type="button" role="option" aria-selected={!currentVcode} onClick={() => pick('')}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5625rem 0.875rem', border: 'none',
                 background: !currentVcode ? 'var(--brand-tint)' : 'none', color: !currentVcode ? 'var(--brand-dark)' : 'var(--text-body)',
                 fontWeight: !currentVcode ? 700 : 500, fontSize: '0.8125rem', cursor: 'pointer' }}>
-              All Vendors
+              Vendor Code
             </button>
-            {filtered.length === 0 && <p style={{ padding: '0.625rem 0.875rem', fontSize: '0.78125rem', color: 'var(--text-muted)', margin: '0rem' }}>No vendors match "{typeQ.trim()}"</p>}
+            {filtered.length === 0 && <p style={{ padding: '0.625rem 0.875rem', fontSize: '0.78125rem', color: 'var(--text-muted)' }}>No vendors match.</p>}
             {filtered.map((v) => (
               <button key={v.vcode} type="button" role="option" aria-selected={currentVcode === v.vcode} onClick={() => pick(v.vcode)}
                 style={{ display: 'flex', flexDirection: 'column', width: '100%', textAlign: 'left', padding: '0.5rem 0.875rem', border: 'none',
@@ -296,7 +290,7 @@ function TopbarFiscalYearDropdown({ scope, onUpdate, defaultFY }) {
   const fyOptions = useMemo(() => {
     const years = new Set([defaultFY]);
     if (currentFY !== 'all') years.add(currentFY);
-    invoices.forEach((inv) => inv.date && years.add(getFiscalYear(inv.date)));
+    invoices.forEach((inv) => { const fy = invoiceFiscalYear(inv); if (fy) years.add(fy); });
     return Array.from(years).sort((a, b) => b.localeCompare(a));
   }, [invoices, defaultFY, currentFY]);
   // "All Years" and the clear (x) only mean something when there is more than one year.
@@ -408,6 +402,7 @@ export default function Topbar() {
               <TopbarChannelDropdown scope={scope} onUpdate={updateScope} />
             )}
             <TopbarVendorDropdown scope={scope} onUpdate={updateScope} />
+            <TopbarPlantDropdown scope={scope} onUpdate={updateScope} />
           </div>
         )}
 

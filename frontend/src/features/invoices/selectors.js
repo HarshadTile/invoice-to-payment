@@ -32,9 +32,12 @@ export function selectInternalScopeLabel(state) {
  * chosen in the top bar, so every internal screen shows the same slice. Lookups of one specific
  * invoice (detail dialogs) keep using the access list so a filter can't make an invoice vanish.
  * Suppliers have no such filters on their invoices (their pages apply the year themselves). */
-/** Fiscal year (Apr-Mar) of the invoice itself, from its invoice date, not from whichever
- *  stage date happens to be on show. */
+/** SRM's FILTER_FISCAL_YEAR is the ending year; older prototype rows use the invoice date. */
 export function invoiceFiscalYear(inv) {
+  if (inv.filterFiscalYear) {
+    const end = Number(inv.filterFiscalYear);
+    return `${end - 1}-${String(end).slice(-2)}`;
+  }
   const ymd = inv.rawDate;
   if (ymd) {
     const year = Number(String(ymd).slice(0, 4));
@@ -47,9 +50,16 @@ export function invoiceFiscalYear(inv) {
   return inv.date ? getFiscalYear(inv.date) : '';
 }
 
+export function matchesSrmFilters(inv, scope = {}) {
+  return (!scope.productType || inv.productType === scope.productType)
+    && (!scope.plant || inv.plant === scope.plant)
+    && (!scope.division || inv.dvType === scope.division);
+}
+
 function applyScope(list, scope, { channel = true, vendor = true } = {}) {
   const { fy, channel: ch, vcode } = resolveScope(scope);
   return list.filter((inv) => {
+    if (!matchesSrmFilters(inv, scope)) return false;
     if (channel && ch && inv.channel !== ch) return false;
     if (vendor && vcode && inv.vcode !== vcode) return false;
     if (fy !== 'all' && invoiceFiscalYear(inv) && invoiceFiscalYear(inv) !== fy) return false;

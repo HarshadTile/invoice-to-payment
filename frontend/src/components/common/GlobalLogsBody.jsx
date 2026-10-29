@@ -24,7 +24,7 @@ const NO_FILTERS = { search: '', type: 'all', from: '', to: '' };
  * invoice record) and query activity (from GET /v1/tickets/internal-activity-log, limited to the
  * tickets this person may see), each with who did it.
  */
-export default function GlobalLogsBody({ invoiceList }) {
+export default function GlobalLogsBody({ invoiceList, getInvoiceRows = invoiceLogRows, strictInvoiceScope = false }) {
   const dispatch = useDispatch();
 
   const [entries, setEntries] = useState([]);
@@ -43,8 +43,13 @@ export default function GlobalLogsBody({ invoiceList }) {
   const filtersActive = Object.keys(NO_FILTERS).some((key) => filters[key] !== NO_FILTERS[key]);
 
   const allRows = useMemo(
-    () => withUniqueKeys([...invoiceLogRows(invoiceList), ...staffQueryLogRows(entries, invoiceList, true)]),
-    [invoiceList, entries],
+    () => {
+      const scopedEntries = strictInvoiceScope ? entries.filter((entry) => entry.invoice_no && invoiceList.some((invoice) =>
+        invoice.no === entry.invoice_no && (!entry.vendor_code || invoice.vcode === entry.vendor_code)
+        && (!entry.channel || invoice.channel === entry.channel))) : entries;
+      return withUniqueKeys([...getInvoiceRows(invoiceList), ...staffQueryLogRows(scopedEntries, invoiceList, true)]);
+    },
+    [invoiceList, entries, getInvoiceRows, strictInvoiceScope],
   );
   const filteredRows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
   const { sorted: rows, dir: dateDir, toggle: toggleDate } = useDateSort(filteredRows, (row) => row.when, 'desc');
@@ -87,7 +92,7 @@ export default function GlobalLogsBody({ invoiceList }) {
                 <td>
                   {row.invoiceNo === '-'
                     ? '-'
-                    : <button type="button" className="link-hero" onClick={() => dispatch(openModal({ kind: 'invoiceDetail', ctx: { no: row.invoiceNo, poItem: row.invoice?.poItem } }))}>{row.invoiceNo}</button>}
+                    : <button type="button" className="link-hero" onClick={() => dispatch(openModal({ kind: 'invoiceDetail', ctx: { no: row.invoiceNo, poItem: row.invoice?.poItem, vcode: row.invoice?.vcode, po: row.invoice?.po, channel: row.invoice?.channel, sourceId: row.invoice?.sourceId } }))}>{row.invoiceNo}</button>}
                 </td>
                 <td>
                   {row.vcode && row.vcode !== '-'

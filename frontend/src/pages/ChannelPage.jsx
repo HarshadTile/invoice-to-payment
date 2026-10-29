@@ -1,3 +1,4 @@
+import { useScope } from '../features/ui/scope';
 import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useSearchParams } from 'react-router-dom';
@@ -6,35 +7,37 @@ import { CHANNELS, VIEW_COLUMNS, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../d
 import { runtime } from '../data/runtime';
 import { selectFilteredInvoicesAnyChannel } from '../features/invoices/selectors';
 import { channelViewRows } from '../utils/businessLogic';
+import PoPortalWorkspace from '../components/invoices/PoPortalWorkspace.jsx';
 import { setChannelViewTab, openModal, setPageFilters } from '../features/ui/uiSlice';
 import { setRowsLocal, selectTable } from '../features/tables/tablesSlice';
 import { selectPerm } from '../features/auth/authSlice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
-import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
+import InvoiceFilterBar, { invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
 import EditableTable from '../components/common/EditableTable.jsx';
 import StatCard from '../components/common/StatCard.jsx';
 import Badge from '../components/common/Badge.jsx';
+import SrmWorkspace from '../components/invoices/SrmWorkspace.jsx';
 
 /** Status + date-range filter (same one used on My Invoices / Search Invoice(s)), scoped to this channel's invoices.
  *  Persisted per channel in Redux so it survives navigating away and back — the
  *  sidebar always links to the bare channel URL, which would otherwise reset it. */
-function useChannelInvoiceFilter(channelInvoices, channelKey) {
+function useChannelInvoiceFilter(channelInvoices, channelKey, enabled = true) {
   const dispatch = useDispatch();
+  const scope = useScope();
   const filterKey = `channel-${channelKey}`;
   const saved = useSelector((s) => s.ui.pageFilters[filterKey]);
   const [searchParams, setSearchParams] = useSearchParams();
-  const range = defaultInvoiceRange();
 
   const cameInFresh = !['status', 'date_from', 'date_to'].some((k) => searchParams.has(k));
   const restored = cameInFresh ? saved : null;
 
   const status = restored?.status ?? (searchParams.get('status') || '');
-  const dateFrom = restored?.dateFrom ?? (searchParams.has('date_from') ? searchParams.get('date_from') : range.from);
-  const dateTo = restored?.dateTo ?? (searchParams.has('date_to') ? searchParams.get('date_to') : range.to);
+  const dateFrom = restored?.dateFrom ?? (searchParams.has('date_from') ? searchParams.get('date_from') : '');
+  const dateTo = restored?.dateTo ?? (searchParams.has('date_to') ? searchParams.get('date_to') : '');
 
   // Write restored filters into the URL once, and keep Redux's copy current on every change.
   useEffect(() => {
-    if (!restored) return;
+    if (!enabled || !restored) return;
     const next = new URLSearchParams(searchParams);
     let changed = false;
     if (restored.status && !next.has('status')) { next.set('status', restored.status); changed = true; }
@@ -45,8 +48,9 @@ function useChannelInvoiceFilter(channelInvoices, channelKey) {
   }, [filterKey]);
 
   useEffect(() => {
+    if (!enabled) return;
     dispatch(setPageFilters({ key: filterKey, filters: { status, dateFrom, dateTo } }));
-  }, [dispatch, filterKey, status, dateFrom, dateTo]);
+  }, [dispatch, filterKey, status, dateFrom, dateTo, enabled]);
 
   const update = (changes) => {
     const next = new URLSearchParams(searchParams);
@@ -55,18 +59,17 @@ function useChannelInvoiceFilter(channelInvoices, channelKey) {
   };
 
   const inRange = channelInvoices.filter((i) => {
-    const ymd = invoiceYMD(i);
+    const ymd = invoiceYMD(i, scope.dateField);
+    if ((dateFrom || dateTo) && !ymd) return false;
     return (!dateFrom || ymd >= dateFrom) && (!dateTo || ymd <= dateTo);
   });
   const shown = inRange.filter((i) => !status || i.status === status);
-  const isDefaultRange = dateFrom === range.from && dateTo === range.to;
-  const rangeLabel = !dateFrom && !dateTo ? 'all dates' : (isDefaultRange ? 'last 90 days' : `${dateFrom || 'earliest'} to ${dateTo || 'latest'}`);
+  const rangeLabel = !dateFrom && !dateTo ? 'all dates' : `${dateFrom || 'earliest'} to ${dateTo || 'latest'}`;
 
   const bar = (
     <InvoiceFilterBar
       status={status} dateFrom={dateFrom} dateTo={dateTo}
       onStatusChange={(v) => update({ status: v || null })} onDateFrom={(v) => update({ date_from: v })} onDateTo={(v) => update({ date_to: v })}
-      onLast90Days={() => update({ date_from: null, date_to: null })}
       onAllDates={() => update({ date_from: '', date_to: '' })}
       onClear={() => update({ status: null, date_from: '', date_to: '' })}
       statusCountBase={inRange} resultCount={shown.length} rangeLabel={rangeLabel}
@@ -85,10 +88,13 @@ export default function ChannelPage() {
   const savedViewTab = useSelector((s) => s.ui.channelViewTab[key]);
   const perm = useSelector(selectPerm);
   const channelInvoices = useMemo(() => scopedInvoices.filter((i) => i.channel === key), [scopedInvoices, key]);
-  const { shown: filteredChannelInvoices, bar: channelFilterBar } = useChannelInvoiceFilter(channelInvoices, key);
+  const { shown: filteredChannelInvoices, bar: channelFilterBar } = useChannelInvoiceFilter(channelInvoices, key, !['msetuSrm', 'poPortal'].includes(key));
 
   if (!channel) return <p>Unknown channel.</p>;
   if (!enabledChannels.some((item) => item.key === key)) return <div className="card"><p>This portal is currently disabled. Contact your administrator.</p></div>;
+
+  if (key === 'msetuSrm') return <SrmWorkspace invoices={channelInvoices} canExport={perm.importExport} />;
+  if (key === 'poPortal') return <PoPortalWorkspace invoices={channelInvoices} canExport={perm.importExport} />;
 
   const activeView = savedViewTab && channel.views.includes(savedViewTab) ? savedViewTab : channel.views[0];
 
@@ -120,7 +126,7 @@ function ChannelHistory({ channelKey, channelInvoices }) {
   const [activeKpi, setActiveKpi] = useState('total');
   const rows = runtime.syncLog.filter((s) => CHANNEL_SYNC_LABELS[channelKey].includes(s.channel));
   const done = channelInvoices.filter((i) => i.status === 'Paid').length;
-  const failed = channelInvoices.filter((i) => i.status === 'Rejected' || i.status === 'Deleted').length;
+  const failed = channelInvoices.filter((i) => i.status === 'Rejected' || ['Deleted', 'Entry Deleted'].includes(i.status)).length;
   const ongoing = channelInvoices.length - done - failed;
   const filters = {
     total: {
@@ -133,11 +139,11 @@ function ChannelHistory({ channelKey, channelInvoices }) {
     },
     ongoing: {
       label: 'Currently In Progress',
-      invoices: channelInvoices.filter((i) => i.status !== 'Paid' && i.status !== 'Rejected' && i.status !== 'Deleted'),
+      invoices: channelInvoices.filter((i) => i.status !== 'Paid' && i.status !== 'Rejected' && !['Deleted', 'Entry Deleted'].includes(i.status)),
     },
     failed: {
       label: 'Failed',
-      invoices: channelInvoices.filter((i) => i.status === 'Rejected' || i.status === 'Deleted'),
+      invoices: channelInvoices.filter((i) => i.status === 'Rejected' || ['Deleted', 'Entry Deleted'].includes(i.status)),
     },
   };
   const activeFilter = filters[activeKpi] || filters.total;

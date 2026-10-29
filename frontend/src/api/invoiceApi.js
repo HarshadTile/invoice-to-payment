@@ -10,7 +10,7 @@ function displayDate(value) {
 }
 
 function displayAmount(invoice) {
-  const amount = invoice.sap?.cash_discount_base ?? invoice.sap?.amount_local_currency ?? invoice.sap?.amount;
+  const amount = invoice.sap?.payable_amount ?? invoice.sap?.amount;
   if (amount === null || amount === undefined) return '-';
   const currency = invoice.sap?.currency || 'INR';
   try {
@@ -23,17 +23,15 @@ function displayAmount(invoice) {
 function getDynamicDate(invoice, status) {
   switch (status) {
     case 'Invoice Uploaded':
-      return invoice.sap?.posting_date 
-        ? `${displayDate(invoice.sap.posting_date)} / ${displayDate(invoice.invoice_date)}` 
-        : displayDate(invoice.invoice_date);
+      return displayDate(invoice.invoice_upload_date);
     case 'Approved':
-      return displayDate(invoice.workflow?.final_approval_date || invoice.invoice_date);
+      return displayDate(invoice.workflow?.final_approval_date);
     case 'Miro Booked':
-      return displayDate(invoice.sap?.document_date || invoice.sap?.posting_date || invoice.invoice_date);
+      return displayDate(invoice.sap?.miro_booking_date || invoice.sap?.document_date);
     case 'Payment Due':
       return displayDate(invoice.sap?.net_due_date || invoice.invoice_date);
     case 'Paid':
-      return displayDate(invoice.sap?.clearing_date || invoice.invoice_date);
+      return displayDate(invoice.sap?.clearing_date);
     default:
       return displayDate(invoice.invoice_date);
   }
@@ -46,19 +44,31 @@ export function toWorkspaceInvoice(invoice) {
     vcode: invoice.supplier?.vendor_code || '-',
     vendor: invoice.supplier?.supplier_name || '-',
     pan: invoice.supplier?.pan || '',
-    channel: 'msetuSrm',
+    channel: invoice.channel || 'msetuSrm',
+    sourceId: invoice.source_id,
+    poPortal: invoice.po_portal,
     po: invoice.purchase_order?.po_number || '-',
     poItem: invoice.purchase_order?.po_item ?? '',
     amount: displayAmount(invoice),
     status,
     utr: invoice.sap?.utr_number || '-',
     date: getDynamicDate(invoice, status),
-    shortPayReason: invoice.workflow?.rejection_reason || undefined,
+    shortPayReason: invoice.channel === 'poPortal' ? undefined : invoice.workflow?.rejection_reason || undefined,
+    rejectionReason: invoice.workflow?.rejection_reason || undefined,
     stageIndex: invoice.workflow?.current_workflow_level || undefined,
     // Keep raw objects for timeline rendering
     sap: invoice.sap,
     workflow: invoice.workflow,
     rawDate: invoice.invoice_date,
+    rawUploadDate: invoice.invoice_upload_date,
+    productType: invoice.product_type,
+    invoiceType: invoice.invoice_type,
+    plant: invoice.plant,
+    filterFiscalYear: invoice.filter_fiscal_year,
+    dvType: invoice.dv_type,
+    statusLabel: invoice.status_label,
+    statusFlag: invoice.status_flag,
+    invoiceUploaded: invoice.invoice_uploaded,
   };
 }
 
@@ -69,7 +79,7 @@ async function request(path = '') {
     let message = `Invoice request failed (${response.status})`;
     try {
       const body = await response.json();
-      message = body.detail || body.message || message;
+      message = body.error?.message || body.detail || body.message || message;
     } catch {
       // Keep the status-based message when the API does not return JSON.
     }
@@ -92,10 +102,11 @@ function queryString(filters = {}) {
 
 export const invoiceApi = {
   list: (filters = {}) => request(`/list-invoices${queryString(filters)}`),
-  get: (invoiceNumber, poItem) => request(`/invoice-details/${encodeURIComponent(invoiceNumber)}${queryString({ po_item: poItem })}`),
+  get: (invoiceNumber, poItem, identity = {}) => request(`/invoice-details/${encodeURIComponent(invoiceNumber)}${queryString({ po_item: poItem, ...identity })}`),
   summary: (filters = {}) => request(`/invoice-summary${queryString(filters)}`),
   recent: (filters = {}) => request(`/recent-invoices${queryString(filters)}`),
   async listAll(filters = {}) {
+    filters = { channel: 'all', ...filters };
     const pageSize = 1000;
     const first = await this.list({ ...filters, page: 1, page_size: pageSize });
     const pages = await Promise.all(

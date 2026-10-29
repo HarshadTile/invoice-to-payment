@@ -1,150 +1,168 @@
+"""SRM invoice source; GCP can later supply the same source-row contract."""
+from datetime import date, datetime
 from pathlib import Path
+
 from openpyxl import load_workbook
 
-EXCEL_FILE = Path("data/gcp_invoice_data.xlsx")
+EXCEL_FILE = Path(__file__).resolve().parents[2] / "data" / "tbl_dw_inv_paymt_SRM.xlsx"
 SHEET_NAME = "in"
-
 _cached_invoices = None
+
+STATUS_LABELS = {
+    "D": "Rejected", "Y": "Rejected", "X": "Entry Deleted",
+    "N": "Push to PO Portal", "L": "Level Approved", "A": "Approved",
+    "P": "Pending for Approval", "I": "Initial",
+}
+
+DATE_FIELDS = {
+    "invoice": ("INVOICE_DATE",), "upload": ("INVOICE_UPLOAD_DATE",),
+    "approval": ("FINAL_APPRPVAL_DATE",), "miro": ("MIRO_DOCUMENT_DATE",),
+    "due": ("NETDT", "NET_DUE_DATE", "Payment_Due_Date"), "payment": ("CLEARING_DATE",),
+    "posting": ("POSTING_DATE",), "accounts": ("DOC_SENT_ACCOUNT_DATE",),
+    "utr_clearing": ("UTR_CLEARING_DATE_PAID",),
+}
+
+
+def text_value(value):
+    if value is None:
+        return None
+    value = str(value).strip()
+    return None if value in ("", "-") else value
+
+
+def date_value(value):
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    value = text_value(value)
+    if value:
+        try:
+            return date.fromisoformat(value[:10])
+        except ValueError:
+            pass
+    return None
+
+
+def invoice_status(row):
+    """Payment evidence wins, then MIRO booking, then the SRM approval flag."""
+    if row.get('__channel') == 'poPortal':
+        from app.repositories.po_portal_invoice import invoice_status as po_status
+        return po_status(row)
+    if text_value(row.get("UTR_NUMBER")) or date_value(row.get("CLEARING_DATE")):
+        return "Paid"
+    if (text_value(row.get("MIRO_BOOKED")) or "").upper() == "MIRO BOOKED":
+        return "Miro Booked"
+    flag = (text_value(row.get("STATUS_FLAG")) or "").upper()
+    if flag == "I" and (text_value(row.get("Invoice_Uploaded")) or "").upper() == "YES":
+        return "Invoice Uploaded"
+    return STATUS_LABELS.get(flag, flag or "Unknown")
+
 
 def _load_excel_data():
     global _cached_invoices
-    if _cached_invoices is not None:
-        return _cached_invoices
-        
-    workbook = load_workbook(
-        EXCEL_FILE,
-        read_only=True,
-        data_only=True,
-    )
-    try:
-        sheet = workbook[SHEET_NAME]
-        rows = sheet.iter_rows(values_only=True)
-        headers = next(rows)
-        records = []
-        for row in rows:
-            record = dict(zip(headers, row))
-            
-            # Override Payable Amount with CD Base Amount if it exists
-            cd_base = record.get("MIRO_CD_BASE")
-            if cd_base is not None and str(cd_base).strip() != "":
-                record["MIRO_AMOUNT"] = cd_base
-                record["MIRO_AMOUNT_LC"] = cd_base
-                
-            # Override Status based on UTR and Due Date
-            utr = record.get("UTR_NO")
-            due_date = record.get("MIRO_NET_DUE_DATE")
-            
-            if utr is not None and str(utr).strip() not in ("", "-"):
-                record["OVERALL_STATUS"] = "Paid"
-            elif due_date is not None and str(due_date).strip() != "":
-                record["OVERALL_STATUS"] = "Payment Due"
-                
-            records.append(record)
-            
-        _cached_invoices = records
-        return _cached_invoices
-    finally:
-        workbook.close()
-
-def get_invoices(
-    page: int = 1,
-    page_size: int = 20,
-    status: str | None = None,
-    vendor_code: str | None = None,
-    invoice_number: str | None = None,
-    po_number: str | None = None,
-    po_item: int | None = None,
-    vendor_codes: list[str] | None = None,
-):
-    """Get paginated invoices from the in-memory cached Excel data."""
-    all_records = _load_excel_data()
-    records = []
-    allowed_codes = {c.strip().lower() for c in vendor_codes} if vendor_codes is not None else None
-
-    for record in all_records:
-        if invoice_number:
-            source_invoice_number = record.get("INV_NO")
-            if source_invoice_number is None:
-                continue
-            if str(source_invoice_number).strip() != invoice_number.strip():
-                continue
-
-        if status:
-            source_status = record.get("OVERALL_STATUS")
-            if source_status is None:
-                continue
-            if str(source_status).strip().lower() != status.strip().lower():
-                continue
-
-        if vendor_code:
-            source_vendor = record.get("SUPPLIER")
-            if source_vendor is None:
-                continue
-            if str(source_vendor).strip().lower() != vendor_code.strip().lower():
-                continue
-
-        if allowed_codes is not None:
-            if str(record.get("SUPPLIER") or "").strip().lower() not in allowed_codes:
-                continue
-
-        if po_number:
-            source_po_number = record.get("PO_NO")
-            if source_po_number is None:
-                continue
-            if str(source_po_number).strip() != po_number.strip():
-                continue
-
-        if po_item is not None:
-            source_po_item = record.get("PO_ITEM")
-            if source_po_item is None:
-                continue
-            try:
-                if int(str(source_po_item).strip()) != po_item:
+    if _cached_invoices is None:
+        workbook = load_workbook(EXCEL_FILE, read_only=True, data_only=True)
+        try:
+            rows = workbook[SHEET_NAME].iter_rows(values_only=True)
+            headers = next(rows)
+            records = []
+            for values in rows:
+                if not any(value is not None for value in values):
                     continue
-            except (TypeError, ValueError):
-                continue
+                row = dict(zip(headers, values))
+                row["OVERALL_STATUS"] = invoice_status(row)
+                records.append(row)
+            _cached_invoices = records
+        finally:
+            workbook.close()
+    return _cached_invoices
 
-        records.append(record)
 
-    total = len(records)
-    start = (page - 1) * page_size
-    return records[start:start + page_size], total
-
-def get_invoice_by_number(invoice_number: str, po_item: int | None = None) -> dict | None:
-    """Find one invoice in the in-memory cached Excel data.
-
-    INV_NO is NOT unique in the source data: the same invoice number can cover
-    several PO line items, each a separate real row (e.g. one invoice number with
-    6 rows for PO items 10/20/30/40/50). Without po_item this returns whichever
-    matching row comes first in the file, same as before; pass po_item to get the
-    exact line item.
-    """
-    all_records = _load_excel_data()
-    matches = []
-
-    for record in all_records:
-        source_invoice_number = record.get("INV_NO")
-        if source_invoice_number is None:
+def filter_invoices(
+    *, status=None, vendor_code=None, invoice_number=None, po_number=None,
+    po_item=None, vendor_codes=None, product_type=None, plant=None, dv_type=None,
+    upload_date_from=None, upload_date_to=None, filter_fiscal_year=None,
+    date_type="invoice", date_from=None, date_to=None,
+    approver=None, pending_with=None, approved_by=None, miro_status=None, payment_status=None,
+    channel='msetuSrm', source_id=None, hod1_status=None, hod2_status=None,
+    accounts_status=None, approval_stage=None, invoice_uploaded=None, po_type=None,
+):
+    allowed = {c.strip().lower() for c in vendor_codes} if vendor_codes is not None else None
+    records = []
+    sources = []
+    if channel in ('msetuSrm', 'all'):
+        sources.extend(_load_excel_data())
+    if channel in ('poPortal', 'all'):
+        from app.repositories.po_portal_invoice import get_all_cached_invoices
+        sources.extend(get_all_cached_invoices())
+    for row in sources:
+        is_po = row.get('__channel') == 'poPortal'
+        po_filters = [(hod1_status, 'HOD1_Status'), (hod2_status, 'HOD2_Status'),
+                      (accounts_status, 'Accounts_Status'), (approval_stage, 'Status_OF_HOD'), (po_type, 'PO_Type')]
+        if any(value is not None and (not is_po or (text_value(row.get(key)) or '').upper() != ('' if value == '__blank__' else value.strip().upper()))
+               for value, key in po_filters):
             continue
-        if str(source_invoice_number).strip() == invoice_number.strip():
-            matches.append(record)
-
-    if not matches:
-        return None
-
-    if po_item is not None:
-        for record in matches:
-            source_po_item = record.get("PO_ITEM")
-            if source_po_item is None:
+        if invoice_uploaded is not None and ((text_value(row.get('Invoice_Uploaded')) or '').upper() == 'YES') != invoice_uploaded:
+            continue
+        if source_id is not None and row.get('__source_id') != source_id:
+            continue
+        vendor = (text_value(row.get("SUPPLIER")) or "").lower()
+        if allowed is not None and vendor not in allowed:
+            continue
+        if vendor_code and vendor != vendor_code.strip().lower():
+            continue
+        approver_columns = ('Created_by_HOD1', 'Created_by_HOD2', 'Created_by_ACCOUNTS') if is_po else tuple(f'APPROVER{i}' for i in range(1, 8))
+        if approver and not any(approver.strip().lower() in (text_value(row.get(column)) or '').lower() for column in approver_columns):
+            continue
+        if any(query and query.strip().lower() not in (text_value(row.get(column)) or '').lower()
+               for query, column in [(pending_with, "PENDING_WITH"), (approved_by, "APPROVED_BY")]):
+            continue
+        miro = (text_value(row.get("MIRO_BOOKED")) or '').upper()
+        if miro_status and miro != {"booked": "MIRO BOOKED", "pending": "PENDING FOR MIRO"}[miro_status]:
+            continue
+        if payment_status and (invoice_status(row) == "Paid") != (payment_status == "paid"):
+            continue
+        exact = ((invoice_number, "VENDOR_INVOICE_NO"), (po_number, "PURCHASING_DOCUMENT"),
+                 (po_item, "ITEM"), (product_type, "PRODUCT_TYPE"), (plant, "PLANT"),
+                 (filter_fiscal_year, "FILTER_FISCAL_YEAR"), (dv_type, "DV_TYPE"))
+        if any(value is not None and str(value).strip() != "" and
+               (text_value(row.get(column)) or "").lower() != str(value).strip().lower()
+               for value, column in exact):
+            continue
+        if status:
+            target = {"pending approval": "pending for approval", "deleted": "entry deleted"}.get(
+                status.strip().lower(), status.strip().lower())
+            if invoice_status(row).lower() != target:
                 continue
-            try:
-                if int(str(source_po_item).strip()) == po_item:
-                    return record
-            except (TypeError, ValueError):
+        uploaded = date_value(row.get("INVOICE_UPLOAD_DATE"))
+        if upload_date_from and (uploaded is None or uploaded < upload_date_from):
+            continue
+        if upload_date_to and (uploaded is None or uploaded > upload_date_to):
+            continue
+        if date_from or date_to:
+            columns = DATE_FIELDS[date_type]
+            if is_po:
+                columns = {'miro': ('MIRO_POSTING_DATE',), 'posting': ('MIRO_POSTING_DATE',),
+                           'approval': (), 'accounts': ()}.get(date_type, columns)
+            selected_date = next((parsed for column in columns
+                                  if (parsed := date_value(row.get(column))) is not None), None)
+            if selected_date is None or (date_from and selected_date < date_from) or (date_to and selected_date > date_to):
                 continue
+        records.append(row)
+    return records
 
-    return matches[0]
+
+def get_invoices(page=1, page_size=20, **filters):
+    records = filter_invoices(**filters)
+    start = (page - 1) * page_size
+    return records[start:start + page_size], len(records)
+
+
+def get_invoice_by_number(invoice_number: str, po_item: int | None = None, *, vendor_codes=None):
+    records = filter_invoices(invoice_number=invoice_number, po_item=po_item, vendor_codes=vendor_codes)
+    return records[0] if records else None
+
 
 def get_all_cached_invoices():
-    """Helper to return the full un-paginated list for fast aggregation."""
     return _load_excel_data()

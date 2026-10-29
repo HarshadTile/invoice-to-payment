@@ -21,7 +21,7 @@ const EyeOffIcon = (p) => (<svg width="16" height="16" viewBox="0 0 24 24" fill=
 const SplitIcon = (p) => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M12 3v18M5 8l-3 4 3 4M19 8l3 4-3 4" /></svg>);
 const CheckCircleIcon = (p) => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>);
 
-const STATUS_ORDER = ['Paid', 'Payment Due', 'Miro Booked', 'Approved', 'Pending Approval', 'Invoice Uploaded', 'Rejected', 'Deleted'];
+const STATUS_ORDER = ['Paid', 'Miro Booked', 'Approved', 'Level Approved', 'Pending for Approval', 'Invoice Uploaded', 'Initial', 'Push to PO Portal', 'Rejected', 'Entry Deleted'];
 const RECENT_LIMIT = 5;
 
 /* Single-hue Mahindra-red ramp: dark = largest value, light = smallest. */
@@ -44,9 +44,9 @@ function aggregate(invoices, channelList) {
   return {
     total: invoices.length,
     kpi: {
-      pendingApproval: count((i) => i.status === 'Pending Approval'),
+      pendingApproval: count((i) => ['Pending Approval', 'Pending for Approval'].includes(i.status)),
       approved: count((i) => i.status === 'Approved'),
-      paymentDue: count((i) => i.status === 'Payment Due'),
+      miroBooked: count((i) => i.status === 'Miro Booked'),
       paid: count((i) => i.status === 'Paid'),
     },
     byChannel: channelList.map((c) => ({ key: c.key, value: count((i) => i.channel === c.key) })),
@@ -56,7 +56,7 @@ function aggregate(invoices, channelList) {
 
 function recentFrom(invoices) {
   return [...invoices]
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .sort((a, b) => new Date(b.rawUploadDate || b.rawDate || b.date) - new Date(a.rawUploadDate || a.rawDate || a.date))
     .slice(0, RECENT_LIMIT);
 }
 
@@ -89,7 +89,7 @@ export default function InvoicesPage() {
     (async () => {
       try {
         if (USE_FASTAPI_INVOICES) {
-          const s = await import('../api/invoiceApi').then(m => m.invoiceApi.summary());
+          const s = await import('../api/invoiceApi').then(m => m.invoiceApi.summary({ channel: channelScope || 'all' }));
           if (alive && s) setSummary({ key: fetchKey, data: s });
         } else {
           const s = await api.get(`/dashboard/summary${scope ? `?${scope}` : ''}`);
@@ -100,7 +100,7 @@ export default function InvoicesPage() {
       try {
         if (USE_FASTAPI_INVOICES) {
           const toWorkspaceInvoice = await import('../api/invoiceApi').then(m => m.toWorkspaceInvoice);
-          const r = await import('../api/invoiceApi').then(m => m.invoiceApi.recent({ limit: RECENT_LIMIT }));
+          const r = await import('../api/invoiceApi').then(m => m.invoiceApi.recent({ limit: RECENT_LIMIT, channel: channelScope || 'all' }));
           if (alive && Array.isArray(r)) setRecent({ key: fetchKey, data: r.map(toWorkspaceInvoice) });
         } else {
           const r = await api.get(`/dashboard/latest-invoices?count=${RECENT_LIMIT}${scope ? `&${scope}` : ''}`);
@@ -112,7 +112,7 @@ export default function InvoicesPage() {
   }, [fetchKey, channelScope]);
 
   // If local topbar filters are active, bypass the server summary and compute locally.
-  const isFiltering = topScope.channel || topScope.vcode || topScope.fy !== 'all';
+  const isFiltering = topScope.channel || topScope.vcode || topScope.fy !== 'all' || topScope.productType || topScope.plant || topScope.division;
   const useServerSummary = !isFiltering && summary?.key === fetchKey;
   
   const scopedChannels = isChannelLocked ? CHANNELS.filter((c) => c.key === channelScope) : CHANNELS;
@@ -133,9 +133,9 @@ export default function InvoicesPage() {
     <>
       <div className="dash">
         <div className="kpi-grid">
-          <StatCard tone="warn" icon={<ClockIcon />} label="Pending Approval" value={agg.kpi.pendingApproval} sub="Awaiting approver action" onClick={() => openSearchByStatus('Pending Approval')} />
+          <StatCard tone="warn" icon={<ClockIcon />} label="Pending Approval" value={agg.kpi.pendingApproval} sub="Awaiting approver action" onClick={() => openSearchByStatus('Pending for Approval')} />
           <StatCard icon={<CheckCircleIcon />} label="Approved" value={agg.kpi.approved} sub="Approved by business" onClick={() => openSearchByStatus('Approved')} />
-          <StatCard icon={<CardIcon />} label="Payment Due" value={agg.kpi.paymentDue} sub="Booked, due this cycle" onClick={() => openSearchByStatus('Payment Due')} />
+          <StatCard icon={<CardIcon />} label="Miro Booked" value={agg.kpi.miroBooked} sub="Booked in SAP, awaiting payment" onClick={() => openSearchByStatus('Miro Booked')} />
           <StatCard tone="good" icon={<CheckCircleIcon />} label="Paid" value={agg.kpi.paid} sub="Payment cleared" onClick={() => openSearchByStatus('Paid')} />
         </div>
 

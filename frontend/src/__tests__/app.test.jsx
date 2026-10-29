@@ -24,6 +24,7 @@ import uiReducer, { setScopeFilter } from '../features/ui/uiSlice';
 import AppRoutes from '../routes/AppRoutes.jsx';
 import { api as mockApi } from '../api/client';
 import ToastStack from '../components/common/ToastStack.jsx';
+import { runtime } from '../data/runtime';
 
 function freshStore() {
   return configureStore({
@@ -176,17 +177,23 @@ describe('Internal admin - full navigation', () => {
     }
   });
 
-  it('filters channel history invoices from KPI cards', async () => {
-    const { user } = await loginAdmin();
+  it('keeps SRM invoice filters when switching to dated history', async () => {
+    const { store, user } = await loginAdmin();
+    act(() => {
+      runtime.invoices.forEach((invoice) => { invoice.rawUploadDate = '2026-10-01'; });
+      store.dispatch({ type: 'ui/bumpData' });
+      store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+    });
     await user.click(screen.getAllByText('Msetu / SRM')[0]);
+    await user.click(screen.getByRole('button', { name: 'Filter by status' }));
+    await user.click(screen.getByRole('option', { name: /^Paid/ }));
     await user.click(screen.getByRole('button', { name: 'History' }));
-    expect(await screen.findByText(/Msetu \/ SRM : Total Invoices/)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /^Failed 1$/ }));
-
-    expect(screen.getByRole('heading', { name: /Failed/ })).toBeInTheDocument();
-    expect(screen.getByText('INV-MS-1005')).toBeInTheDocument();
-    expect(screen.queryByText('INV-MS-1001')).not.toBeInTheDocument();
+    expect(await screen.findAllByText('Invoice uploaded')).not.toHaveLength(0);
+    expect(screen.getByText('INV-MS-1001')).toBeInTheDocument();
+    expect(screen.queryByText('INV-MS-1005')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Approver Assignment' }));
+    expect(screen.getByRole('columnheader', { name: 'Approver 7' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'INV-MS-1005' })).toBeNull();
   });
 
   it('opens the Stage Simple modal from the Recent Invoices list', async () => {
@@ -563,6 +570,19 @@ describe('Internal admin - full navigation', () => {
     expect(screen.getByLabelText('Filter by type')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Search the log'), { target: { value: 'zzz-no-such-entry' } });
     expect(await screen.findByText('No log entries match your filters.')).toBeInTheDocument();
+  });
+
+  it('searches the top-bar vendor dropdown by name or code', async () => {
+    const { store, user } = await loginAdmin();
+    await user.click(screen.getByTitle('Filter by vendor'));
+    const search = screen.getByRole('textbox', { name: 'Search vendor name or code' });
+    fireEvent.change(search, { target: { value: 'tata' } });
+    expect(screen.getByRole('option', { name: /DIT00388AC/ })).toBeTruthy();
+    fireEvent.change(search, { target: { value: 'NO-SUCH-VENDOR' } });
+    expect(screen.getByText('No vendors match.')).toBeTruthy();
+    fireEvent.change(search, { target: { value: ' dit00388ac ' } });
+    await user.click(screen.getByRole('option', { name: /DIT00388AC/ }));
+    expect(store.getState().ui.scope.vcode).toBe('DIT00388AC');
   });
 
   it('the top-bar vendor / channel / year apply on every screen until cleared', async () => {

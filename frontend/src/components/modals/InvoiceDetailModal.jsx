@@ -1,10 +1,12 @@
 ﻿import { useDispatch, useSelector } from 'react-redux';
 import { CHANNEL_STAGES, CHANNEL_LABEL, CHANNEL_ROUTING_RULE, STATUS_CHIP } from '../../data/constants';
 import { stageProgress, handlerFor, findInvoice } from '../../utils/businessLogic';
+import PoPortalDetails from '../invoices/PoPortalDetails.jsx';
 import { closeModal } from '../../features/ui/uiSlice';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
 import ModalShell from './ModalShell.jsx';
 import Badge from '../common/Badge.jsx';
+import { invoiceDateLabel } from '../../utils/invoiceDates';
 
 function displayDate(value) {
   if (!value) return null;
@@ -16,30 +18,32 @@ export default function InvoiceDetailModal({ ctx }) {
   useSelector((s) => s.ui.dataVersion); // re-render when invoice data refreshes
   const authType = useSelector((s) => s.auth.authType);
   const invoices = useSelector(selectScopedInvoices);
-  const inv = findInvoice(ctx.no, ctx.poItem, invoices);
+  const inv = findInvoice(ctx.no, ctx.poItem, invoices, ctx);
   if (!inv) return null;
 
-  const stages = ['Invoice Uploaded', 'Pending Approval', 'Approved', 'Miro Booked', 'Payment Due', 'Paid'];
-  const currentIndex = stages.indexOf(inv.status);
-  const failed = inv.status === 'Rejected' || inv.status === 'Deleted';
+  const stages = ['Initial', 'Invoice Uploaded', 'Pending for Approval', 'Approved', 'Miro Booked', 'Paid'];
+  const currentIndex = stages.indexOf(['Pending Approval', 'Level Approved', 'Action Required'].includes(inv.status) ? 'Pending for Approval' : inv.status);
+  const failed = inv.status === 'Rejected' || ['Deleted', 'Entry Deleted'].includes(inv.status);
   const done = failed ? 1 : (currentIndex >= 0 ? currentIndex + 1 : 1);
   const h = handlerFor(inv);
   const bookedOrLater = done >= Math.ceil(stages.length * 0.7) || inv.status === 'Paid';
 
   const getStageDate = (stage) => {
     switch (stage) {
-      case 'Invoice Uploaded':
+      case 'Initial':
         return displayDate(inv.rawDate);
-      case 'Pending Approval':
+      case 'Invoice Uploaded':
+        return displayDate(inv.rawUploadDate);
+      case 'Pending for Approval':
         return null;
       case 'Approved':
         return displayDate(inv.workflow?.final_approval_date);
       case 'Miro Booked':
-        return displayDate(inv.sap?.document_date || inv.sap?.posting_date);
+        return displayDate(inv.sap?.miro_booking_date || inv.sap?.document_date);
       case 'Payment Due':
         return displayDate(inv.sap?.net_due_date);
       case 'Paid':
-        return inv.utr && inv.utr !== '-' ? `${displayDate(inv.sap?.clearing_date)} (${inv.utr})` : displayDate(inv.sap?.clearing_date);
+        return inv.utr && inv.utr !== '-' ? `${displayDate(inv.sap?.clearing_date) || '-'} (${inv.utr})` : displayDate(inv.sap?.clearing_date);
       default:
         return null;
     }
@@ -102,8 +106,12 @@ export default function InvoiceDetailModal({ ctx }) {
 
       <div className="validation-row"><span>Current Status</span><Badge tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge></div>
       <div className="validation-row"><span>UTR No.</span><span>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</span></div>
+      <PoPortalDetails invoice={inv} internal={authType !== 'supplier'} />
       {inv.shortPayReason && <div className="validation-row"><span>Short-Payment Reason</span><span style={{ textAlign: 'right', maxWidth: '17.5rem' }}>{inv.shortPayReason}</span></div>}
-      <div className="validation-row"><span>Invoice Date</span><span>{inv.date}</span></div>
+      <div className="validation-row"><span>Invoice Date</span><span>{invoiceDateLabel(inv)}</span></div>
+      <div className="validation-row"><span>Upload Date</span><span>{displayDate(inv.rawUploadDate) || '-'}</span></div>
+      <div className="validation-row"><span>Payment Due Date</span><span>{displayDate(inv.sap?.net_due_date) || '-'}</span></div>
+      <div className="validation-row"><span>Payment Date</span><span>{displayDate(inv.sap?.clearing_date) || '-'}</span></div>
     </ModalShell>
   );
 }

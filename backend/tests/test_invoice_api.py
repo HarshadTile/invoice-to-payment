@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from app.core.security import create_access_token
 from app.main import app
@@ -12,6 +13,20 @@ def _auth(auth_type, subject, scope=None):
 anonymous = TestClient(app)
 client = TestClient(app, headers=_auth("internal", 1, {"channelScope": "all"}))
 supplier = TestClient(app, headers=_auth("supplier", "DIM00505AA", {"company": "Forvis Mazars LLP"}))
+
+
+@pytest.fixture(autouse=True)
+def invoice_source(monkeypatch):
+    """API contracts use fixed SRM rows, independent of the current export."""
+    from app.repositories import gcp_invoice
+    base = {"PRODUCT_TYPE": "S", "STATUS_FLAG": "A", "Invoice_Uploaded": "YES",
+            "MIRO_BOOKED": "PENDING FOR MIRO", "ITEM": 10, "PURCHASING_DOCUMENT": "650001",
+            "FILTER_FISCAL_YEAR": 2027}
+    monkeypatch.setattr(gcp_invoice, "_cached_invoices", [
+        {**base, "VENDOR_INVOICE_NO": "INV-2627000165", "SUPPLIER": "DIM00505AA",
+         "SUPPLIER_NAME": "Forvis Mazars LLP"},
+        {**base, "VENDOR_INVOICE_NO": "26-27/IT/101", "SUPPLIER": "DIG00356AA", "STATUS_FLAG": "P"},
+    ])
 
 
 def test_get_invoice_by_number(): 
@@ -86,7 +101,7 @@ def test_filter_by_status():
 
     data = response.json()
 
-    assert data["total"] == 693
+    assert data["total"] == 1
     assert data["page"] == 1
     assert data["page_size"] == 20
 
@@ -105,7 +120,7 @@ def test_filter_by_vendor_code():
 
     data = response.json()
 
-    assert data["total"] == 14
+    assert data["total"] == 1
 
     for invoice in data["items"]:
         assert invoice["supplier"]["vendor_code"] == "DIG00356AA"

@@ -285,7 +285,7 @@ def get_current_user(
             "user_id": None,
             "name": supplier.name or "Vendor",
             "ticket_role": "SUPPLIER",
-            "channel_scope": None,
+            "channel_scope": supplier.channel,
             "allowed_channels": [],
         }
 

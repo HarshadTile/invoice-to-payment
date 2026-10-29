@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { getFiscalYear } from '../../utils/businessLogic';
 import { useScope } from '../../features/ui/scope';
-import { selectScopedInvoices } from '../../features/invoices/selectors';
+import { invoiceFiscalYear, matchesSrmFilters, selectScopedInvoices } from '../../features/invoices/selectors';
 import { setSearch } from '../../features/ui/uiSlice';
 import InvoiceTable from '../../components/invoices/InvoiceTable.jsx';
 import StatCard from '../../components/common/StatCard.jsx';
-import InvoiceFilterBar, { defaultInvoiceRange, invoiceYMD } from '../../components/invoices/InvoiceFilterBar.jsx';
+import InvoiceFilterBar, { invoiceYMD } from '../../components/invoices/InvoiceFilterBar.jsx';
 import InvoiceProgressCard from '../../components/invoices/InvoiceProgressCard.jsx';
 
 export default function SupplierHomePage() {
@@ -18,13 +17,10 @@ export default function SupplierHomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Filters live in the URL so they survive opening an invoice and coming back
-  // Default window is the last 90 days; once a financial year is picked in the top bar, that year sets the scope instead
   const scope = useScope();
-  const fyChosen = scope.fyChosen;
-  const range = fyChosen ? { from: '', to: '' } : defaultInvoiceRange();
   const status = searchParams.get('status') || '';
-  const dateFrom = searchParams.has('date_from') ? searchParams.get('date_from') : range.from;
-  const dateTo = searchParams.has('date_to') ? searchParams.get('date_to') : range.to;
+  const dateFrom = searchParams.has('date_from') ? searchParams.get('date_from') : '';
+  const dateTo = searchParams.has('date_to') ? searchParams.get('date_to') : '';
   const openNo = searchParams.get('open') || '';
   const openItem = searchParams.get('item') || '';
   const invoiceSearch = searchParams.get('invoice_number') || '';
@@ -45,13 +41,15 @@ export default function SupplierHomePage() {
     const invoiceMatches = !invoiceSearch.trim() || i.no.toLowerCase().includes(invoiceSearch.trim().toLowerCase());
     const poMatches = !poSearch.trim() || i.po.toLowerCase().includes(poSearch.trim().toLowerCase());
     const itemMatches = !poItemSearch.trim() || String(i.poItem) === poItemSearch.trim();
-    const fyMatches = fySearch === 'all' || getFiscalYear(i.date) === fySearch;
-    return invoiceMatches && poMatches && itemMatches && fyMatches;
+    const fyMatches = fySearch === 'all' || invoiceFiscalYear(i) === fySearch;
+    return invoiceMatches && poMatches && itemMatches && fyMatches
+      && matchesSrmFilters(i, { productType: scope.productType });
   });
 
   // ── Invoice progress view (opened by clicking an invoice number) ──
   if (openNo) {
-    const opened = codeInvoices.filter((i) => i.no === openNo && (!openItem || String(i.poItem) === openItem));
+    const opened = codeInvoices.filter((i) => i.no === openNo && (!openItem || String(i.poItem) === openItem)
+      && (!searchParams.get('source_id') || i.sourceId === searchParams.get('source_id')));
     return (
       <>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.875rem', flexWrap: 'wrap' }}>
@@ -66,15 +64,16 @@ export default function SupplierHomePage() {
 
   // ── All Invoices: date range first, then KPI cards, status filter and table ──
   const inRange = codeInvoices.filter((i) => {
-    const ymd = invoiceYMD(i);
+    const ymd = invoiceYMD(i, scope.dateField);
+    if ((dateFrom || dateTo) && !ymd) return false;
     return (!dateFrom || ymd >= dateFrom) && (!dateTo || ymd <= dateTo);
   });
   // Every invoice falls in exactly one group, so Paid + In Progress + Rejected/Deleted = Total
   const kpiFilters = {
     total: inRange,
     paid: inRange.filter((i) => i.status === 'Paid'),
-    progress: inRange.filter((i) => !['Paid', 'Rejected', 'Deleted'].includes(i.status)),
-    rejected: inRange.filter((i) => i.status === 'Rejected' || i.status === 'Deleted'),
+    progress: inRange.filter((i) => !['Paid', 'Rejected', 'Deleted', 'Entry Deleted'].includes(i.status)),
+    rejected: inRange.filter((i) => i.status === 'Rejected' || ['Deleted', 'Entry Deleted'].includes(i.status)),
   };
   const shown = (kpiFilters[activeKpi] || inRange).filter((i) => !status || i.status === status);
   // A KPI card and the status dropdown both narrow by status, so using one clears the other
@@ -86,12 +85,9 @@ export default function SupplierHomePage() {
     setActiveKpi('total');
     update({ status: value || null });
   };
-  const isDefaultRange = dateFrom === range.from && dateTo === range.to;
-  const rangeLabel = !dateFrom && !dateTo ? 'all dates' : (isDefaultRange ? 'last 90 days' : `${dateFrom || 'earliest'} → ${dateTo || 'latest'}`);
+  const rangeLabel = !dateFrom && !dateTo ? 'all dates' : `${dateFrom || 'earliest'} → ${dateTo || 'latest'}`;
   // No time limit at all: every date, every financial year
   const showAllDates = () => update({ date_from: '', date_to: '', fy: 'all' });
-  // Back to the page defaults: last 90 days, current financial year
-  const showLast90Days = () => update({ date_from: null, date_to: null, fy: null });
   // Remove every filter: table search, KPI card, status, any search params, and the time limit
   const clearFilters = () => {
     ['total', activeKpi].forEach((k) => dispatch(setSearch({ key: `supplierAllInvoices-${k}`, value: '' })));
@@ -111,7 +107,7 @@ export default function SupplierHomePage() {
       <InvoiceFilterBar
         status={status} dateFrom={dateFrom} dateTo={dateTo}
         onStatusChange={pickStatus} onDateFrom={(v) => update({ date_from: v })} onDateTo={(v) => update({ date_to: v })}
-        onLast90Days={showLast90Days} onAllDates={showAllDates} onClear={clearFilters}
+        onAllDates={showAllDates} onClear={clearFilters}
         statusCountBase={inRange} resultCount={shown.length} rangeLabel={rangeLabel}
       />
 

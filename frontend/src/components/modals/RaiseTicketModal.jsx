@@ -14,7 +14,7 @@ export default function RaiseTicketModal({ ctx }) {
   const availableInvoices = authType === 'supplier'
     ? invoices.filter((item) => supplierCodes.includes(item.vcode))
     : invoices;
-  const [invoiceNo, setInvoiceNo] = useState(ctx.no || availableInvoices[0]?.no || '');
+  const [invoiceNo, setInvoiceNo] = useState(ctx.sourceId || ctx.no || availableInvoices[0]?.sourceId || availableInvoices[0]?.no || '');
   const [category, setCategory] = useState(TICKET_CATEGORIES[0]);
   const [priority, setPriority] = useState('Medium');
   const [subject, setSubject] = useState('');
@@ -24,7 +24,7 @@ export default function RaiseTicketModal({ ctx }) {
   const idempotencyKey = useRef(crypto.randomUUID());
   const [createTicket, { isLoading: isCreating }] = useCreateTicketMutation();
   const [uploadAttachment, { isLoading: isUploading }] = useUploadAttachmentMutation();
-  const inv = availableInvoices.find((item) => item.no === invoiceNo);
+  const inv = availableInvoices.find((item) => (item.sourceId || item.no) === invoiceNo);
 
   if (!inv) return null;
 
@@ -42,6 +42,7 @@ export default function RaiseTicketModal({ ctx }) {
     try {
       created = await createTicket({
         invoice_no: inv.no,
+        ...(inv.channel === 'poPortal' ? { invoice_channel: inv.channel, invoice_source_id: inv.sourceId } : {}),
         category,
         priority: priority.toUpperCase(),
         subject: subject.trim(),
@@ -85,8 +86,8 @@ export default function RaiseTicketModal({ ctx }) {
         <label htmlFor="ticket-invoice">Invoice</label>
         <select id="ticket-invoice" value={invoiceNo} onChange={(event) => setInvoiceNo(event.target.value)}>
           {availableInvoices.map((item, index) => (
-            <option key={`${item.no}-${item.poItem}-${index}`} value={item.no}>
-              {item.no} | PO {item.po} | {item.amount}
+            <option key={`${item.no}-${item.poItem}-${index}`} value={item.sourceId || item.no}>
+              {item.no} | PO {item.po} | Item {item.poItem} {item.poPortal?.line_number ? `| Service line ${item.poPortal.line_number}` : ''} | {item.amount}
             </option>
           ))}
         </select>

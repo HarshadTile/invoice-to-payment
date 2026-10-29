@@ -1,27 +1,17 @@
 import Dropdown from '../common/Dropdown.jsx';
 import { X } from '../common/icons.jsx';
-import { STATUS_CHIP } from '../../data/constants';
+import { INVOICE_FILTER_STATUSES } from '../../data/constants';
+import { useDispatch } from 'react-redux';
+import { useScope } from '../../features/ui/scope';
+import { setScopeFilter } from '../../features/ui/uiSlice';
+import SrmInvoiceFilters from './SrmInvoiceFilters.jsx';
+import { invoiceDateTypeLabel, invoiceFilterDate } from '../../utils/invoiceDates';
 
-const ALL_STATUSES = Object.keys(STATUS_CHIP);
+const ALL_STATUSES = INVOICE_FILTER_STATUSES;
 
 /** Invoice date as YYYY-MM-DD. Prefers the raw ISO date; falls back to a "04 Sept 2026" display string. */
-export function invoiceYMD(inv) {
-  if (inv.rawDate) return inv.rawDate;
-  const months = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
-  const [d, m, y] = String(inv.date || '').split(' ');
-  const key = months[(m || '').slice(0, 3)];
-  return key && y ? `${y}-${key}-${d.padStart(2, '0')}` : '';
-}
-
-// Local calendar date as YYYY-MM-DD (toISOString would shift the day for users ahead of UTC)
-const toYMD = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-
-/** The default view: the rolling last 90 days, ending today. */
-export function defaultInvoiceRange() {
-  const to = new Date();
-  const from = new Date(to);
-  from.setDate(from.getDate() - 90);
-  return { from: toYMD(from), to: toYMD(to) };
+export function invoiceYMD(inv, dateField = 'invoice') {
+  return invoiceFilterDate(inv, dateField);
 }
 
 /**
@@ -30,9 +20,16 @@ export function defaultInvoiceRange() {
  * `invoices`) are counted per option so a user can see what a choice will return before picking it.
  */
 export default function InvoiceFilterBar({
-  status, dateFrom, dateTo, onStatusChange, onDateFrom, onDateTo, onLast90Days, onAllDates, onClear,
+  status, dateFrom, dateTo, onStatusChange, onDateFrom, onDateTo, onAllDates, onClear,
   statusCountBase, resultCount, rangeLabel, extra,
 }) {
+  const scope = useScope();
+  const dateLabel = invoiceDateTypeLabel(scope.dateField).replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const dispatch = useDispatch();
+  const clear = () => {
+    for (const [key, value] of [['productType', ''], ['plant', ''], ['division', ''], ['dateField', 'invoice']]) dispatch(setScopeFilter({ key, value }));
+    onClear();
+  };
   const statusOptions = [
     { value: '', label: 'All Statuses', count: statusCountBase.length },
     ...ALL_STATUSES.map((s) => ({ value: s, label: s, count: statusCountBase.filter((i) => i.status === s).length })),
@@ -45,29 +42,28 @@ export default function InvoiceFilterBar({
           <Dropdown label="Status" ariaLabel="Filter by status" value={status} options={statusOptions} onChange={onStatusChange} />
         </div>
 
+        <SrmInvoiceFilters />
         <label style={{ display: 'flex', flexDirection: 'column', gap: '0.1875rem', flex: '1 1 10em' }}>
-          <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date From</span>
+          <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>{dateLabel} From</span>
           <input type="date" className="search-box" style={{ width: '100%' }} value={dateFrom} max={dateTo || undefined}
             onChange={(e) => onDateFrom(e.target.value)} />
         </label>
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: '0.1875rem', flex: '1 1 10em' }}>
-          <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Date To</span>
+          <span style={{ fontSize: '0.65625rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>{dateLabel} To</span>
           <input type="date" className="search-box" style={{ width: '100%' }} value={dateTo} min={dateFrom || undefined}
             onChange={(e) => onDateTo(e.target.value)} />
         </label>
 
         <div style={{ display: 'flex', gap: '0.5rem', flex: '0 0 auto' }}>
           <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap' }}
-            title="Back to the default view: last 90 days" onClick={onLast90Days}>&#8634; Last 90 days</button>
-          <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap' }}
             title="Remove the date limit" onClick={onAllDates}>All dates</button>
           <button type="button" className="btn" style={{ height: '2.375rem', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}
-            title="Remove all filters" onClick={onClear}><X size={14} />Clear</button>
+            title="Remove all filters" onClick={clear}><X size={14} />Clear</button>
         </div>
       </div>
       <p style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', margin: '0.625rem 0 0' }}>
-        {resultCount.toLocaleString()} invoice{resultCount === 1 ? '' : 's'} &middot; {rangeLabel}
+        {resultCount.toLocaleString()} invoice{resultCount === 1 ? '' : 's'} &middot; {dateLabel}: {rangeLabel}
         {extra}
       </p>
     </div>

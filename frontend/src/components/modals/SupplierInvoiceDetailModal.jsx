@@ -1,14 +1,16 @@
 import { useDispatch } from 'react-redux';
 import { runtime } from '../../data/runtime';
 import { CHANNEL_LABEL } from '../../data/constants';
-import { combinedStatusFor, currentStageName, findInvoice } from '../../utils/businessLogic';
+import { combinedStatusFor, currentStageName, findInvoice, invoiceProductType } from '../../utils/businessLogic';
+import PoPortalDetails from '../invoices/PoPortalDetails.jsx';
+import { formatInvoiceDate } from '../../utils/invoiceDates';
 import { closeModal } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
 import Badge from '../common/Badge.jsx';
 
 export default function SupplierInvoiceDetailModal({ ctx }) {
   const dispatch = useDispatch();
-  const inv = findInvoice(ctx.no, ctx.poItem);
+  const inv = findInvoice(ctx.no, ctx.poItem, undefined, ctx);
   if (!inv) return null;
   const cs = combinedStatusFor(inv);
   // Same invoice number can legitimately repeat as separate PO line items — exclude
@@ -31,9 +33,21 @@ export default function SupplierInvoiceDetailModal({ ctx }) {
       </div>
       <div className="validation-row"><span>Vendor Code</span><span className="mono">{inv.vcode}</span></div>
       <div className="validation-row"><span>PO No</span><span>{inv.po}</span></div>
+      <div className="validation-row"><span>PO Item</span><span>{inv.poItem === '' || inv.poItem == null ? '-' : inv.poItem}</span></div>
+      <div className="validation-row"><span>Product Type</span><span>{invoiceProductType(inv)}</span></div>
       <div className="validation-row"><span>Amount</span><span>{inv.amount}</span></div>
+      <div className="validation-row"><span>Invoice Date</span><span>{formatInvoiceDate(inv.rawDate)}</span></div>
+      <div className="validation-row"><span>Upload Date</span><span>{formatInvoiceDate(inv.rawUploadDate)}</span></div>
+      <div className="validation-row"><span>Approval Date</span><span>{formatInvoiceDate(inv.workflow?.final_approval_date)}</span></div>
+      <div className="validation-row"><span>MIRO Booked Date</span><span>{formatInvoiceDate(inv.sap?.miro_booking_date || inv.sap?.document_date)}</span></div>
+      <div className="validation-row"><span>Payment Due Date</span><span>{formatInvoiceDate(inv.sap?.net_due_date)}</span></div>
+      <div className="validation-row"><span>Payment Date</span><span>{formatInvoiceDate(inv.sap?.clearing_date)}</span></div>
       <div className="validation-row"><span>UTR No.</span><span>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</span></div>
-      {inv.shortPayReason && <div className="validation-row"><span>Reason for Less Paid</span><span style={{ textAlign: 'right', maxWidth: '16.25rem' }}>{inv.shortPayReason}</span></div>}
+      {inv.status === 'Rejected' && <div role="alert" style={{ marginTop: '0.75rem', padding: '0.75rem', borderRadius: '0.5rem', background: 'var(--brand-tint)', color: 'var(--brand-dark)' }}>
+        <strong>Rejection reason:</strong> {inv.rejectionReason || inv.workflow?.rejection_reason || inv.shortPayReason || 'Not provided'}
+      </div>}
+      <PoPortalDetails invoice={inv} />
+      {inv.shortPayReason && !inv.rejectionReason && !inv.workflow?.rejection_reason && inv.status !== 'Rejected' && <div className="validation-row"><span>Reason for Less Paid</span><span style={{ textAlign: 'right', maxWidth: '16.25rem' }}>{inv.shortPayReason}</span></div>}
       {siblingInvoices.length > 0 && (
         <>
           <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Other Invoices on PO {inv.po}</label>

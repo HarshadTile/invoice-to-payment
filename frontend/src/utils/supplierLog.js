@@ -53,11 +53,11 @@ export function invoiceLogRows(invoices) {
   invoices.forEach((inv) => {
     const dueDate = dayStart(inv.sap?.net_due_date);
     rows.push(
-      invoiceRow(inv, 'Invoice', 'Invoice uploaded', inv.rawDate),
+      invoiceRow(inv, 'Invoice', 'Invoice uploaded', inv.rawUploadDate === undefined ? inv.rawDate : inv.rawUploadDate),
       invoiceRow(inv, 'Invoice', 'Invoice approved', inv.workflow?.final_approval_date),
       invoiceRow(
         inv, 'Invoice', 'Booked in SAP',
-        inv.sap?.document_date || inv.sap?.posting_date,
+        inv.sap?.miro_booking_date || inv.sap?.document_date || inv.sap?.posting_date,
         dueDate ? `Payment due ${formatDay(dueDate)}` : '',
       ),
     );
@@ -67,7 +67,7 @@ export function invoiceLogRows(invoices) {
       const parts = [utr, inv.amount && inv.amount !== '-' ? inv.amount : '', inv.shortPayReason ? `Short payment: ${inv.shortPayReason}` : '']
         .filter(Boolean);
       rows.push(invoiceRow(inv, 'Payment', 'Payment completed', inv.sap?.clearing_date, parts.join(' · ')));
-    } else if (inv.status === 'Rejected' || inv.status === 'Deleted') {
+    } else if (inv.channel !== 'poPortal' && (inv.status === 'Rejected' || ['Deleted', 'Entry Deleted'].includes(inv.status))) {
       rows.push(invoiceRow(
         inv, 'Payment', inv.status === 'Rejected' ? 'Invoice rejected' : 'Invoice deleted',
         inv.rawDate, inv.shortPayReason || '',

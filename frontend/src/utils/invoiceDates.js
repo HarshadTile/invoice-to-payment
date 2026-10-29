@@ -1,7 +1,37 @@
+export const INVOICE_DATE_FIELDS = [
+  { value: 'invoice', label: 'Invoice date', read: (inv) => inv.rawDate },
+  { value: 'upload', label: 'Upload date', read: (inv) => inv.rawUploadDate },
+  { value: 'approval', label: 'Approval date', read: (inv) => inv.workflow?.final_approval_date },
+  { value: 'miro', label: 'MIRO booking date', read: (inv) => inv.sap?.miro_booking_date || inv.sap?.document_date },
+  { value: 'due', label: 'Payment Due date', read: (inv) => inv.sap?.net_due_date },
+  { value: 'utr_clearing', label: 'UTR clearing date', read: (inv) => inv.sap?.utr_clearing_date_paid },
+];
+
+export function invoiceDateTypeLabel(type = 'invoice') {
+  return INVOICE_DATE_FIELDS.find((field) => field.value === type)?.label || 'Invoice date';
+}
+
+/** Filter the chosen source date only; a missing milestone never uses another date. */
+export function invoiceFilterDate(inv, type = 'invoice') {
+  const field = INVOICE_DATE_FIELDS.find((entry) => entry.value === type);
+  const value = field?.read(inv);
+  if (value) return String(value).slice(0, 10);
+  if (type !== 'invoice' || inv.rawDate !== undefined) return '';
+  // Older prototype rows contain only a formatted invoice date.
+  const months = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+  const [day, month, year] = String(inv.date || '').split(' ');
+  const key = months[(month || '').slice(0, 3)];
+  return key && year ? `${year}-${key}-${day.padStart(2, '0')}` : '';
+}
+
 /** The source invoice date is independent of the current processing stage. */
 export function invoiceDateLabel(invoice) {
-  if (!invoice.rawDate) return '-';
-  const date = new Date(`${invoice.rawDate}T00:00:00`);
+  return formatInvoiceDate(invoice.rawDate);
+}
+
+export function formatInvoiceDate(value) {
+  if (!value) return '-';
+  const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }

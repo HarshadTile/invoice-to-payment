@@ -40,6 +40,9 @@ def _author_role(user: dict) -> str:
 
 
 def _fy_from_invoice(invoice) -> str:
+    if invoice.filter_fiscal_year:
+        end = invoice.filter_fiscal_year
+        return f"{end - 1}-{str(end)[-2:]}"
     year = invoice.sap.fiscal_year
     if year:
         # SAP stores the fiscal year by its ending calendar year. For example,
@@ -51,15 +54,19 @@ def _fy_from_invoice(invoice) -> str:
     return f"{start}-{str(start + 1)[-2:]}"
 
 
-def _invoice_context(invoice_no: str) -> dict:
-    invoice = get_gcp_invoice_response(invoice_no)
+def _invoice_context(invoice_no: str, *, channel='msetuSrm', source_id=None, vendor_codes=None) -> dict:
+    try:
+        invoice = (get_gcp_invoice_response(invoice_no) if channel == 'msetuSrm'
+                   else get_gcp_invoice_response(invoice_no, channel=channel, source_id=source_id, vendor_codes=vendor_codes))
+    except ValueError:
+        _error(422, 'VALIDATION_ERROR', 'Select a specific service line for this invoice.')
     if not invoice:
         _error(422, "VALIDATION_ERROR", "The selected invoice does not exist.")
     return {
         "invoice": invoice,
         "invoice_no": invoice.invoice_number,
         "vendor_code": invoice.supplier.vendor_code,
-        "channel": "msetuSrm",
+        "channel": invoice.channel,
         "fy": _fy_from_invoice(invoice),
     }
 
@@ -144,10 +151,17 @@ def _serialize_attachment(attachment) -> dict:
 def _invoice_summary(ticket: Ticket):
     if not ticket.invoice_no:
         return None
-    invoice = get_gcp_invoice_response(ticket.invoice_no)
+    if ticket.channel == 'poPortal':
+        try:
+            invoice = get_gcp_invoice_response(ticket.invoice_no, channel='poPortal', vendor_code=ticket.vendor_code)
+        except ValueError:
+            # Tickets are invoice-level records. Never pick an arbitrary line amount.
+            return {'invoice_no': ticket.invoice_no}
+    else:
+        invoice = get_gcp_invoice_response(ticket.invoice_no)
     if not invoice:
         return {"invoice_no": ticket.invoice_no}
-    amount = invoice.sap.cash_discount_base or invoice.sap.amount_local_currency or invoice.sap.amount
+    amount = invoice.sap.payable_amount if invoice.sap.payable_amount is not None else invoice.sap.amount
     return {
         "invoice_no": invoice.invoice_number,
         "po_no": invoice.purchase_order.po_number,
@@ -236,7 +250,13 @@ def create_ticket(db: Session, user: dict, ticket_in, idempotency_key: str | Non
         if existing:
             return format_ticket(db, user, existing)
     _check_creation_rate(db, user)
-    context = _invoice_context(ticket_in.invoice_no)
+    channel = getattr(ticket_in, 'invoice_channel', 'msetuSrm')
+    if user['auth_type'] == 'supplier' and channel != (user.get('channel_scope') or 'msetuSrm'):
+        _error(403, 'FORBIDDEN', 'Invoice channel is outside your supplier workspace.')
+    context = (_invoice_context(ticket_in.invoice_no) if channel == 'msetuSrm' else
+               _invoice_context(ticket_in.invoice_no, channel=channel,
+                                source_id=getattr(ticket_in, 'invoice_source_id', None),
+                                vendor_codes=user.get('vendor_codes') if user['auth_type'] == 'supplier' else None))
     if user["auth_type"] == "supplier" and context["vendor_code"].strip().lower() not in {c.lower() for c in user["vendor_codes"]}:
         _error(404, "NOT_FOUND", "Invoice not found.")
     if not can_create(user, context["channel"]):

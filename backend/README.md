@@ -1,7 +1,7 @@
 # Invoice-to-Payment Tracker — Backend
 
 FastAPI service backing the [frontend](../frontend). Invoice data is read
-straight from `data/gcp_invoice_data.xlsx`; everything else (login accounts,
+straight from `data/tbl_dw_inv_paymt_SRM.xlsx` (sheet `in`); everything else (login accounts,
 tickets, settings, the audit log) lives in a SQL database.
 
 ## Requirements

@@ -4,7 +4,8 @@ import {
 import { runtime } from '../data/runtime';
 
 export function handlerFor(inv) {
-  return { approver: '-', approverEmail: '-', accounts: '-', accountsEmail: '-' };
+  return { approver: inv.workflow?.pending_with || inv.workflow?.approved_by || '-', approverEmail: '-',
+    accounts: inv.workflow?.accountant || '-', accountsEmail: '-' };
 }
 
 /** Invoice number alone is NOT unique in the real source data — the same INV_NO can
@@ -13,8 +14,14 @@ export function handlerFor(inv) {
  *  or it silently resolves to whichever matching row happens to come first. `list`
  *  defaults to runtime.invoices but callers with an already-scoped/filtered array
  *  (e.g. selectScopedInvoices) should pass it explicitly. */
-export function findInvoice(no, poItem, list = runtime.invoices) {
-  const candidates = list.filter((i) => i.no === no);
+export function findInvoice(no, poItem, list = runtime.invoices, identity = {}) {
+  const candidates = list.filter((i) => i.no === no
+    && (!identity.sourceId || i.sourceId === identity.sourceId)
+    && (!identity.channel || i.channel === identity.channel)
+    && (!identity.vcode || i.vcode === identity.vcode) && (!identity.po || i.po === identity.po));
+  if ((identity.vcode || identity.po) && poItem !== undefined && poItem !== null && poItem !== '') {
+    return candidates.find((i) => String(i.poItem) === String(poItem));
+  }
   if (candidates.length <= 1) return candidates[0];
   if (poItem !== undefined && poItem !== null && poItem !== '') {
     const match = candidates.find((i) => String(i.poItem) === String(poItem));
@@ -107,6 +114,8 @@ export function posForVendorCode(code) {
 export function stageProgress(channel, status) {
   const total = CHANNEL_STAGES[channel].length;
   const pct = {
+    Initial: 0.1, 'Pending for Approval': 0.45, 'Level Approved': 0.5,
+    'Push to PO Portal': 0.2, 'Entry Deleted': 0.1,
     'Invoice Uploaded': 0.2, 'Pending Approval': 0.45, Approved: 0.6,
     'Miro Booked': 0.8, 'Payment Due': 0.8, Paid: 1, Rejected: 0.4, Deleted: 0.4,
   }[status] || 0.2;
@@ -120,16 +129,22 @@ export function stageProgress(channel, status) {
 // Uploaded"); now it shows the real status, same as the progress stepper does.
 export function currentStageName(inv) {
   if (inv.status === 'Rejected') return 'Rejected';
-  if (inv.status === 'Deleted') return 'Deleted';
+  if (['Deleted', 'Entry Deleted'].includes(inv.status)) return inv.status;
   return inv.status || 'Invoice Uploaded';
+}
+
+export function invoiceProductType(inv) {
+  return { S: 'Service', M: 'Material' }[inv.productType] || inv.invoiceType || '-';
 }
 
 
 export function combinedStatusFor(inv) {
+  if (inv.status === 'Action Required') return { label: 'Action Required', tone: 'amber', reason: 'Review the invoice comments and provide the requested information.' };
   if (inv.status === 'Paid') return { label: 'Fully Paid', tone: 'green', reason: 'Settled in full. UTR and payment date are shown below.' };
-  if (inv.status === 'Rejected' || inv.status === 'Deleted') return { label: inv.status, tone: 'red', reason: 'Blocked. See the current stage above for why.' };
+  if (inv.status === 'Rejected' || ['Deleted', 'Entry Deleted'].includes(inv.status)) return { label: inv.status, tone: 'red', reason: 'Blocked. See the current stage above for why.' };
   if (inv.status === 'Approved') return { label: 'Approved', tone: 'blue', reason: 'Approved. Waiting for the invoice to be booked in SAP (MIRO).' };
-  if (['Payment Due', 'Miro Booked'].includes(inv.status)) return { label: 'Unpaid', tone: 'blue', reason: 'Booked, not yet due for payment.' };
+  if (['Payment Due', 'Miro Booked'].includes(inv.status)) return { label: 'Unpaid', tone: 'blue', reason: 'Booked in SAP, awaiting payment.' };
+  if (['Initial', 'Invoice Uploaded', 'Push to PO Portal', 'Level Approved'].includes(inv.status)) return { label: inv.status, tone: 'gray', reason: 'Current status reported by SRM.' };
   return { label: 'In Approval', tone: 'amber', reason: 'Awaiting internal review or approver action.' };
 }
 
@@ -139,7 +154,7 @@ export function getInvoiceHistory(inv, tickets) {
   const total = stages.length;
   const done = stageProgress(inv.channel, inv.status);
   const owner = currentHandlerFor(inv);
-  const failed = inv.status === 'Rejected' || inv.status === 'Deleted';
+  const failed = inv.status === 'Rejected' || ['Deleted', 'Entry Deleted'].includes(inv.status);
   const fullyDone = done >= total && !failed;
   const events = [];
   for (let i = 1; i <= done; i++) {
@@ -207,8 +222,16 @@ export function channelViewRows(channelKey, view, invoices) {
     ? invoices.filter(hasPaymentActivity)
     : invoices;
   return source.map((inv) => {
+    // Real SRM invoices carry source dates; missing documents and people stay empty.
+    if (inv.sap) {
+      const dateLabel = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+      if (view === 'Approver Assignment') return [inv.no, '-', inv.statusLabel || inv.status, dateLabel(inv.workflow?.final_approval_date)];
+      if (view === 'SAP Booking (MIRO)') return [inv.no, inv.sap.miro_document || '-', inv.workflow?.accountant || '-', dateLabel(inv.sap.document_date), dateLabel(inv.sap.net_due_date)];
+      if (view === 'Payment & UTR (FBL1N)') return [inv.no, inv.vcode, dateLabel(inv.sap.clearing_date), inv.utr, inv.amount, inv.shortPayReason || '-'];
+      if (view === 'Payment Status') return [inv.no, inv.vcode, dateLabel(inv.sap.net_due_date), inv.status === 'Paid' ? 'Paid' : 'Pending', dateLabel(inv.sap.clearing_date), inv.utr];
+    }
     const done = stageProgress(inv.channel, inv.status);
-    const failed = inv.status === 'Rejected' || inv.status === 'Deleted';
+    const failed = inv.status === 'Rejected' || ['Deleted', 'Entry Deleted'].includes(inv.status);
     const reached = milestone != null && done >= milestone && !failed;
     const idShort = inv.no.replace('INV-', '');
     if (view === 'Approver Assignment') return [inv.no, inv.date, reached ? 'Approved' : (failed ? 'Rejected' : 'Pending'), reached ? inv.date : '-'];

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { selectScopedInvoices } from '../../features/invoices/selectors';
-import { getFiscalYear, timestampedExportName } from '../../utils/businessLogic';
+import { invoiceFiscalYear, selectScopedInvoices } from '../../features/invoices/selectors';
+import { timestampedExportName } from '../../utils/businessLogic';
 import { useScope } from '../../features/ui/scope';
 import { api } from '../../api/client';
 import {
@@ -23,7 +23,7 @@ export default function SupplierLogsPage() {
   const fySearch = useScope().fy;
   const scopedInvoices = useSelector(selectScopedInvoices);
   const invoices = useMemo(
-    () => scopedInvoices.filter((i) => i.vcode === code && (fySearch === 'all' || getFiscalYear(i.date) === fySearch)),
+    () => scopedInvoices.filter((i) => i.vcode === code && (fySearch === 'all' || invoiceFiscalYear(i) === fySearch)),
     [scopedInvoices, code, fySearch],
   );
 

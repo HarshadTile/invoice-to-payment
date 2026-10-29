@@ -1,11 +1,13 @@
 """Vendors (supplier name, PAN, vendor codes) as they appear in the invoice data.
 
-The invoice Excel is the only source of truth for which PAN owns which vendor codes; this
-module reads it (read-only) so the Suppliers screen can search it and validate against it.
+The SRM workbook and PO Portal CSV supply PAN/vendor ownership. This module reads
+both sources so the Suppliers screen can search and validate existing vendor codes.
 """
 import re
+from itertools import chain
 
 from app.repositories.gcp_invoice import get_all_cached_invoices
+from app.repositories.po_portal_invoice import get_all_cached_invoices as get_po_invoices
 
 PAN_REGEX = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
 
@@ -19,10 +21,11 @@ def _clean(value) -> str:
 
 def _directory() -> dict[str, dict]:
     rows = get_all_cached_invoices()
-    if _cache["rows"] is rows:
+    po_rows = get_po_invoices()
+    if _cache["rows"] is rows and _cache.get('po_rows') is po_rows:
         return _cache["directory"]
     directory: dict[str, dict] = {}
-    for row in rows:
+    for row in chain(rows, po_rows):
         pan = _clean(row.get("PAN_NO")).upper()
         code = _clean(row.get("SUPPLIER"))
         if not code or not PAN_REGEX.match(pan):
@@ -34,6 +37,7 @@ def _directory() -> dict[str, dict]:
             entry["name"] = entry["name"] or name
         entry["codes"].setdefault(code.lower(), code)
     _cache["rows"], _cache["directory"] = rows, directory
+    _cache['po_rows'] = po_rows
     return directory
 
 

@@ -2,21 +2,23 @@ import { useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
-import { currentHandlerFor, currentStageName, downloadCSV, timestampedExportName } from '../../utils/businessLogic';
+import { currentStageName, invoiceProductType, downloadCSV, timestampedExportName } from '../../utils/businessLogic';
 import { matchesInvoiceQuery } from '../../utils/invoiceQuery';
 import { setSearch, setTablePage, toggleSelectRow, setSelectAll, clearSelection, openModal, pushToast } from '../../features/ui/uiSlice';
 import Badge from '../common/Badge.jsx';
 import PagerFoot from '../common/PagerFoot.jsx';
 import SortDateTh from '../common/SortDateTh.jsx';
 import { useDateColumnSort } from '../../utils/dateSort';
-import { invoiceDateLabel } from '../../utils/invoiceDates';
+import { invoiceDateLabel, formatInvoiceDate } from '../../utils/invoiceDates';
 import { totalsByCurrency } from '../../utils/amounts';
 import { Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
 
 const PAGE_SIZE = 10;
 const EMPTY_SELECTION = Object.freeze([]);
-// The two sortable date columns: the invoice's own date, and the date that goes with its status
-const DATE_COLUMNS = { invoice: (inv) => inv.rawDate, status: (inv) => inv.date };
+const DATE_COLUMNS = { invoice: (inv) => inv.rawDate, upload: (inv) => inv.rawUploadDate, status: (inv) => inv.date, due: (inv) => inv.sap?.net_due_date };
+const poItemValue = (inv) => inv.poItem === '' || inv.poItem == null ? '-' : inv.poItem;
+const rejectionReason = (inv) => inv.status === 'Rejected'
+  ? (inv.rejectionReason || inv.workflow?.rejection_reason || inv.shortPayReason || 'Not provided') : '-';
 
 // Pinned columns are given an exact width: the next pinned column's `left` offset is the sum of
 // the widths before it, so a column that grew or shrank with its content left a gap or an
@@ -68,23 +70,24 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const action = mode === 'simple' ? 'stageSimple' : mode === 'supplierSafe' ? 'supplierInvoiceDetail' : 'invoiceDetail';
   const rowTitle = mode === 'simple' ? 'Click to see current stage' : mode === 'supplierSafe' ? (isSupplierUser ? 'Click to view invoice progress' : 'Click for supplier-facing status') : 'Click for full stage-by-stage status';
 
-  const openInvoice    = (no, poItem) => {
+  const openInvoice    = (no, poItem, inv = {}) => {
     if (isSupplierUser && mode === 'supplierSafe') {
       // keep the page's filters in the URL so "← All Invoices" returns to the same list
       const next = new URLSearchParams(searchParams);
       next.set('open', no);
       if (poItem !== undefined && poItem !== '') next.set('item', String(poItem)); else next.delete('item');
+      if (inv.sourceId) next.set('source_id', inv.sourceId); else next.delete('source_id');
       navigate({ pathname: '/supplier/home', search: next.toString() });
       return;
     }
-    dispatch(openModal({ kind: action, ctx: { no, poItem } }));
+    dispatch(openModal({ kind: action, ctx: { no, poItem, vcode: inv.vcode, po: inv.po, channel: inv.channel, sourceId: inv.sourceId } }));
   };
   const openVendorCode = (code) => dispatch(openModal({ kind: 'vendorCodePreview', ctx: { code } }));
-  const openRaiseTicket= (no, poItem) => dispatch(openModal({ kind: 'raiseTicket',    ctx: { no, poItem } }));
+  const openRaiseTicket= (no, poItem, inv = {}) => dispatch(openModal({ kind: 'raiseTicket', ctx: { no, poItem, sourceId: inv.sourceId, channel: inv.channel } }));
 
   // Suppliers see one vendor code, so vendor columns are noise.
   const supplierView = mode === 'supplierSafe' && isSupplierUser;
-  const colCount = (bulk ? 1 : 0) + (supplierView ? 10 : 13);
+  const colCount = (bulk ? 1 : 0) + (supplierView ? 12 : 19);
   const exportCount = filteredCount ?? filtered.length;
   const exportLabel = `Export to Excel (${exportCount})`;
   const portalExportNames = { msetuSrm: 'Msetu_SRM', poPortal: 'PO_Portal', mfoxPortal: 'MFOX' };
@@ -92,12 +95,11 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const regularExportName = exportName || portalExportNames[channelKey] || 'Invoices';
 
   const exportCols = supplierView
-    ? ['Invoice No', 'Channel', 'PO No', 'Invoice Date', 'Amount', 'Status', 'Current Stage', 'UTR No', 'Status Date']
-    : ['Invoice No', 'Vendor', 'Vendor Code', 'Channel', 'PO No', 'Invoice Date', 'Amount', 'Status', 'Current Stage', 'Owner', 'UTR No', 'Status Date'];
+    ? ['Invoice No', 'Channel', 'PO No', 'Product Type', 'Invoice Date', 'Payment Due Date', 'Amount', 'Status', 'Current Stage', 'UTR No', 'Status Date', 'Rejection Reason']
+    : ['Invoice No', 'Vendor', 'Vendor Code', 'Channel', 'PO No', 'PO Item', 'Product Type', 'Plant Code', 'Division', 'Invoice Date', 'Upload Date', 'Payment Due Date', 'Amount', 'Status', 'Pending With', 'UTR No', 'Status Date', 'Rejection Reason'];
   const toExportRow = (inv) => {
-    if (supplierView) return [inv.no, CHANNEL_LABEL[inv.channel], inv.po, invoiceDateLabel(inv), inv.amount, inv.status, currentStageName(inv), inv.utr, inv.date];
-    const owner = currentHandlerFor(inv);
-    return [inv.no, inv.vendor, inv.vcode, CHANNEL_LABEL[inv.channel], inv.po, invoiceDateLabel(inv), inv.amount, inv.status, currentStageName(inv), owner.name, inv.utr, inv.date];
+    if (supplierView) return [inv.no, CHANNEL_LABEL[inv.channel], inv.po, invoiceProductType(inv), invoiceDateLabel(inv), formatInvoiceDate(inv.sap?.net_due_date), inv.amount, inv.status, currentStageName(inv), inv.utr, inv.date, inv.status === 'Rejected' ? (inv.rejectionReason || inv.workflow?.rejection_reason || inv.shortPayReason || 'Not provided') : ''];
+    return [inv.no, inv.vendor, inv.vcode, CHANNEL_LABEL[inv.channel], inv.po, poItemValue(inv), invoiceProductType(inv), inv.plant || '-', inv.dvType || '-', invoiceDateLabel(inv), formatInvoiceDate(inv.rawUploadDate), formatInvoiceDate(inv.sap?.net_due_date), inv.amount, inv.status, inv.workflow?.pending_with || '-', inv.utr, inv.date, rejectionReason(inv)];
   };
   const exportInvoices = (list, isSelected = false) => {
     const filename = timestampedExportName(isSelected ? 'Selected_Invoices' : regularExportName);
@@ -183,14 +185,20 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               {!supplierView && <th scope="col">Vendor Code</th>}
               <th scope="col">Channel</th>
               <th scope="col">PO No</th>
+              {!supplierView && <th scope="col">PO Item</th>}
+              <th scope="col">Product Type</th>
+              {!supplierView && <th scope="col">Plant Code</th>}
+              {!supplierView && <th scope="col">Division</th>}
               <SortDateTh label="Invoice Date" dir={dirFor('invoice')} onToggle={() => toggleDate('invoice')} title="Source invoice date used by the date filters" />
+              {!supplierView && <SortDateTh label="Upload Date" dir={dirFor('upload')} onToggle={() => toggleDate('upload')} />}
+              <SortDateTh label="Payment Due Date" dir={dirFor('due')} onToggle={() => toggleDate('due')} />
               <th scope="col" className="num">Amount</th>
               <th scope="col">Status</th>
-              <th scope="col">Current Stage</th>
-              {/* Renamed from "Handled By" which was truncating */}
-              {!supplierView && <th scope="col">Owner</th>}
+              {supplierView && <th scope="col">Current Stage</th>}
+              {!supplierView && <th scope="col">Pending With</th>}
               <th scope="col">UTR No</th>
               <SortDateTh label="Status Date" className="invoice-status-date" dir={dirFor('status')} onToggle={() => toggleDate('status')} />
+              {!supplierView && <th scope="col">Rejection Reason</th>}
               <th scope="col" className="col-actions">Actions</th>
             </tr>
           </thead>
@@ -207,7 +215,6 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
             )}
 
             {pageRows.map((inv, rowIndex) => {
-              const owner = currentHandlerFor(inv);
               return (
                 <tr key={`${inv.no}-${rowIndex}`}>
                   {bulk && (
@@ -220,7 +227,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
 
                   {/* Sticky: Invoice No */}
                   <td style={{ ...fixedWidth(INVOICE_COL_W), ...stickyCell(bulk ? CHECK_COL_W : 0) }}>
-                    <button type="button" className="link-hero" title={rowTitle} onClick={() => openInvoice(inv.no, inv.poItem)}>
+                    <button type="button" className="link-hero" title={rowTitle} onClick={() => openInvoice(inv.no, inv.poItem, inv)}>
                       {inv.no}
                     </button>
                   </td>
@@ -241,18 +248,25 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
                   )}
                   <td>{CHANNEL_LABEL[inv.channel]}</td>
                   <td>{inv.po}</td>
+                  {!supplierView && <td>{poItemValue(inv)}</td>}
+                  <td>{invoiceProductType(inv)}</td>
+                  {!supplierView && <td>{inv.plant || '-'}</td>}
+                  {!supplierView && <td>{inv.dvType || '-'}</td>}
                   <td className="cell-muted" style={{ whiteSpace: 'nowrap' }}>{invoiceDateLabel(inv)}</td>
+                  {!supplierView && <td className="cell-muted" style={{ whiteSpace: 'nowrap' }}>{formatInvoiceDate(inv.rawUploadDate)}</td>}
+                  <td className="cell-muted" style={{ whiteSpace: 'nowrap' }}>{formatInvoiceDate(inv.sap?.net_due_date)}</td>
                   <td className="num mono">{inv.amount}</td>
-                  <td><Badge tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge></td>
-                  <td className="cell-muted" style={{ whiteSpace: 'normal', minWidth: '9.375rem' }}>{currentStageName(inv)}</td>
-                  {!supplierView && (
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {owner.name}
-                      {owner.role && owner.name !== 'MDE Invoice Team' && <><br /><span className="cell-sub">{owner.role}</span></>}
-                    </td>
-                  )}
+                  <td>
+                    <Badge tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge>
+                    {supplierView && inv.status === 'Rejected' && <div style={{ marginTop: '0.375rem', color: 'var(--brand-dark)', whiteSpace: 'normal', minWidth: '10rem' }}>
+                      <strong>Rejection reason:</strong> {inv.rejectionReason || inv.workflow?.rejection_reason || inv.shortPayReason || 'Not provided'}
+                    </div>}
+                  </td>
+                  {supplierView && <td className="cell-muted" style={{ whiteSpace: 'normal', minWidth: '9.375rem' }}>{currentStageName(inv)}</td>}
+                  {!supplierView && <td style={{ whiteSpace: 'normal', minWidth: '9rem' }}>{inv.workflow?.pending_with || '-'}</td>}
                   <td>{inv.utr === '-' ? <span className="cell-dim">Not yet visible</span> : inv.utr}</td>
                   <td className="cell-muted invoice-status-date">{inv.date}</td>
+                  {!supplierView && <td style={{ whiteSpace: 'normal', minWidth: '10rem', color: inv.status === 'Rejected' ? 'var(--brand-dark)' : undefined }}>{rejectionReason(inv)}</td>}
 
                   <td className="col-actions">
                     <div className="row-actions">
@@ -261,14 +275,14 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
                           type="button" className="kebab"
                           title="Raise a query on this invoice"
                           aria-label={`Raise query for invoice ${inv.no}`}
-                          onClick={() => openRaiseTicket(inv.no, inv.poItem)}
+                          onClick={() => openRaiseTicket(inv.no, inv.poItem, inv)}
                         ><Flag /></button>
                       )}
                       <button
                         type="button" className="kebab"
                         title={rowTitle}
                         aria-label={`View details for invoice ${inv.no}`}
-                        onClick={() => openInvoice(inv.no, inv.poItem)}
+                        onClick={() => openInvoice(inv.no, inv.poItem, inv)}
                       ><Eye /></button>
                     </div>
                   </td>

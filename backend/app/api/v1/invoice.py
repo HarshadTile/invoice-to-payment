@@ -1,18 +1,20 @@
 from math import ceil
 from datetime import date
-from collections import defaultdict
+from collections import Counter
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.v1.auth import get_current_user_token
 from app.core.database import get_db
-from app.services.supplier_service import supplier_vendor_codes_from_token
+from app.services.supplier_service import supplier_vendor_codes_from_token, is_managed_supplier_token, load_active_supplier
 from app.schemas.invoice import ApproversResponse, InvoiceListResponse, InvoiceResponse
 from app.services.invoice import (
     get_gcp_invoice_list,
     get_gcp_invoice_response,
+    get_recent_gcp_invoices,
 )
-from app.repositories.gcp_invoice import get_all_cached_invoices
+from app.repositories.gcp_invoice import filter_invoices, invoice_status
 
 
 router = APIRouter(
@@ -47,145 +49,158 @@ def _redact_for_supplier(invoice: InvoiceResponse) -> InvoiceResponse:
         "document_sent_to_accounts_date": None,
         "approver_remarks": None,
     })
-    return invoice.model_copy(update={"workflow": workflow})
+    # PO Portal carries its own approval names and internal comments. Use an
+    # allowlist so adding a new internal PO field cannot leak it to suppliers.
+    portal = invoice.po_portal
+    if portal is not None:
+        from app.schemas.invoice import POPortalResponse
+        portal = POPortalResponse(**{key: getattr(portal, key) for key in (
+            'service', 'line_number', 'entry_sheet', 'entry_sheet_creation_date', 'po_request_number',
+            'po_type', 'po_activity', 'miro_created_on', 'miro_posting_date',
+        )})
+    return invoice.model_copy(update={"workflow": workflow, "po_portal": portal})
 
 
-@router.get("", response_model=InvoiceListResponse, include_in_schema=False)
-@router.get(
-    "/list-invoices",
-    response_model=InvoiceListResponse,
-    operation_id="listInvoices",
-    summary="List invoices",
-)
-def get_all_invoices(
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=1000),
+def _channel_scope(filters, user, db):
+    filters = dict(filters)
+    scope = (user.get('scope') or {}).get('channelScope')
+    if is_managed_supplier_token(user):
+        scope = load_active_supplier(db, user).channel
+    elif user.get('auth_type') == 'supplier':
+        # Legacy vendor-code sessions predate PO Portal and retain SRM access.
+        scope = 'msetuSrm'
+    requested = filters.get('channel', 'msetuSrm')
+    if scope and scope != 'all':
+        if requested not in ('all', scope):
+            raise HTTPException(status_code=403, detail='Invoice channel is outside your workspace')
+        filters['channel'] = scope
+    return filters
+
+
+def invoice_filters(
+    channel: Literal['msetuSrm', 'poPortal', 'all'] = 'msetuSrm',
     status: str | None = None,
     vendor_code: str | None = None,
     invoice_number: str | None = None,
     po_number: str | None = None,
     po_item: int | None = None,
+    product_type: Literal["S", "M"] | None = None,
+    plant: str | None = None,
+    dv_type: str | None = None,
+    upload_date_from: date | None = None,
+    upload_date_to: date | None = None,
+    filter_fiscal_year: int | None = None,
+    date_type: Literal["invoice", "upload", "approval", "miro", "due", "payment", "posting", "accounts", "utr_clearing"] = "invoice",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    approver: str | None = None,
+    pending_with: str | None = None,
+    approved_by: str | None = None,
+    miro_status: Literal["booked", "pending"] | None = None,
+    payment_status: Literal["paid", "unpaid"] | None = None,
+    hod1_status: Literal['APPROVED', 'REJECTED', '__blank__'] | None = None,
+    hod2_status: Literal['APPROVED', 'REJECTED', '__blank__'] | None = None,
+    accounts_status: Literal['APPROVED', 'REJECTED', '__blank__'] | None = None,
+    approval_stage: Literal['SC', 'INFO', 'HOD1', 'HOD2'] | None = None,
+    invoice_uploaded: bool | None = None,
+    po_type: str | None = None,
+):
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=422, detail="Date from must not be after date to")
+    if upload_date_from and upload_date_to and upload_date_from > upload_date_to:
+        raise HTTPException(status_code=422, detail="Upload date from must not be after upload date to")
+    return dict(channel=channel, status=status, vendor_code=vendor_code, invoice_number=invoice_number,
+                po_number=po_number, po_item=po_item, product_type=product_type, plant=plant, dv_type=dv_type,
+                upload_date_from=upload_date_from, upload_date_to=upload_date_to,
+                filter_fiscal_year=filter_fiscal_year,
+                date_type=date_type, date_from=date_from, date_to=date_to,
+                approver=approver, pending_with=pending_with, approved_by=approved_by,
+                miro_status=miro_status, payment_status=payment_status,
+                hod1_status=hod1_status, hod2_status=hod2_status, accounts_status=accounts_status,
+                approval_stage=approval_stage, invoice_uploaded=invoice_uploaded, po_type=po_type)
+
+
+def _scoped_filters(filters, supplier_codes):
+    filters = dict(filters)
+    if supplier_codes is not None:
+        if any(filters.get(key) for key in ("approver", "pending_with", "approved_by", "hod1_status", "hod2_status", "accounts_status", "approval_stage")):
+            raise HTTPException(status_code=403, detail="Internal approval filters are unavailable to suppliers")
+        if filters.get("date_type") == "accounts":
+            raise HTTPException(status_code=403, detail="Internal account dates are unavailable to suppliers")
+        filters["vendor_codes"] = _narrow(supplier_codes, filters.pop("vendor_code", None))
+    return filters
+
+
+@router.get("", response_model=InvoiceListResponse, include_in_schema=False)
+@router.get("/list-invoices", response_model=InvoiceListResponse,
+            operation_id="listInvoices", summary="List invoices")
+def get_all_invoices(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=1000),
+    filters: dict = Depends(invoice_filters),
     user: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
 ):
     supplier_codes = _supplier_codes(user, db)
-    vendor_codes = None
-    if supplier_codes is not None:  # a supplier can only ever see its own codes
-        vendor_codes = _narrow(supplier_codes, vendor_code)
-        vendor_code = None
-
     invoices, total = get_gcp_invoice_list(
-        page=page,
-        page_size=page_size,
-        status=status,
-        vendor_code=vendor_code,
-        vendor_codes=vendor_codes,
-        invoice_number=invoice_number,
-        po_number=po_number,
-        po_item=po_item,
-    )
-
+        page=page, page_size=page_size, **_scoped_filters(_channel_scope(filters, user, db), supplier_codes))
     if supplier_codes is not None:
         invoices = [_redact_for_supplier(i) for i in invoices]
+    return InvoiceListResponse(items=invoices, total=total, page=page, page_size=page_size,
+                               total_pages=ceil(total / page_size) if total else 0)
 
-    total_pages = ceil(total / page_size) if total else 0
-
-    return InvoiceListResponse(
-        items=invoices,
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
 
 @router.get("/summary", include_in_schema=False)
 @router.get("/invoice-summary", operation_id="getInvoiceSummary", summary="Get invoice summary")
 def get_invoice_summary(
-    vendor_code: str | None = None,
+    filters: dict = Depends(invoice_filters),
     user: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
 ):
-    supplier_codes = _supplier_codes(user, db)
-    all_rows = get_all_cached_invoices()
-    if supplier_codes is not None:
-        allowed = {c.lower() for c in _narrow(supplier_codes, vendor_code)}
-        all_rows = [r for r in all_rows if str(r.get("SUPPLIER", "")).strip().lower() in allowed]
-        vendor_code = None  # already applied above; the internal-only filter below then does nothing
-    
-    if vendor_code:
-        target_vendor = vendor_code.strip().lower()
-        all_rows = [r for r in all_rows if str(r.get("SUPPLIER", "")).strip().lower() == target_vendor]
-        
-    status_counts = defaultdict(int)
-    for row in all_rows:
-        st = row.get("OVERALL_STATUS")
-        if not st:
-            st = "Uploaded"
-        status_counts[st] += 1
-        
-    # Hardcoding the channels for Msetu/SRM for this mockup
-    channel_counts = [{"key": "msetuSrm", "value": len(all_rows)}]
-    by_status = [{"key": s, "value": c} for s, c in status_counts.items()]
-    
-    pending_approval = sum(1 for r in all_rows if str(r.get("OVERALL_STATUS", "")).strip().lower() == 'pending approval')
-    approved = sum(1 for r in all_rows if str(r.get("OVERALL_STATUS", "")).strip().lower() == 'approved')
-    payment_due = sum(1 for r in all_rows if str(r.get("OVERALL_STATUS", "")).strip().lower() == 'payment due')
-    paid = sum(1 for r in all_rows if str(r.get("OVERALL_STATUS", "")).strip().lower() == 'paid')
-    
+    rows = filter_invoices(**_scoped_filters(_channel_scope(filters, user, db), _supplier_codes(user, db)))
+    counts = Counter(invoice_status(row) for row in rows)
     return {
-        "total": len(all_rows),
-        "kpi": {
-            "pendingApproval": pending_approval,
-            "approved": approved,
-            "paymentDue": payment_due,
-            "paid": paid
-        },
-        "byChannel": channel_counts,
-        "byStatus": by_status
+        "total": len(rows),
+        "kpi": {"pendingApproval": counts["Pending for Approval"], "approved": counts["Approved"],
+                "miroBooked": counts["Miro Booked"], "paid": counts["Paid"], "paymentDue": 0},
+        "byChannel": [{"key": key, "value": count} for key, count in Counter(row.get('__channel', 'msetuSrm') for row in rows).items()],
+        "byStatus": [{"key": status, "value": count} for status, count in counts.items()],
     }
 
+
 @router.get("/recent", include_in_schema=False)
-@router.get("/recent-invoices", operation_id="listRecentInvoices", summary="List recent invoices")
+@router.get("/recent-invoices", response_model=list[InvoiceResponse],
+            operation_id="listRecentInvoices", summary="List recent invoices")
 def get_recent_invoices(
-    limit: int = 5,
-    vendor_code: str | None = None,
+    limit: int = Query(default=5, ge=1, le=1000),
+    filters: dict = Depends(invoice_filters),
     user: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
 ):
     supplier_codes = _supplier_codes(user, db)
-    vendor_codes = _narrow(supplier_codes, vendor_code) if supplier_codes is not None else None
-    invoices, _ = get_gcp_invoice_list(
-        page=1,
-        page_size=limit,
-        vendor_code=None if supplier_codes is not None else vendor_code,
-        vendor_codes=vendor_codes,
-    )
-    
-    # Sort them by date descending (get_gcp_invoice_list doesn't support sorting yet)
-    invoices.sort(key=lambda x: x.invoice_date or date.min, reverse=True)
-    invoices = invoices[:limit]
+    invoices = get_recent_gcp_invoices(limit=limit, **_scoped_filters(_channel_scope(filters, user, db), supplier_codes))
     return [_redact_for_supplier(i) for i in invoices] if supplier_codes is not None else invoices
 
+
 @router.get("/{invoice_number:path}", response_model=InvoiceResponse, include_in_schema=False)
-@router.get(
-    "/invoice-details/{invoice_number:path}",
-    response_model=InvoiceResponse,
-    operation_id="getInvoiceDetails",
-    summary="Get invoice details",
-)
+@router.get("/invoice-details/{invoice_number:path}", response_model=InvoiceResponse,
+            operation_id="getInvoiceDetails", summary="Get invoice details")
 def get_invoice_by_number(
     invoice_number: str,
     po_item: int | None = None,
+    channel: Literal['msetuSrm', 'poPortal', 'all'] = 'msetuSrm',
+    source_id: str | None = None,
+    vendor_code: str | None = None,
+    po_number: str | None = None,
     user: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
 ):
-    invoice = get_gcp_invoice_response(invoice_number, po_item=po_item)
     supplier_codes = _supplier_codes(user, db)
-    allowed = {c.lower() for c in supplier_codes} if supplier_codes is not None else None
-
-    # 404 (not 403) for other suppliers' invoices so their existence isn't revealed
-    if invoice is None or (allowed is not None and invoice.supplier.vendor_code.strip().lower() not in allowed):
+    filters = _scoped_filters(_channel_scope(dict(channel=channel, vendor_code=vendor_code), user, db), supplier_codes)
+    try:
+        invoice = get_gcp_invoice_response(invoice_number, po_item=po_item, source_id=source_id, po_number=po_number, **filters)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if invoice is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
-
-    return _redact_for_supplier(invoice) if allowed is not None else invoice
-
+    return _redact_for_supplier(invoice) if supplier_codes is not None else invoice

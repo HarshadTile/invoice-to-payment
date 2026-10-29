@@ -30,6 +30,9 @@ The application uses these routes for its screens and actions. Some backend rout
 
 ## Invoices and workspace
 
+PO Portal source fields, status precedence, channel filters and service-line
+identity are documented in [PO Portal mapping](po-portal-mapping.md).
+
 | Method | Endpoint | Purpose / when to call | Query parameters |
 |---|---|---|---|
 | GET | `/api/v1/invoices/list-invoices` | Load a page of invoices for invoice lists and supplier invoice views. | `page`, `page_size`, `status`, `vendor_code`, `invoice_number`, `po_number`, `po_item` |
@@ -40,6 +43,53 @@ The application uses these routes for its screens and actions. Some backend rout
 | GET | `/api/v1/sync-log` | Load invoice synchronization history. | None |
 
 Invoice list responses are paginated. The backend applies supplier vendor-code restrictions from the authenticated token; a supplier cannot use a query parameter to access another supplier’s invoices.
+
+The list, summary, and recent invoice endpoints also accept `product_type` (`S` = Service,
+`M` = Material), `plant`, `dv_type` (Division, from `DV_TYPE`), `upload_date_from`, `upload_date_to` (inclusive ISO dates),
+and `filter_fiscal_year` (source ending year, e.g. `2027` for FY 2026–27).
+Choose a date with `date_type` (`invoice`, `upload`, `approval`, `miro`, `due`,
+`payment`, `posting`, `accounts`, or `utr_clearing`), then supply `date_from`
+and/or `date_to` as inclusive ISO dates. Rows without the selected date are
+excluded when either bound is supplied. `accounts` is internal-only. Existing
+`upload_date_from`/`upload_date_to` remain available as independent upload filters.
+Summary and recent endpoints accept the same invoice/vendor/PO/status filters as the list.
+Internal SRM queries also accept `approver` (case-insensitive partial match across
+Approvers 1–7), `pending_with`, and `approved_by` (case-insensitive partial matches).
+Suppliers cannot use these internal approval filters. `miro_status=booked|pending`
+matches the actual MIRO status; `payment_status=paid|unpaid` follows UTR/clearing
+payment evidence. Missing MIRO status is not treated as pending.
+
+The internal SRM workspace applies one invoice search and filter set across Invoice
+Log, Approver Assignment, SAP Booking, Payment & UTR, and History. Its Columns menu
+offers Standard (tab-specific), Approvals, All SRM fields, and custom selections.
+Invoice number and vendor remain pinned. Column selections persist per tab for
+the session. Exports include every matching row in the selected column order;
+pagination does not restrict exports. History shows only actual dated milestones
+and available query activity. Source fields omitted by the agreed SRM mapping are
+not manufactured. The Payment & UTR tab includes unpaid invoices as well as paid
+ones; the Payment Status filter narrows them explicitly.
+Recent invoices are sorted across the matching source by `INVOICE_UPLOAD_DATE` before limiting.
+
+Invoice data currently comes from `backend/data/tbl_dw_inv_paymt_SRM.xlsx`, sheet `in`.
+The response includes `product_type`, `plant`, `invoice_upload_date`, `invoice_uploaded`,
+`filter_fiscal_year`, `dv_type`, and `status_label` (the decoded `STATUS_FLAG`).
+`sap.payable_amount` and the compatible `sap.amount` both use `PAYABLE_AMOUNT`;
+cash discount base and other fields absent from SRM remain null. `FISCAL_YEAR` and
+`STATUS_FLAG_APPROVED` are not used. `sap.miro_status` retains `MIRO_BOOKED`.
+Approval, MIRO, and payment dates come from `FINAL_APPRPVAL_DATE`, `MIRO_DOCUMENT_DATE`,
+and `CLEARING_DATE`, respectively. `sap.net_due_date` uses `NETDT` when supplied,
+then the Excel `NET_DUE_DATE`, falling back to `Payment_Due_Date`; it does not drive
+invoice status. The UI offers "Payment Due date" for this field; "Payment date"
+and "Posting date" are excluded from the date-type dropdown. Their source fields
+remain available in API responses.
+
+Overall status precedence is: UTR number or clearing date → `Paid`; MIRO booked →
+`Miro Booked`; otherwise decode `STATUS_FLAG`: D/Y → `Rejected`, X → `Entry Deleted`,
+N → `Push to PO Portal`, L → `Level Approved`, A → `Approved`, P → `Pending for Approval`,
+I → `Initial` (or `Invoice Uploaded` when `Invoice_Uploaded=YES`). Unknown codes remain
+visible. Summary KPI `miroBooked` replaces the former Payment Due card; `paymentDue`
+is retained as zero for compatibility. Legacy `Pending Approval` and `Deleted` status
+query values are accepted. No GCP connection is configured by this mapping change.
 
 ## Internal user management
 

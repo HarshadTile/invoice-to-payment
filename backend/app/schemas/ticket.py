@@ -9,6 +9,8 @@ Visibility = Literal["PUBLIC", "INTERNAL"]
 
 
 class TicketCreate(BaseModel):
+    invoice_channel: Literal['msetuSrm', 'poPortal'] = 'msetuSrm'
+    invoice_source_id: str | None = Field(default=None, max_length=100)
     invoice_no: str = Field(min_length=1, max_length=64)
     category: str = Field(min_length=1, max_length=64)
     priority: Priority = "MEDIUM"

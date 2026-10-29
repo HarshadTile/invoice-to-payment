@@ -66,9 +66,13 @@ export const VIEW_COLUMNS = {
 };
 
 export const STATUS_CHIP = {
-  Paid: 'green', 'Payment Due': 'blue', 'Pending Approval': 'amber', Approved: 'blue',
-  'Miro Booked': 'purple', 'Invoice Uploaded': 'gray', Rejected: 'red', Deleted: 'red',
+  'Action Required': 'amber',
+  Paid: 'green', 'Pending for Approval': 'amber', Approved: 'blue',
+  'Miro Booked': 'purple', 'Invoice Uploaded': 'gray', Rejected: 'red', 'Entry Deleted': 'red', Initial: 'gray', 'Push to PO Portal': 'blue', 'Level Approved': 'blue',
 };
+
+export const INVOICE_FILTER_STATUSES = Object.keys(STATUS_CHIP)
+  .filter((status) => !['Push to PO Portal', 'Level Approved'].includes(status));
 
 export const CHANNEL_STAGES = {
   msetuSrm: [
