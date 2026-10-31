@@ -58,12 +58,13 @@ function useChannelInvoiceFilter(channelInvoices, channelKey, enabled = true) {
     setSearchParams(next, { replace: true });
   };
 
-  const inRange = channelInvoices.filter((i) => {
+  // SRM / PO Portal bring their own filters; skip scanning their (large) lists on every render.
+  const inRange = useMemo(() => !enabled ? [] : channelInvoices.filter((i) => {
     const ymd = invoiceYMD(i, scope.dateField);
     if ((dateFrom || dateTo) && !ymd) return false;
     return (!dateFrom || ymd >= dateFrom) && (!dateTo || ymd <= dateTo);
-  });
-  const shown = inRange.filter((i) => !status || i.status === status);
+  }), [enabled, channelInvoices, scope.dateField, dateFrom, dateTo]);
+  const shown = useMemo(() => inRange.filter((i) => !status || i.status === status), [inRange, status]);
   const rangeLabel = !dateFrom && !dateTo ? 'all dates' : `${dateFrom || 'earliest'} to ${dateTo || 'latest'}`;
 
   const bar = (
@@ -100,7 +101,7 @@ export default function ChannelPage() {
 
   return (
     <>
-      <div className="sheet-carousel" style={{ margin: '0.25rem 0 1rem' }}>
+      <div className="sheet-carousel">
         <div className="car-track">
           {channel.views.map((v) => (
             <button type="button" key={v} className={`car-chip${v === activeView ? ' active' : ''}`} onClick={() => dispatch(setChannelViewTab({ key, view: v }))}>{v}</button>

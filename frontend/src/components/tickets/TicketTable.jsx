@@ -5,6 +5,13 @@ import SortDateTh from '../common/SortDateTh.jsx';
 import { useDateSort } from '../../utils/dateSort';
 import { channelLabel, formatDate, PRIORITY_TONE, STATUS_LABEL, STATUS_TONE, ticketPath } from '../../utils/tickets.js';
 
+/** Who owns the query: initials in a small circle, or a muted "Unassigned". */
+function Owner({ name }) {
+  if (!name) return <span className="cell-muted">Unassigned</span>;
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  return <span className="log-actor"><span className="log-actor-badge" aria-hidden="true">{initials}</span><span>{name}</span></span>;
+}
+
 export default function TicketTable({ tickets = [], loading = false }) {
   const navigate = useNavigate();
   const supplier = useSelector((state) => state.auth.authType === 'supplier');
@@ -42,10 +49,10 @@ export default function TicketTable({ tickets = [], loading = false }) {
                 <span className="mono">{ticket.invoice_no || 'Not linked'}</span>
                 <div className="cell-sub">{channelLabel(ticket.channel)}</div>
               </td>
-              {!supplier && <td className="mono">{ticket.vendor_code || '-'}</td>}
+              {!supplier && <td>{ticket.vendor_code ? <span className="vcode-tag">{ticket.vendor_code}</span> : '-'}</td>}
               <td>{ticket.category}</td>
               <td><Badge tone={PRIORITY_TONE[ticket.priority] || 'gray'}>{ticket.priority}</Badge></td>
-              <td>{ticket.assignee?.name || ticket.assignee?.team || 'Unassigned'}</td>
+              <td><Owner name={ticket.assignee?.name || ticket.assignee?.team} /></td>
               <td>{formatDate(ticket.updated_at, true)}</td>
               <td>
                 {ticket.sla?.breached

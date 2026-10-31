@@ -12,10 +12,18 @@ import LogFilterBar from '../../components/common/LogFilterBar.jsx';
 import PagerFoot from '../../components/common/PagerFoot.jsx';
 import SortDateTh from '../../components/common/SortDateTh.jsx';
 import { useDateSort } from '../../utils/dateSort';
-import Badge from '../../components/common/Badge.jsx';
+import StatCard from '../../components/common/StatCard.jsx';
+import { EventLabel, TypeBadge } from '../../components/common/GlobalLogsBody.jsx';
+import { Banknote, Clock, FileText, History, MessageSquare } from '../../components/common/icons.jsx';
 
 const PAGE_SIZE = 20;
-const TYPE_TONE = { Invoice: 'blue', Payment: 'green', Query: 'amber' };
+// The summary cards double as the type filter.
+const TYPE_CARDS = [
+  { type: 'all', label: 'All activity', icon: History, tone: 'shade-total', sub: 'Every event in this selection' },
+  { type: 'Invoice', label: 'Invoice events', icon: FileText, tone: 'shade-pending', sub: 'Upload, approval, SAP booking' },
+  { type: 'Payment', label: 'Payments', icon: Banknote, tone: 'shade-paid', sub: 'Cleared payments and UTRs' },
+  { type: 'Query', label: 'Query updates', icon: MessageSquare, tone: 'shade-approved', sub: 'Your questions and replies' },
+];
 
 export default function SupplierLogsPage() {
   const navigate = useNavigate();
@@ -47,6 +55,13 @@ export default function SupplierLogsPage() {
     [invoices, queryEntries, fySearch],
   );
   const filteredRows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
+  // Counts per type follow the search and dates, but not the type itself.
+  const typeCounts = useMemo(() => {
+    const counts = { all: 0, Invoice: 0, Payment: 0, Query: 0 };
+    for (const row of filterLogRows(allRows, { ...filters, type: 'all' })) { counts.all += 1; counts[row.type] = (counts[row.type] || 0) + 1; }
+    return counts;
+  }, [allRows, filters]);
+  const pickType = (type) => { setFilters((prev) => ({ ...prev, type: prev.type === type ? 'all' : type })); setPage(1); };
   const { sorted: rows, dir: dateDir, toggle: toggleDate } = useDateSort(filteredRows, (row) => row.when, 'desc');
   const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / PAGE_SIZE)));
   const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -67,7 +82,14 @@ export default function SupplierLogsPage() {
   }
 
   return (
-    <>
+    <div className="dash supplier-logs">
+      <div className="kpi-grid supplier-log-kpis">
+        {TYPE_CARDS.map(({ type, label, icon: Icon, tone, sub }) => (
+          <StatCard key={type} tone={tone} icon={<Icon size={16} />} label={label} sub={sub}
+            value={(typeCounts[type] || 0).toLocaleString('en-IN')}
+            onClick={() => pickType(type)} active={filters.type === type} />
+        ))}
+      </div>
       <div className="card">
         <LogFilterBar
           filters={filters} onChange={setFilter} filtersActive={filtersActive}
@@ -78,14 +100,14 @@ export default function SupplierLogsPage() {
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78125rem', margin: '0 0 0.625rem' }}>Your query history couldn't be loaded right now. Invoice and payment activity is shown below.</p>
         )}
         <div className="table-scroll">
-          <table>
+          <table className="log-table">
             <thead>
               <tr><SortDateTh dir={dateDir} onToggle={toggleDate} /><th>Invoice No</th><th>PO No</th><th>Type</th><th>Event</th><th>Details</th></tr>
             </thead>
             <tbody>
               {pageRows.length ? pageRows.map((row) => (
                 <tr key={row.key}>
-                  <td style={{ whiteSpace: 'nowrap' }}>{row.hasTime ? formatDayTime(row.when) : formatDay(row.when)}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}><span className="log-when"><Clock size={12} />{row.hasTime ? formatDayTime(row.when) : formatDay(row.when)}</span></td>
                   <td>
                     {row.type === 'Query' && row.ticketId
                       ? <button type="button" className="link-hero" onClick={() => navigate(`/supplier/tickets/${row.ticketId}`)}>{row.invoiceNo}</button>
@@ -94,8 +116,8 @@ export default function SupplierLogsPage() {
                         : row.invoiceNo}
                   </td>
                   <td>{row.po}</td>
-                  <td><Badge tone={TYPE_TONE[row.type]}>{row.type}</Badge></td>
-                  <td>{row.event}</td>
+                  <td><TypeBadge type={row.type} /></td>
+                  <td><EventLabel event={row.event} type={row.type} /></td>
                   <td style={{ color: 'var(--text-muted)' }}>{row.detail || '-'}</td>
                 </tr>
               )) : (
@@ -108,6 +130,6 @@ export default function SupplierLogsPage() {
         </div>
         <PagerFoot total={rows.length} page={currentPage} pageSize={PAGE_SIZE} onPage={setPage} />
       </div>
-    </>
+    </div>
   );
 }

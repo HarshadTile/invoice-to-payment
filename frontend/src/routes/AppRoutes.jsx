@@ -26,6 +26,7 @@ import GlobalLogsPage from '../pages/GlobalLogsPage.jsx';
 import SettingsPage from '../pages/SettingsPage.jsx';
 import ProfilePage from '../pages/ProfilePage.jsx';
 import SupplierHomePage from '../pages/supplier/SupplierHomePage.jsx';
+import SupplierDashboardPage from '../pages/supplier/SupplierDashboardPage.jsx';
 import SupplierLogsPage from '../pages/supplier/SupplierLogsPage.jsx';
 import SupplierTicketsPage from '../pages/supplier/SupplierTicketsPage.jsx';
 import TicketDetailPage from '../pages/TicketDetailPage.jsx';
@@ -89,9 +90,10 @@ export default function AppRoutes() {
       {/* Supplier side */}
       <Route element={<RequireSupplier />}>
         <Route element={<AppLayout />}>
-          <Route path="/supplier" element={<Navigate to="/supplier/home" replace />} />
+          <Route path="/supplier" element={<Navigate to="/supplier/dashboard" replace />} />
+          <Route path="/supplier/dashboard" element={<SupplierDashboardPage />} />
           <Route path="/supplier/home" element={<SupplierHomePage />} />
-          <Route path="/supplier/vendor-code/:code" element={<Navigate to="/supplier/home" replace />} />
+          <Route path="/supplier/vendor-code/:code" element={<Navigate to="/supplier/dashboard" replace />} />
           <Route path="/supplier/logs" element={<SupplierLogsPage />} />
           <Route path="/supplier/tickets" element={<SupplierTicketsPage />} />
           <Route path="/supplier/tickets/:id" element={<TicketDetailPage />} />

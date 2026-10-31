@@ -10,13 +10,15 @@ export default function PoPortalDetails({ invoice, internal = false }) {
       ['HOD1', po.hod1], ['HOD1 Status', po.hod1_status], ['HOD2', po.hod2], ['HOD2 Status', po.hod2_status],
       ['Accounts User', po.accounts_user], ['Accounts Status', po.accounts_status], ['Comments', po.comments]] : []),
   ];
-  return <div style={{ marginTop: '1rem' }}>
-    <strong>PO Portal Details</strong>
-    {fields.map(([label, value]) => <div className="validation-row" key={label}><span>{label}</span><span>{value || '-'}</span></div>)}
-    {(invoice.rejectionReason || invoice.workflow?.rejection_reason) && <div className="validation-row">
-      <span>{invoice.status === 'Rejected' ? 'Rejection Reason' : 'Review / Rejection Comment'}</span>
-      <span>{invoice.rejectionReason || invoice.workflow.rejection_reason}</span>
-    </div>}
-    {internal && <p className="cell-muted">HOD2 assignment is inferred from Created_by_HOD2. Original approval values are shown above.</p>}
-  </div>;
+  return <>
+    <h4 className="inv-section-title">PO Portal Details</h4>
+    <div className="detail-grid">
+      {fields.map(([label, value]) => <div className="detail-item" key={label}><span>{label}</span><span>{value || '-'}</span></div>)}
+      {(invoice.rejectionReason || invoice.workflow?.rejection_reason) && <div className="detail-item wide">
+        <span>{invoice.status === 'Rejected' ? 'Rejection Reason' : 'Review / Rejection Comment'}</span>
+        <span>{invoice.rejectionReason || invoice.workflow.rejection_reason}</span>
+      </div>}
+    </div>
+    {internal && <p className="detail-note">HOD2 assignment is inferred from Created_by_HOD2. Original approval values are shown above.</p>}
+  </>;
 }

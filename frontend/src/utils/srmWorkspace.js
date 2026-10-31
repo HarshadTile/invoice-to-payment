@@ -1,6 +1,7 @@
 import { formatInvoiceDate, invoiceFilterDate } from './invoiceDates';
 import { invoiceProductType } from './businessLogic';
-import { matchesInvoiceQuery, parseInvoiceQuery } from './invoiceQuery';
+import { matchesSrmFilters } from '../features/invoices/selectors';
+import { matchesInvoiceQuery } from './invoiceQuery';
 
 const text = (value) => value == null || String(value).trim() === '' || value === '-' ? '-' : String(value).trim();
 const contains = (value, query) => text(value) !== '-' && text(value).toLowerCase().includes(query.trim().toLowerCase());
@@ -56,14 +57,29 @@ export function srmCell(invoice, entry) {
   return entry.type === 'date' ? formatInvoiceDate(entry.read(invoice)) : text(entry.read(invoice));
 }
 
+/** Dropdown options for the values present in the data, with how many invoices carry each.
+ *  `read` may return one value or a list (an invoice then counts once per distinct value). */
+export function facetOptions(invoices, read, allLabel, label = (value) => value) {
+  const counts = new Map();
+  for (const invoice of invoices) {
+    const values = read(invoice);
+    for (const value of new Set(Array.isArray(values) ? values : [values])) {
+      if (value) counts.set(value, (counts.get(value) || 0) + 1);
+    }
+  }
+  return [{ value: '', label: allLabel }, ...[...counts].sort(([x], [y]) => String(x).localeCompare(String(y)))
+    .map(([value, count]) => ({ value, label: label(value), count }))];
+}
+
 export function srmPaid(invoice) {
   return invoice.status === 'Paid' || text(invoice.utr) !== '-' || text(invoice.sap?.clearing_date) !== '-';
 }
 
 export function matchesSrmWorkspace(invoice, filters, dateType = 'invoice', skipStatus = false) {
+  if (!matchesSrmFilters(invoice, filters)) return false;
   const query = filters.q || '';
   if (!matchesInvoiceQuery(invoice, query)
-      && !(parseInvoiceQuery(query).mode === 'any' && contains(invoice.pan, query))) return false;
+      && !(!query.includes(',') && contains(invoice.pan, query))) return false;
   if (!skipStatus && filters.status && invoice.status !== filters.status) return false;
   const value = invoiceFilterDate(invoice, dateType);
   if ((filters.date_from || filters.date_to) && !value) return false;
@@ -83,6 +99,17 @@ export function matchesSrmWorkspace(invoice, filters, dateType = 'invoice', skip
 /** Only dated source milestones; no guessed assignment or rejection timestamps. */
 export function srmHistoryRows(invoices) {
   const rows = [];
+  // Thousands of invoices share a few hundred dates: parse each one once. Rows only read `when`.
+  const days = new Map();
+  const dayOf = (rawDate) => {
+    let when = days.get(rawDate);
+    if (when === undefined) {
+      when = new Date(`${rawDate}T00:00:00`);
+      if (Number.isNaN(when.getTime())) when = null;
+      days.set(rawDate, when);
+    }
+    return when;
+  };
   for (const inv of invoices) {
     const milestones = [
       ['Invoice', 'Invoice dated', inv.rawDate], ['Invoice', 'Invoice uploaded', inv.rawUploadDate],
@@ -94,8 +121,8 @@ export function srmHistoryRows(invoices) {
     ];
     for (const [type, event, rawDate, person, detail] of milestones) {
       if (!rawDate) continue;
-      const when = new Date(`${rawDate}T00:00:00`);
-      if (Number.isNaN(when.getTime())) continue;
+      const when = dayOf(rawDate);
+      if (!when) continue;
       rows.push({ key: `${inv.vcode}|${inv.no}|${inv.po}|${inv.poItem}|${event}`, when, hasTime: false,
         type, event, detail: detail || '', invoiceNo: inv.no, po: inv.po, invoice: inv,
         vcode: inv.vcode, channel: inv.channel, performedBy: text(person) === '-' ? 'System' : person });

@@ -1,57 +1,84 @@
-import { useMemo } from 'react';
+import { useCallback, useDeferredValue, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { setChannelViewTab, setPageFilters } from '../../features/ui/uiSlice';
 import { useScope } from '../../features/ui/scope';
 import { PO_TABLE_CONFIG, PO_VIEWS, matchesPoPortalWorkspace, poPortalHistoryRows } from '../../utils/poPortalWorkspace';
+import { facetOptions } from '../../utils/srmWorkspace';
 import InvoiceFilterBar from './InvoiceFilterBar.jsx';
 import SrmDataTable from './SrmDataTable.jsx';
 import Dropdown from '../common/Dropdown.jsx';
 import GlobalLogsBody from '../common/GlobalLogsBody.jsx';
+import { FileText, History, Search, Sliders } from '../common/icons.jsx';
+import { filterInvoiceQuery, INVOICE_SEARCH_PLACEHOLDER } from '../../utils/invoiceQuery';
+import useWorkspaceSearch from './useWorkspaceSearch';
 
-const EMPTY = { q: '', status: '', date_from: '', date_to: '', hod1_status: '', hod2_status: '', accounts_status: '',
-  source_approval_stage: '', invoice_uploaded: '', miro_status: '', payment_status: '', po_type: '', approver: '' };
-const choices = (label, values) => [{ value: '', label }, ...values.map((value) => ({ value, label: value === '__blank__' ? 'Not recorded' : value }))];
-const APPROVAL = choices('Any status', ['APPROVED', 'REJECTED', '__blank__']);
+// Same shape as SRM: master search + status/date, and three PO-specific quick filters.
+// Approval statuses, MIRO and payment state are found through the master search instead.
+const EMPTY = { q: '', status: '', date_from: '', date_to: '', source_approval_stage: '', po_type: '', approver: '' };
+const VIEW_ICON = { 'Invoice Log': FileText, History };
 
 export default function PoPortalWorkspace({ invoices, canExport }) {
   const dispatch = useDispatch();
   const scope = useScope();
-  const filters = useSelector((s) => s.ui.pageFilters.poPortalWorkspace) || EMPTY;
+  const saved = useSelector((s) => s.ui.pageFilters.poPortalWorkspace);
+  // Only the current filter keys: older saved filters (HOD statuses, MIRO, ...) must not narrow silently.
+  const filters = useMemo(() => Object.fromEntries(Object.keys(EMPTY).map((key) => [key, saved?.[key] ?? ''])), [saved]);
   const chosenView = useSelector((s) => s.ui.channelViewTab.poPortal);
-  const view = PO_VIEWS.includes(chosenView) ? chosenView : PO_VIEWS[0];
-  const update = (changes) => dispatch(setPageFilters({ key: 'poPortalWorkspace', filters: { ...filters, ...changes } }));
-  const beforeStatus = useMemo(() => invoices.filter((i) => matchesPoPortalWorkspace(i, filters, scope.dateField, true)), [invoices, filters, scope.dateField]);
+  const view = PO_VIEWS.some((entry) => entry.key === chosenView) ? chosenView : PO_VIEWS[0].key;
+  // The tab lights up immediately; the (large) table for it renders right after.
+  const shownView = useDeferredValue(view);
+  const commitQuery = useCallback((q) => dispatch(setPageFilters({ key: 'poPortalWorkspace', filters: { ...filters, q } })), [dispatch, filters]);
+  const search = useWorkspaceSearch(filters.q, commitQuery, invoices);
+  const update = (changes) => {
+    if ('q' in changes) search.setQuery(changes.q);
+    dispatch(setPageFilters({ key: 'poPortalWorkspace', filters: { ...filters, ...changes } }));
+  };
+  // Search first through the list's cached index, then the cheap field filters.
+  const searched = useMemo(() => filterInvoiceQuery(invoices, search.deferredQuery), [invoices, search.deferredQuery]);
+  const beforeStatus = useMemo(() => searched.filter((i) => matchesPoPortalWorkspace(i, { ...filters, q: '' }, scope.dateField, true)), [searched, filters, scope.dateField]);
   const filtered = useMemo(() => beforeStatus.filter((i) => !filters.status || i.status === filters.status), [beforeStatus, filters.status]);
-  const approvers = [...new Set(invoices.flatMap((i) => [i.poPortal?.hod1, i.poPortal?.hod2, i.poPortal?.accounts_user]).filter(Boolean))].sort();
-  const poTypes = [...new Set(invoices.map((i) => i.poPortal?.po_type).filter(Boolean))].sort();
+  const facets = useMemo(() => ({
+    stage: facetOptions(invoices, (i) => i.poPortal?.source_approval_stage, 'All stages'),
+    poType: facetOptions(invoices, (i) => i.poPortal?.po_type, 'All PO types'),
+    approver: facetOptions(invoices, (i) => [i.poPortal?.hod1, i.poPortal?.hod2, i.poPortal?.accounts_user], 'All approvers'),
+  }), [invoices]);
+
   return <>
-    <div className="sheet-carousel" style={{ margin: '0.25rem 0 1rem' }}><div className="car-track">
-      {PO_VIEWS.map((entry) => <button type="button" className={`car-chip${view === entry ? ' active' : ''}`} key={entry}
-        onClick={() => dispatch(setChannelViewTab({ key: 'poPortal', view: entry }))}>{entry}</button>)}
-    </div></div>
+    <div className="srm-toolbar">
+      <div className="srm-tabs" role="group" aria-label="PO Portal view">
+        {PO_VIEWS.map((entry) => {
+          const Icon = VIEW_ICON[entry.key];
+          return <button type="button" className={`srm-tab${view === entry.key ? ' active' : ''}`} key={entry.key}
+            aria-pressed={view === entry.key} onClick={() => dispatch(setChannelViewTab({ key: 'poPortal', view: entry.key }))}><Icon size={14} />{entry.label}</button>;
+        })}
+      </div>
+      <div className="srm-quick-filters">
+        <span className="srm-quick-filters-label"><Sliders size={12} />Filter</span>
+        <Dropdown variant="chip" label="Stage" ariaLabel="Filter by source approval stage" value={filters.source_approval_stage}
+          options={facets.stage} onChange={(source_approval_stage) => update({ source_approval_stage })} />
+        <Dropdown variant="chip" label="PO Type" ariaLabel="Filter by PO type" value={filters.po_type} options={facets.poType}
+          searchPlaceholder="Search PO type" onChange={(po_type) => update({ po_type })} />
+        <Dropdown variant="chip" label="Approver" ariaLabel="Filter by approver" value={filters.approver} options={facets.approver}
+          searchPlaceholder="Search approver" onChange={(approver) => update({ approver })} />
+      </div>
+    </div>
     <div className="card" style={{ marginBottom: '0.875rem' }}>
       <label className="srm-search-label">Search PO Portal invoices
-        <input type="search" className="search-box" style={{ width: '100%' }} value={filters.q}
-          placeholder="Invoice no, PO no, PO item, UTR, PAN or vendor" onChange={(e) => update({ q: e.target.value })} />
+        <span className="srm-search"><Search size={15} />
+          <input type="search" className="search-box" value={search.query}
+            aria-busy={search.pending} placeholder={INVOICE_SEARCH_PLACEHOLDER} onChange={(e) => search.setQuery(e.target.value)} />
+        </span>
       </label>
+      <InvoiceFilterBar compact status={filters.status} dateFrom={filters.date_from} dateTo={filters.date_to}
+        onStatusChange={(status) => update({ status })} onDateFrom={(date_from) => update({ date_from })}
+        onDateTo={(date_to) => update({ date_to })} onAllDates={() => update({ date_from: '', date_to: '' })}
+        onClear={() => update(EMPTY)} statusCountBase={beforeStatus} resultCount={filtered.length}
+        rangeLabel={!filters.date_from && !filters.date_to ? 'all dates' : `${filters.date_from || 'earliest'} to ${filters.date_to || 'latest'}`} />
     </div>
-    <InvoiceFilterBar status={filters.status} dateFrom={filters.date_from} dateTo={filters.date_to}
-      onStatusChange={(status) => update({ status })} onDateFrom={(date_from) => update({ date_from })}
-      onDateTo={(date_to) => update({ date_to })} onAllDates={() => update({ date_from: '', date_to: '' })}
-      onClear={() => update(EMPTY)} statusCountBase={beforeStatus} resultCount={filtered.length}
-      rangeLabel={!filters.date_from && !filters.date_to ? 'all dates' : `${filters.date_from || 'earliest'} to ${filters.date_to || 'latest'}`} />
-    <div className="card srm-advanced-filters" style={{ marginBottom: '0.875rem' }}>
-      {[
-        ['hod1_status', 'HOD1 Status', APPROVAL], ['hod2_status', 'HOD2 Status', APPROVAL], ['accounts_status', 'Accounts Status', APPROVAL],
-        ['source_approval_stage', 'Source Approval Stage', choices('Any stage', ['SC', 'INFO', 'HOD1', 'HOD2'])],
-        ['approver', 'Approver', choices('Any approver', approvers)], ['po_type', 'PO Type', choices('Any PO type', poTypes)],
-        ['invoice_uploaded', 'Invoice Uploaded', [{ value: '', label: 'Any upload status' }, { value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]],
-        ['miro_status', 'MIRO Status', [{ value: '', label: 'Any MIRO status' }, { value: 'booked', label: 'Booked' }, { value: 'pending', label: 'Pending for MIRO' }]],
-        ['payment_status', 'Payment Status', [{ value: '', label: 'Any payment status' }, { value: 'paid', label: 'Paid' }, { value: 'unpaid', label: 'Unpaid' }]],
-      ].map(([key, label, options]) => <Dropdown key={key} label={label} value={filters[key]} options={options}
-        searchPlaceholder={key === 'approver' ? 'Search approver' : undefined} onChange={(value) => update({ [key]: value })} />)}
+    <div className={`srm-view${shownView !== view ? ' is-switching' : ''}`} aria-busy={shownView !== view}>
+      {shownView !== view && <p role="status" className="srm-view-loading">Loading {PO_VIEWS.find((entry) => entry.key === view).label.toLowerCase()}…</p>}
+      {shownView === 'History' ? <GlobalLogsBody invoiceList={filtered} getInvoiceRows={poPortalHistoryRows} strictInvoiceScope />
+        : <SrmDataTable invoices={filtered} view={shownView} canExport={canExport} config={PO_TABLE_CONFIG} />}
     </div>
-    {view === 'History' ? <GlobalLogsBody invoiceList={filtered} getInvoiceRows={poPortalHistoryRows} strictInvoiceScope />
-      : <SrmDataTable invoices={filtered} view={view} canExport={canExport} config={PO_TABLE_CONFIG} />}
   </>;
 }

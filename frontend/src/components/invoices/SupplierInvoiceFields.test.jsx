@@ -22,8 +22,10 @@ const invoice = {
   sap: { document_date: '2026-10-04', net_due_date: '2026-10-05', clearing_date: '2026-10-06' },
 };
 
+let dataVersion = 0;
 function show(component) {
-  const store = configureStore({ reducer: { ui: uiReducer, auth: () => ({ authType: 'supplier', channelScope: 'all' }) } });
+  const store = configureStore({ reducer: { ui: uiReducer, auth: () => ({ authType: 'supplier', channelScope: 'all' }) },
+    preloadedState: { ui: { ...uiReducer(undefined, { type: 'init' }), dataVersion: ++dataVersion } } });
   return render(<Provider store={store}><MemoryRouter>{component}</MemoryRouter></Provider>);
 }
 

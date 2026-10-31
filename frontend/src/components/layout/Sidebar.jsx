@@ -8,6 +8,7 @@ import { selectHasTicketAccess, selectPerm } from '../../features/auth/authSlice
 import {
   FileText, Search, Layers, Building, MessageSquare, BarChart3, History,
   Settings, Sliders, Users, Shield, Bell, User, LogOut, ChevronRight,
+  LayoutGrid,
 } from '../common/icons.jsx';
 import logo from '../../assets/Mahindra Digital Engine.png';
 import useEnabledChannels from '../../features/settings/useEnabledChannels';
@@ -54,6 +55,7 @@ export default function Sidebar() {
         <Brand />
         <div className="sidebar-scroll">
           <nav className="nav-tree" aria-label="Primary">
+            <NavItem icon={<LayoutGrid />} label="Dashboard" active={isActive('/supplier/dashboard')} onClick={() => navigate('/supplier/dashboard')} />
             <NavItem icon={<FileText />} label="My Invoices" active={isActive('/supplier/home')} onClick={() => navigate('/supplier/home')} />
             <NavItem icon={<History />} label="Logs" active={isActive('/supplier/logs')} onClick={() => navigate('/supplier/logs')} />
             <NavItem icon={<MessageSquare />} label="My Queries" active={isActive('/supplier/tickets')} onClick={() => navigate('/supplier/tickets')} />
@@ -170,7 +172,7 @@ export default function Sidebar() {
 
 function Brand() {
   const authType = useSelector((s) => s.auth.authType);
-  const home = authType === 'supplier' ? '/supplier/home' : '/app/invoices';
+  const home = authType === 'supplier' ? '/supplier/dashboard' : '/app/invoices';
   return (
     <Link className="brand" to={home} aria-label="Go to home">
       <img src={logo} alt="Mahindra Digital Engine" />

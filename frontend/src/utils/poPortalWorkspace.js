@@ -26,15 +26,16 @@ export const PO_COLUMNS = [
 ];
 const APPROVALS = ['invoice', 'vendor', 'po', 'item', 'status', 'sourceStage', 'approvalStage',
   'hod1', 'hod1Status', 'hod2', 'hod2Status', 'accounts', 'accountsStatus', 'pending', 'rejection'];
+// Same two views as SRM. 'Invoice Log' stays the key so saved column choices carry over;
+// approval, MIRO and payment fields are reached through the Columns presets.
 const VIEWS = {
   'Invoice Log': ['invoice', 'vendor', 'vcode', 'po', 'item', 'service', 'line', 'invoiceDate', 'uploadDate',
     'amount', 'status', 'approvalStage', 'pending', 'dueDate', 'utr', 'rejection'],
-  'Approver Assignment': APPROVALS,
-  'Service Entry (ML81N)': ['invoice', 'vendor', 'po', 'item', 'service', 'line', 'entry', 'entryDate', 'request', 'poType', 'activity', 'cost'],
-  'SAP Booking (MIRO)': ['invoice', 'vendor', 'po', 'item', 'miroStatus', 'miroCreated', 'miroDate', 'miroUser', 'parking', 'parkingUser', 'posting', 'postingUser', 'rsegPosting', 'document', 'doc', 'claim'],
-  'Payment Status': ['invoice', 'vendor', 'po', 'item', 'amount', 'currency', 'status', 'dueDate', 'paymentDate', 'utr', 'utrDate'],
 };
-export const PO_VIEWS = [...Object.keys(VIEWS), 'History'];
+export const PO_VIEWS = [
+  { key: 'Invoice Log', label: 'Invoice Register' },
+  { key: 'History', label: 'History' },
+];
 export const PO_TABLE_CONFIG = {
   namespace: 'po-portal', label: 'PO Portal', columns: PO_COLUMNS,
   resolveColumns(view, selection = {}) {

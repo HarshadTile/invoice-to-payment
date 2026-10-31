@@ -88,7 +88,7 @@ export default function LoginPage() {
     if (!password) fe.password = 'Enter your password.';
     setFieldErr(fe);
     if (Object.keys(fe).length) return;
-    runLogin({ mode: 'supplierPassword', pan: pan.trim().toUpperCase(), password }, '/supplier/home');
+    runLogin({ mode: 'supplierPassword', pan: pan.trim().toUpperCase(), password }, '/supplier/dashboard');
   }
 
 

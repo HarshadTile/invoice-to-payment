@@ -46,6 +46,27 @@ def test_status_precedence(changes, label):
     assert source.invoice_status(row(**changes)) == label
 
 
+@pytest.mark.parametrize("raw,expected", [
+    ("HDFCH008095981872026-02-17", date(2026, 2, 17)),   # UTR with the date glued on (SRM source)
+    ("SCBLN520260519005871732026-05-19", date(2026, 5, 19)),  # same shape in the PO Portal source
+    ("2026-10-16", date(2026, 10, 16)),
+    ("2026-10-16 00:00:00", date(2026, 10, 16)),
+    ("16-10-2026", date(2026, 10, 16)),
+    ("16/10/2026", date(2026, 10, 16)),
+    (datetime(2026, 10, 16, 9, 30), date(2026, 10, 16)),
+    ("HDFCH00809598187", None),   # a UTR alone carries no date
+    ("31-02-2026", None),
+    ("-", None),
+])
+def test_date_value_reads_every_source_date_shape(raw, expected):
+    assert source.date_value(raw) == expected
+
+
+def test_utr_clearing_date_glued_to_utr_is_mapped_and_filterable():
+    mapped = map_gcp_invoice_to_response(row(UTR_CLEARING_DATE_PAID="HDFCH008095981872026-10-16"))
+    assert mapped.sap.utr_clearing_date_paid == date(2026, 10, 16)
+
+
 def test_exact_srm_mapping():
     mapped = map_gcp_invoice_to_response(row(
         PRODUCT_TYPE="M", MIRO_DOCUMENT_DATE=date(2026, 10, 4),
@@ -226,6 +247,35 @@ def test_supplier_detail_matches_own_duplicate_invoice_number(api, monkeypatch):
     monkeypatch.setattr(source, "_cached_invoices", [row(SUPPLIER="V2"), row()])
     app.dependency_overrides[get_current_user_token] = lambda: {"auth_type": "supplier", "sub": "V1"}
     assert client.get("/api/v1/invoices/invoice-details/INV/1").json()["supplier"]["vendor_code"] == "V1"
+
+
+def test_deleted_entries_hidden_from_all_supplier_invoice_endpoints_before_pagination(api, monkeypatch):
+    client, app = api
+    monkeypatch.setattr(source, '_cached_invoices', [
+        row(VENDOR_INVOICE_NO='DELETED', STATUS_FLAG='X', INVOICE_UPLOAD_DATE=date(2026, 10, 20)),
+        row(VENDOR_INVOICE_NO='VISIBLE', INVOICE_UPLOAD_DATE=date(2026, 10, 1)),
+    ])
+    app.dependency_overrides[get_current_user_token] = lambda: {'auth_type': 'supplier', 'sub': 'V1'}
+    page = client.get('/api/v1/invoices/list-invoices?page_size=1&exclude_deleted=false').json()
+    assert page['total'] == page['total_pages'] == 1
+    assert page['items'][0]['invoice_number'] == 'VISIBLE'
+    summary = client.get('/api/v1/invoices/invoice-summary').json()
+    assert summary['total'] == 1
+    assert summary['byStatus'] == [{'key': 'Approved', 'value': 1}]
+    recent = client.get('/api/v1/invoices/recent-invoices?limit=1').json()
+    assert recent[0]['invoice_number'] == 'VISIBLE'
+    assert client.get('/api/v1/invoices/invoice-details/DELETED').status_code == 404
+    assert client.get('/api/v1/invoices/list-invoices?status=Entry%20Deleted').json()['total'] == 0
+    app.dependency_overrides[get_current_user_token] = lambda: {'auth_type': 'internal'}
+    assert client.get('/api/v1/invoices/list-invoices').json()['total'] == 2
+    assert client.get('/api/v1/invoices/invoice-details/DELETED').json()['overall_status'] == 'Entry Deleted'
+
+
+def test_supplier_deleted_exclusion_keeps_existing_payment_priority(api, monkeypatch):
+    client, app = api
+    monkeypatch.setattr(source, '_cached_invoices', [row(STATUS_FLAG='X', UTR_NUMBER='UTR1')])
+    app.dependency_overrides[get_current_user_token] = lambda: {'auth_type': 'supplier', 'sub': 'V1'}
+    assert client.get('/api/v1/invoices/list-invoices').json()['items'][0]['overall_status'] == 'Paid'
 
 
 def test_real_srm_workbook_maps_every_row(monkeypatch):

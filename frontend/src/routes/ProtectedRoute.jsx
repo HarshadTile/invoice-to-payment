@@ -22,8 +22,8 @@ export function RequireInternal() {
   const { loggedIn, authType } = useSelector((s) => s.auth);
   if (!loggedIn) return <Navigate to="/login?account=internal" replace />;
   if (authType !== 'internal') return <PortalRedirect
-    to="/supplier/home"
-    message="You're signed in as a supplier. You've been redirected to My Invoices. Log out to sign in to the internal portal."
+    to="/supplier/dashboard"
+    message="You're signed in as a supplier. You've been redirected to your Dashboard. Log out to sign in to the internal portal."
   />;
   return <Outlet />;
 }
@@ -77,6 +77,6 @@ export function SettingsIndexRedirect() {
 
 export function RedirectIfLoggedIn({ children }) {
   const { loggedIn, authType } = useSelector((s) => s.auth);
-  if (loggedIn) return <Navigate to={authType === 'supplier' ? '/supplier/home' : '/app/invoices'} replace />;
+  if (loggedIn) return <Navigate to={authType === 'supplier' ? '/supplier/dashboard' : '/app/invoices'} replace />;
   return children;
 }

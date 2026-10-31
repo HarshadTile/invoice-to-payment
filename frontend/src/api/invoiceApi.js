@@ -1,12 +1,14 @@
 import { api } from './client';
+import { invoiceSearchDocument } from '../utils/invoiceSearchDocument';
 
 const INVOICE_BASE_URL = '/api/v1/invoices';
+const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+const amountFormatters = new Map();
 
 function displayDate(value) {
   if (!value) return '-';
-  return new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? '-' : dateFormatter.format(parsed);
 }
 
 function displayAmount(invoice) {
@@ -14,7 +16,8 @@ function displayAmount(invoice) {
   if (amount === null || amount === undefined) return '-';
   const currency = invoice.sap?.currency || 'INR';
   try {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(Number(amount));
+    if (!amountFormatters.has(currency)) amountFormatters.set(currency, new Intl.NumberFormat('en-IN', { style: 'currency', currency }));
+    return amountFormatters.get(currency).format(Number(amount));
   } catch {
     return `${currency} ${amount}`;
   }
@@ -39,7 +42,7 @@ function getDynamicDate(invoice, status) {
 
 export function toWorkspaceInvoice(invoice) {
   const status = invoice.overall_status || 'Invoice Uploaded';
-  return {
+  const workspace = {
     no: invoice.invoice_number,
     vcode: invoice.supplier?.vendor_code || '-',
     vendor: invoice.supplier?.supplier_name || '-',
@@ -70,6 +73,8 @@ export function toWorkspaceInvoice(invoice) {
     statusFlag: invoice.status_flag,
     invoiceUploaded: invoice.invoice_uploaded,
   };
+  invoiceSearchDocument(workspace);
+  return workspace;
 }
 
 async function request(path = '') {
@@ -109,10 +114,23 @@ export const invoiceApi = {
     filters = { channel: 'all', ...filters };
     const pageSize = 1000;
     const first = await this.list({ ...filters, page: 1, page_size: pageSize });
-    const pages = await Promise.all(
-      Array.from({ length: Math.max(0, first.total_pages - 1) }, (_, index) =>
-        this.list({ ...filters, page: index + 2, page_size: pageSize })),
-    );
-    return [first, ...pages].flatMap((page) => page.items.map(toWorkspaceInvoice));
+    const pages = new Array(first.total_pages);
+    pages[0] = first.items.map(toWorkspaceInvoice);
+    let nextPage = 2;
+    let failed = false;
+    const loadPage = async () => {
+      while (!failed && nextPage <= first.total_pages) {
+        const page = nextPage++;
+        try {
+          const result = await this.list({ ...filters, page, page_size: pageSize });
+          pages[page - 1] = result.items.map(toWorkspaceInvoice);
+        } catch (error) {
+          failed = true;
+          throw error;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, Math.max(0, first.total_pages - 1)) }, loadPage));
+    return pages.flat();
   },
 };

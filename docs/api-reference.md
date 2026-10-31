@@ -44,6 +44,14 @@ identity are documented in [PO Portal mapping](po-portal-mapping.md).
 
 Invoice list responses are paginated. The backend applies supplier vendor-code restrictions from the authenticated token; a supplier cannot use a query parameter to access another supplier’s invoices.
 
+Invoices whose current effective status is `Entry Deleted` (or legacy `Deleted`)
+are excluded from supplier list, summary, recent and detail endpoints before
+pagination and counting. Direct supplier detail requests return 404. This is a
+server-enforced rule, not a client-controlled filter. Internal users retain the
+entries and their status filter. Existing payment/MIRO status precedence remains
+unchanged. Supplier tables, logs, exports, status options and detail links also
+exclude deleted entries, including any rows left in an older browser dataset.
+
 The list, summary, and recent invoice endpoints also accept `product_type` (`S` = Service,
 `M` = Material), `plant`, `dv_type` (Division, from `DV_TYPE`), `upload_date_from`, `upload_date_to` (inclusive ISO dates),
 and `filter_fiscal_year` (source ending year, e.g. `2027` for FY 2026–27).
@@ -60,14 +68,38 @@ matches the actual MIRO status; `payment_status=paid|unpaid` follows UTR/clearin
 payment evidence. Missing MIRO status is not treated as pending.
 
 The internal SRM workspace applies one invoice search and filter set across Invoice
-Log, Approver Assignment, SAP Booking, Payment & UTR, and History. Its Columns menu
+Log, Approver Assignment, SAP Booking, Payment & UTR, and History. Its controls
+are master search, Status, Date Type and From/To dates. Product Type, Plant,
+Division, Approver, Pending With, Approved By, MIRO Status and Payment Status
+dropdowns have been removed from SRM; search the relevant table value instead.
+Obsolete SRM URL parameters are removed and saved filters are restricted to the
+remaining controls, so old hidden selections cannot narrow results. The backend
+query parameters remain available to integrations. The common top bar retains
+year, channel and vendor filters. The Columns menu
 offers Standard (tab-specific), Approvals, All SRM fields, and custom selections.
 Invoice number and vendor remain pinned. Column selections persist per tab for
 the session. Exports include every matching row in the selected column order;
 pagination does not restrict exports. History shows only actual dated milestones
 and available query activity. Source fields omitted by the agreed SRM mapping are
 not manufactured. The Payment & UTR tab includes unpaid invoices as well as paid
-ones; the Payment Status filter narrows them explicitly.
+ones; the Status control can narrow the table to Paid invoices.
+
+Invoice text search runs against the already authorized, scoped rows in memory.
+The query is compiled once per search update, with a single pass producing rows
+and status counts. Date filtering is reused while typing. Input updates take
+priority over result rendering; exports are disabled while search results are
+updating. Comma-position matching and exact PO-item matching are unchanged.
+Free text covers mapped table/detail values: Service/Material, plant, division,
+channel labels, PAN, financial year, status, amounts/currency, dates, approval
+names/remarks and PO Portal service-entry/approval fields, in addition to invoice,
+PO and UTR identifiers. Dates match ISO and displayed English dates, plus
+day-month-year and day/month/year forms. Ungrouped amounts can match formatted
+amounts (e.g. `1250.50` matches `₹1,250.50`). Commas remain the positional search
+syntax. Indexes are prepared during invoice mapping, kept in a WeakMap and
+refreshed after scalar or nested-field changes. Redacted values and metadata IDs
+are excluded; the index never widens the supplied invoice scope.
+`node scripts/benchmark-invoice-search.mjs` from `frontend` compares the old and
+new filtering work on synthetic data; it does not measure end-to-end browser time.
 Recent invoices are sorted across the matching source by `INVOICE_UPLOAD_DATE` before limiting.
 
 Invoice data currently comes from `backend/data/tbl_dw_inv_paymt_SRM.xlsx`, sheet `in`.

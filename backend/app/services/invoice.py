@@ -67,9 +67,10 @@ def map_gcp_invoice_to_response(row: dict) -> InvoiceResponse:
 
 
 def get_gcp_invoice_response(invoice_number: str, po_item: int | None = None, *, vendor_codes=None,
-                             channel='msetuSrm', source_id=None, vendor_code=None, po_number=None):
+                             channel='msetuSrm', source_id=None, vendor_code=None, po_number=None, exclude_deleted=False):
     records = filter_invoices(invoice_number=invoice_number, po_item=po_item, vendor_codes=vendor_codes,
-                              channel=channel, source_id=source_id, vendor_code=vendor_code, po_number=po_number)
+                              channel=channel, source_id=source_id, vendor_code=vendor_code, po_number=po_number,
+                              exclude_deleted=exclude_deleted)
     if len(records) > 1 and any(row.get('__channel') == 'poPortal' for row in records):
         raise ValueError('Multiple source rows match; supply source_id from the invoice list')
     row = records[0] if records else None

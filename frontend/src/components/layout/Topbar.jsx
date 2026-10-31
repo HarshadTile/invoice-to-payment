@@ -1,39 +1,24 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useLocation, useParams } from 'react-router-dom';
-import { CHANNELS, CHANNEL_LABEL } from '../../data/constants';
+import { useLocation } from 'react-router-dom';
+import { CHANNEL_LABEL } from '../../data/constants';
+import { pageTitle } from '../../utils/pageTitle';
 import { getFiscalYear } from '../../utils/businessLogic';
 import { invoiceFiscalYear, selectScopedInvoices } from '../../features/invoices/selectors';
 import { pushToast, setScopeFilter, toggleSidebar, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
 import { useScope } from '../../features/ui/scope';
-import { HelpCircle, ChevronDown, Menu } from '../common/icons.jsx';
+import { HelpCircle, ChevronDown, Menu, Calendar, Layers, Building } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
 import NotificationBell from './NotificationBell.jsx';
-import TopbarPlantDropdown from './TopbarPlantDropdown.jsx';
 import useEnabledChannels from '../../features/settings/useEnabledChannels';
 
-const SETTINGS_LABEL = {
-  integrations: 'Integration Settings', auditLogs: 'Audit Logs',
-  users: 'User Management', suppliers: 'Supplier Management', roles: 'Roles & Permissions',
-};
+const CRUMB_PARENTS = ['Processing Channels', 'Supplier Visibility', 'Settings'];
 
-function crumbFor(pathname, params, lockedChannelLabel) {
-  // A channel-locked login sees only its own channel's invoices, and the title says so.
-  if (pathname.startsWith('/app/invoices')) return lockedChannelLabel ? `${lockedChannelLabel} Invoice Tracking` : 'Invoice Tracking';
-  if (pathname.startsWith('/app/search')) return 'Search Invoice(s)';
-  if (pathname.startsWith('/app/channel/')) { const c = CHANNELS.find((x) => x.key === params.key); return `Processing Channels / ${c ? c.label : ''}`; }
-  if (pathname.startsWith('/app/vendor-code/') || pathname.startsWith('/supplier/vendor-code/')) return `Supplier Visibility / ${params.code || ''}`;
-  if (pathname.startsWith('/app/supplier-visibility')) return 'Supplier Visibility';
-  if (pathname.startsWith('/app/logs')) return 'Logs / History';
-  if (pathname.startsWith('/app/inquiry-desk')) return 'Inquiry Desk';
-  if (pathname.startsWith('/supplier/home')) return 'My Invoices';
-  if (pathname.startsWith('/supplier/tickets')) return 'My Queries';
-  if (pathname.startsWith('/supplier/logs')) return 'Logs';
-  if (pathname.startsWith('/app/outputs')) return 'Vendor Status Reports';
-  if (pathname.startsWith('/app/settings/')) return `Settings / ${SETTINGS_LABEL[pathname.split('/').pop()] || ''}`;
-  if (pathname === '/app/notifications' || pathname === '/supplier/notifications') return 'Notifications';
-  if (pathname.startsWith('/app/profile') || pathname.startsWith('/supplier/profile')) return 'Profile';
-  return '';
+/** "Processing Channels / Msetu / SRM" → muted section, then the page name in bold. */
+function crumbParts(crumb) {
+  const parent = CRUMB_PARENTS.find((name) => crumb.startsWith(`${name} / `));
+  if (!parent) return <b>{crumb}</b>;
+  return <><span className="crumb-parent">{parent}</span><span className="crumb-sep"> / </span><b>{crumb.slice(parent.length + 3)}</b></>;
 }
 
 /* ── Compact vendor dropdown for topbar ─────────────────────────── */
@@ -68,60 +53,43 @@ function TopbarVendorDropdown({ scope, onUpdate }) {
   }, []);
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative' }}>
+    <div ref={wrapRef} className="scope-dd">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-          height: '2.375rem', maxWidth: '13.125rem', padding: '0 0.625rem 0 0.75rem',
-          background: currentVcode ? '#EFF6FF' : '#F0F1F4',
-          border: `0.0625rem solid ${currentVcode ? '#3B82F6' : 'var(--border)'}`,
-          borderRadius: '0.5625rem', fontSize: '0.78125rem', fontWeight: 500,
-          color: currentVcode ? '#1D4ED8' : 'var(--text-body)',
-          cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden',
-        }}
+        className={`scope-pill${currentVcode ? ' is-set' : ''}`}
+        style={{ maxWidth: '13.125rem' }}
         aria-haspopup="listbox"
         aria-expanded={open}
         title="Filter by vendor"
       >
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+        <Building size={14} className="scope-pill-ic" />
+        <span className="scope-pill-text">
           {currentVcode || 'Vendor Code'}
         </span>
         {currentVcode
-          ? <span onClick={(e) => { e.stopPropagation(); pick(''); }} style={{ opacity: .7, fontSize: '0.9375rem', lineHeight: 1, flexShrink: 0 }} aria-label="Clear vendor filter">×</span>
-          : <ChevronDown size={13} style={{ flexShrink: 0, opacity: .6 }} />
+          ? <span onClick={(e) => { e.stopPropagation(); pick(''); }} className="scope-pill-clear" aria-label="Clear vendor filter">×</span>
+          : <ChevronDown size={13} className="scope-pill-chev" />
         }
       </button>
 
       {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 0.375rem)', right: '0rem', zIndex: 60,
-          width: '17.5rem', background: '#fff',
-          border: '0.0625rem solid var(--border)', borderRadius: '0.625rem',
-          boxShadow: '0 0.75rem 2.125rem rgba(23,24,26,.13)', overflow: 'hidden',
-        }}>
-          <div style={{ padding: '0.5rem 0.625rem', borderBottom: '0.0625em solid var(--border-soft)' }}>
-            <input autoFocus className="search-box" style={{ width: '100%', height: '2.125rem', fontSize: '0.78125rem' }}
+        <div className="scope-menu" style={{ width: '17.5rem' }}>
+          <div className="scope-menu-search">
+            <input autoFocus className="search-box scope-menu-input"
               aria-label="Search vendor name or code" placeholder="Search vendor name or code…"
               value={typeQ} onChange={(event) => setTypeQ(event.target.value)} />
           </div>
-          <div style={{ maxHeight: '16.25rem', overflowY: 'auto' }} role="listbox">
-            <button type="button" role="option" aria-selected={!currentVcode} onClick={() => pick('')}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5625rem 0.875rem', border: 'none',
-                background: !currentVcode ? 'var(--brand-tint)' : 'none', color: !currentVcode ? 'var(--brand-dark)' : 'var(--text-body)',
-                fontWeight: !currentVcode ? 700 : 500, fontSize: '0.8125rem', cursor: 'pointer' }}>
+          <div className="scope-menu-list" role="listbox">
+            <button type="button" role="option" aria-selected={!currentVcode} onClick={() => pick('')} className={`scope-opt${!currentVcode ? ' selected' : ''}`}>
               Vendor Code
             </button>
-            {filtered.length === 0 && <p style={{ padding: '0.625rem 0.875rem', fontSize: '0.78125rem', color: 'var(--text-muted)' }}>No vendors match.</p>}
+            {filtered.length === 0 && <p className="scope-empty">No vendors match.</p>}
             {filtered.map((v) => (
               <button key={v.vcode} type="button" role="option" aria-selected={currentVcode === v.vcode} onClick={() => pick(v.vcode)}
-                style={{ display: 'flex', flexDirection: 'column', width: '100%', textAlign: 'left', padding: '0.5rem 0.875rem', border: 'none',
-                  background: currentVcode === v.vcode ? 'var(--brand-tint)' : 'none', cursor: 'pointer' }}
-                onMouseEnter={(e) => { if (currentVcode !== v.vcode) e.currentTarget.style.background = 'var(--gray-bg)'; }}
-                onMouseLeave={(e) => { if (currentVcode !== v.vcode) e.currentTarget.style.background = 'none'; }}>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: currentVcode === v.vcode ? 'var(--brand-dark)' : 'var(--text-body)' }}>{v.vendor}</span>
-                <span style={{ fontSize: '0.6875rem', fontFamily: 'monospace', color: 'var(--text-muted)', marginTop: '0.0625rem' }}>{v.vcode}</span>
+                className={`scope-opt scope-opt-vendor${currentVcode === v.vcode ? ' selected' : ''}`}>
+                <span className="scope-opt-name">{v.vendor}</span>
+                <span className="scope-opt-code">{v.vcode}</span>
               </button>
             ))}
           </div>
@@ -213,60 +181,40 @@ function TopbarChannelDropdown({ scope, onUpdate }) {
   }, []);
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative' }}>
+    <div ref={wrapRef} className="scope-dd">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-          height: '2.375rem', maxWidth: '11.25rem', padding: '0 0.625rem 0 0.75rem',
-          background: currentKey ? '#EFF6FF' : '#F0F1F4',
-          border: `0.0625rem solid ${currentKey ? '#3B82F6' : 'var(--border)'}`,
-          borderRadius: '0.5625rem', fontSize: '0.78125rem', fontWeight: 500,
-          color: currentKey ? '#1D4ED8' : 'var(--text-body)',
-          cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden',
-        }}
+        className={`scope-pill${currentKey ? ' is-set' : ''}`}
+        style={{ maxWidth: '11.25rem' }}
         aria-haspopup="listbox"
         aria-expanded={open}
         title="Filter by processing channel"
       >
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+        <Layers size={14} className="scope-pill-ic" />
+        <span className="scope-pill-text">
           {selectedLabel ?? 'All Channels'}
         </span>
         {currentKey
-          ? <span onClick={(e) => { e.stopPropagation(); pick(''); }} style={{ opacity: .7, fontSize: '0.9375rem', lineHeight: 1, flexShrink: 0 }} aria-label="Clear channel filter">×</span>
-          : <ChevronDown size={13} style={{ flexShrink: 0, opacity: .6 }} />
+          ? <span onClick={(e) => { e.stopPropagation(); pick(''); }} className="scope-pill-clear" aria-label="Clear channel filter">×</span>
+          : <ChevronDown size={13} className="scope-pill-chev" />
         }
       </button>
 
       {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 0.375rem)', right: '0rem', zIndex: 60,
-          width: '13.75rem', background: '#fff',
-          border: '0.0625rem solid var(--border)', borderRadius: '0.625rem',
-          boxShadow: '0 0.75rem 2.125rem rgba(23,24,26,.13)', overflow: 'hidden',
-        }}>
+        <div className="scope-menu" style={{ width: '13.75rem' }}>
           {allowedChannels.length > 5 && (
-            <div style={{ padding: '0.5rem 0.625rem', borderBottom: '0.0625em solid var(--border-soft)' }}>
-              <input autoFocus className="search-box" style={{ width: '100%', height: '2.125rem', fontSize: '0.78125rem' }}
+            <div className="scope-menu-search">
+              <input autoFocus className="search-box scope-menu-input"
                 placeholder="Search channel…" value={typeQ} onChange={(e) => setTypeQ(e.target.value)} />
             </div>
           )}
-          <div style={{ maxHeight: '16.25rem', overflowY: 'auto' }} role="listbox">
-            <button type="button" role="option" aria-selected={!currentKey} onClick={() => pick('')}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5625rem 0.875rem', border: 'none',
-                background: !currentKey ? 'var(--brand-tint)' : 'none', color: !currentKey ? 'var(--brand-dark)' : 'var(--text-body)',
-                fontWeight: !currentKey ? 700 : 500, fontSize: '0.8125rem', cursor: 'pointer' }}>
+          <div className="scope-menu-list" role="listbox">
+            <button type="button" role="option" aria-selected={!currentKey} onClick={() => pick('')} className={`scope-opt${!currentKey ? ' selected' : ''}`}>
               All Channels
             </button>
             {filtered.map((c) => (
-              <button key={c.key} type="button" role="option" aria-selected={currentKey === c.key} onClick={() => pick(c.key)}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5625rem 0.875rem', border: 'none', fontSize: '0.8125rem',
-                  background: currentKey === c.key ? 'var(--brand-tint)' : 'none',
-                  color: currentKey === c.key ? 'var(--brand-dark)' : 'var(--text-body)',
-                  fontWeight: currentKey === c.key ? 700 : 500, cursor: 'pointer' }}
-                onMouseEnter={(e) => { if (currentKey !== c.key) e.currentTarget.style.background = 'var(--gray-bg)'; }}
-                onMouseLeave={(e) => { if (currentKey !== c.key) e.currentTarget.style.background = 'none'; }}>
+              <button key={c.key} type="button" role="option" aria-selected={currentKey === c.key} onClick={() => pick(c.key)} className={`scope-opt${currentKey === c.key ? ' selected' : ''}`}>
                 {c.label}
               </button>
             ))}
@@ -302,33 +250,27 @@ function TopbarFiscalYearDropdown({ scope, onUpdate, defaultFY }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
   return (
-    <div ref={wrapRef} style={{ position: 'relative' }}>
+    <div ref={wrapRef} className="scope-dd">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-          height: '2.375rem', maxWidth: '10rem', padding: '0 0.625rem 0 0.75rem',
-          background: !isAll ? '#EFF6FF' : '#F0F1F4',
-          border: `0.0625rem solid ${!isAll ? '#3B82F6' : 'var(--border)'}`,
-          borderRadius: '0.5625rem', fontSize: '0.78125rem', fontWeight: 500,
-          color: !isAll ? '#1D4ED8' : 'var(--text-body)',
-          cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden',
-        }}
+        className={`scope-pill${!isAll ? ' is-set' : ''}`}
+        style={{ maxWidth: '10rem' }}
         aria-haspopup="listbox" aria-expanded={open} title="Filter by Fiscal Year"
       >
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{isAll ? 'All Years' : `FY ${currentFY}`}</span>
+        <Calendar size={14} className="scope-pill-ic" />
+        <span className="scope-pill-text">{isAll ? 'All Years' : `FY ${currentFY}`}</span>
         {!isAll && multiYear
-          ? <span onClick={(e) => { e.stopPropagation(); pick('all'); }} style={{ opacity: .7, fontSize: '0.9375rem', lineHeight: 1, flexShrink: 0 }} aria-label="Clear filter">×</span>
-          : <ChevronDown size={13} style={{ flexShrink: 0, opacity: .6 }} />
+          ? <span onClick={(e) => { e.stopPropagation(); pick('all'); }} className="scope-pill-clear" aria-label="Clear filter">×</span>
+          : <ChevronDown size={13} className="scope-pill-chev" />
         }
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 0.375rem)', right: '0rem', zIndex: 60, width: '8.75rem', background: '#fff', border: '0.0625rem solid var(--border)', borderRadius: '0.625rem', boxShadow: '0 0.75rem 2.125rem rgba(23,24,26,.13)', overflow: 'hidden' }}>
-          <div style={{ maxHeight: '16.25rem', overflowY: 'auto' }} role="listbox">
-            {multiYear && <button type="button" role="option" aria-selected={isAll} onClick={() => pick('all')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5625rem 0.875rem', border: 'none', background: isAll ? 'var(--brand-tint)' : 'none', color: isAll ? 'var(--brand-dark)' : 'var(--text-body)', fontWeight: isAll ? 700 : 500, fontSize: '0.8125rem', cursor: 'pointer' }}>All Years</button>}
+        <div className="scope-menu" style={{ width: '9.5rem' }}>
+          <div className="scope-menu-list" role="listbox">
+            {multiYear && <button type="button" role="option" aria-selected={isAll} onClick={() => pick('all')} className={`scope-opt${isAll ? ' selected' : ''}`}>All Years</button>}
             {fyOptions.map((fy) => (
-              <button key={fy} type="button" role="option" aria-selected={currentFY === fy} onClick={() => pick(fy)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5625rem 0.875rem', border: 'none', fontSize: '0.8125rem', background: currentFY === fy ? 'var(--brand-tint)' : 'none', color: currentFY === fy ? 'var(--brand-dark)' : 'var(--text-body)', fontWeight: currentFY === fy ? 700 : 500, cursor: 'pointer' }} onMouseEnter={(e) => { if (currentFY !== fy) e.currentTarget.style.background = 'var(--gray-bg)'; }} onMouseLeave={(e) => { if (currentFY !== fy) e.currentTarget.style.background = 'none'; }}>{fy}</button>
+              <button key={fy} type="button" role="option" aria-selected={currentFY === fy} onClick={() => pick(fy)} className={`scope-opt${currentFY === fy ? ' selected' : ''}`}>FY {fy}</button>
             ))}
           </div>
         </div>
@@ -340,11 +282,10 @@ function TopbarFiscalYearDropdown({ scope, onUpdate, defaultFY }) {
 export default function Topbar() {
   const dispatch = useDispatch();
   const location = useLocation();
-  const params   = useParams();
   const { authType, channelScope, supplierVendorCodes } = useSelector((s) => s.auth);
   const sidebarCollapsed = useSelector((s) => s.ui.sidebarCollapsed);
 
-  const crumb = crumbFor(location.pathname, params, authType === 'internal' && channelScope !== 'all' ? (CHANNEL_LABEL[channelScope] || channelScope) : '');
+  const crumb = pageTitle(location.pathname, authType === 'internal' && channelScope !== 'all' ? (CHANNEL_LABEL[channelScope] || channelScope) : '');
   const isHQ = channelScope === 'all';
   const isChannelLocked = !isHQ;
   const channelLabel = CHANNEL_LABEL[channelScope] || channelScope;
@@ -368,7 +309,7 @@ export default function Topbar() {
         <Menu size={18} />
       </button>
       {/* The one visible page title (and the page's <h1>); pages don't repeat it. */}
-      <div className="crumb"><h1 className="crumb-title"><b>{crumb}</b></h1></div>
+      <div className="crumb"><h1 className="crumb-title" aria-label={crumb || undefined}>{crumbParts(crumb)}</h1></div>
 
       <div className="topbar-right">
         {authType === 'supplier' && (
@@ -377,32 +318,20 @@ export default function Topbar() {
         {authType === 'supplier' && supplierVendorCodes.length > 0 && (
           <SupplierVendorCodeDropdown codes={supplierVendorCodes} scope={scope} onUpdate={updateScope} />
         )}
-        {/* Internal users: financial year filter, shown on every page next to Channel and Vendor; defaults to the current FY */}
+        {/* Internal users: financial year, channel and vendor, grouped as one scope bar on every page; FY defaults to the current one */}
         {authType === 'internal' && (
+          <div className="scope-group">
           <TopbarFiscalYearDropdown scope={scope} onUpdate={updateScope} defaultFY={getFiscalYear(new Date().toISOString())} />
-        )}
-        {/* Channel + Vendor search dropdowns — shown for all internal users on all pages */}
-        {authType === 'internal' && (
           <div className="topbar-context-filters">
             {isChannelLocked ? (
-              <div
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-                  height: '2.375rem', padding: '0 0.75rem',
-                  background: '#F0F1F4',
-                  border: '0.0625rem solid var(--border)',
-                  borderRadius: '0.5625rem', fontSize: '0.78125rem', fontWeight: 600,
-                  color: 'var(--text-body)', whiteSpace: 'nowrap',
-                }}
-                title="Your scope is locked to this channel"
-              >
-                {channelLabel}
+              <div className="scope-pill is-locked" title="Your scope is locked to this channel">
+                <Layers size={14} className="scope-pill-ic" />{channelLabel}
               </div>
             ) : (
               <TopbarChannelDropdown scope={scope} onUpdate={updateScope} />
             )}
             <TopbarVendorDropdown scope={scope} onUpdate={updateScope} />
-            <TopbarPlantDropdown scope={scope} onUpdate={updateScope} />
+          </div>
           </div>
         )}
 

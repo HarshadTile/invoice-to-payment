@@ -1,21 +1,26 @@
-import { useDispatch } from 'react-redux';
-import { runtime } from '../../data/runtime';
+import { useDispatch, useSelector } from 'react-redux';
+import { selectScopedInvoices } from '../../features/invoices/selectors';
 import { CHANNEL_LABEL } from '../../data/constants';
 import { combinedStatusFor, currentStageName, findInvoice, invoiceProductType } from '../../utils/businessLogic';
 import PoPortalDetails from '../invoices/PoPortalDetails.jsx';
 import { formatInvoiceDate } from '../../utils/invoiceDates';
 import { closeModal } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
+import { useLocation } from 'react-router-dom';
+import { Breadcrumb } from '../layout/Breadcrumb.jsx';
+import { shortPageTitle } from '../../utils/pageTitle';
 import Badge from '../common/Badge.jsx';
 
 export default function SupplierInvoiceDetailModal({ ctx }) {
   const dispatch = useDispatch();
-  const inv = findInvoice(ctx.no, ctx.poItem, undefined, ctx);
+  const { pathname } = useLocation();
+  const invoices = useSelector(selectScopedInvoices);
+  const inv = findInvoice(ctx.no, ctx.poItem, invoices, ctx);
   if (!inv) return null;
   const cs = combinedStatusFor(inv);
   // Same invoice number can legitimately repeat as separate PO line items — exclude
   // this exact row (by no + poItem), not every row sharing just the invoice number.
-  const siblingInvoices = runtime.invoices.filter((i) => i.po === inv.po && !(i.no === inv.no && i.poItem === inv.poItem));
+  const siblingInvoices = invoices.filter((i) => i.po === inv.po && !(i.no === inv.no && i.poItem === inv.poItem));
 
   return (
     <ModalShell
@@ -25,6 +30,7 @@ export default function SupplierInvoiceDetailModal({ ctx }) {
         <button type="button" className="btn" onClick={() => dispatch(closeModal())}>Close</button>
       )}
     >
+      <Breadcrumb parent={shortPageTitle(pathname)} current="Invoice Details" onBack={() => dispatch(closeModal())} />
       <div style={{ textAlign: 'center', padding: '0.125rem 0 1rem' }}>
         <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700 }}>{CHANNEL_LABEL[inv.channel]}</div>
         <div style={{ fontSize: '0.96875rem', fontWeight: 700, color: 'var(--text)', marginTop: '0.5rem', lineHeight: 1.4 }}>{currentStageName(inv)}</div>

@@ -1,17 +1,19 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ChevronDown } from './icons.jsx';
+import { ChevronDown, X } from './icons.jsx';
 
 /**
  * Accessible single-select dropdown (button + listbox).
  * options: [{ value, label, count? }] — `value: ''` is treated as the "all" option.
  * Keyboard: Enter/Space/↓ open, ↑/↓ move, Home/End, Enter select, Esc/Tab close.
+ * variant="chip": a compact pill with the label inline ("Plant · All") and a clear button once set.
  */
-export default function Dropdown({ label, value, options, onChange, ariaLabel, searchPlaceholder }) {
+export default function Dropdown({ label, value, options, onChange, ariaLabel, searchPlaceholder, variant }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [query, setQuery] = useState('');
   const wrapRef = useRef(null);
   const listId = useId();
+  const chip = variant === 'chip';
 
   const selectedIndex = Math.max(0, options.findIndex((o) => o.value === value));
   const selected = options[selectedIndex];
@@ -45,8 +47,8 @@ export default function Dropdown({ label, value, options, onChange, ariaLabel, s
   };
 
   return (
-    <div className="dd-field" ref={wrapRef}>
-      {label && <span className="dd-label">{label}</span>}
+    <div className={`dd-field${chip ? ' dd-chip' : ''}`} ref={wrapRef}>
+      {label && !chip && <span className="dd-label">{label}</span>}
       <div className="dd">
         <button
           type="button"
@@ -58,9 +60,12 @@ export default function Dropdown({ label, value, options, onChange, ariaLabel, s
           onClick={() => (open ? setOpen(false) : openMenu())}
           onKeyDown={onKeyDown}
         >
-          <span className="dd-value">{selected?.label}</span>
-          <ChevronDown size={14} className="dd-chev" />
+          {chip && label && <span className="dd-chip-label">{label}</span>}
+          <span className="dd-value">{chip && !value ? 'All' : selected?.label}</span>
+          <ChevronDown size={chip ? 12 : 14} className="dd-chev" />
         </button>
+        {chip && value && <button type="button" className="dd-chip-clear" aria-label={`Clear ${label}`}
+          onClick={() => onChange('')}><X size={11} /></button>}
 
         {open && (
           <ul className="dd-menu" role="listbox" id={listId}>

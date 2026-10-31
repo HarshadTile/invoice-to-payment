@@ -1,11 +1,15 @@
 ﻿import { useDispatch, useSelector } from 'react-redux';
-import { CHANNEL_STAGES, CHANNEL_LABEL, CHANNEL_ROUTING_RULE, STATUS_CHIP } from '../../data/constants';
-import { stageProgress, handlerFor, findInvoice } from '../../utils/businessLogic';
+import { CHANNEL_LABEL, CHANNEL_ROUTING_RULE, STATUS_CHIP } from '../../data/constants';
+import { handlerFor, findInvoice } from '../../utils/businessLogic';
 import PoPortalDetails from '../invoices/PoPortalDetails.jsx';
 import { closeModal } from '../../features/ui/uiSlice';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
 import ModalShell from './ModalShell.jsx';
+import { useLocation } from 'react-router-dom';
+import { Breadcrumb } from '../layout/Breadcrumb.jsx';
+import { shortPageTitle } from '../../utils/pageTitle';
 import Badge from '../common/Badge.jsx';
+import { Check, HelpCircle, X } from '../common/icons.jsx';
 import { invoiceDateLabel } from '../../utils/invoiceDates';
 
 function displayDate(value) {
@@ -13,8 +17,29 @@ function displayDate(value) {
   return new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+const known = (value) => (value && value !== '-' ? value : '');
+
+/** One person handling the invoice: initials, role, name and e-mail (or "Not assigned"). */
+function Handler({ role, name, email }) {
+  const who = known(name);
+  const initials = who.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  return <div className={`handler-card${who ? '' : ' empty'}`}>
+    <span className="handler-avatar" aria-hidden="true">{initials || '–'}</span>
+    <span className="handler-who">
+      <span className="handler-role">{role}</span>
+      <span className="handler-name">{who || 'Not assigned'}</span>
+      {who && known(email) && <span className="handler-email">{email}</span>}
+    </span>
+  </div>;
+}
+
+function Detail({ label, children }) {
+  return <div className="detail-item"><span>{label}</span><span>{children}</span></div>;
+}
+
 export default function InvoiceDetailModal({ ctx }) {
   const dispatch = useDispatch();
+  const { pathname } = useLocation();
   useSelector((s) => s.ui.dataVersion); // re-render when invoice data refreshes
   const authType = useSelector((s) => s.auth.authType);
   const invoices = useSelector(selectScopedInvoices);
@@ -52,70 +77,80 @@ export default function InvoiceDetailModal({ ctx }) {
   return (
     <ModalShell
       title={inv.no}
-      width={600}
+      width={760}
+      className="invoice-detail-modal"
       foot={<button type="button" className="btn" onClick={() => dispatch(closeModal())}>Close</button>}
     >
-      <div className="row" style={{ marginBottom: '1rem' }}>
-        <div className="form-field" style={{ flex: 1 }}><label>Vendor</label><input value={inv.vendor} readOnly /></div>
-        <div className="form-field" style={{ flex: 1 }}><label>Vendor Code</label><input value={inv.vcode} readOnly /></div>
-      </div>
-      <div className="row" style={{ marginBottom: '1rem' }}>
-        <div className="form-field" style={{ flex: 1 }}><label>Channel</label><input value={CHANNEL_LABEL[inv.channel]} readOnly /></div>
-        <div className="form-field" style={{ flex: 1 }}><label>PO No</label><input value={inv.po} readOnly /></div>
-        <div className="form-field" style={{ flex: 1 }}><label>Amount</label><input value={inv.amount} readOnly /></div>
-      </div>
-      <p style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', margin: '-0.625rem 0 1rem' }}>Why this channel: {CHANNEL_ROUTING_RULE[inv.channel]}</p>
+      <Breadcrumb parent={shortPageTitle(pathname)} current="Invoice Details" onBack={() => dispatch(closeModal())} />
+      {/* Summary: who, which PO, how much, and where it stands */}
+      <section className="inv-hero">
+        <div className="inv-hero-main">
+          <div className="inv-hero-tags">
+            <Badge tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge>
+            <span className="inv-channel-tag">{CHANNEL_LABEL[inv.channel]}</span>
+          </div>
+          <div className="inv-hero-vendor">{inv.vendor}</div>
+          <div className="inv-hero-meta">
+            <span><small>Vendor Code</small>{inv.vcode}</span>
+            <span><small>PO No</small>{inv.po}</span>
+          </div>
+        </div>
+        <div className="inv-hero-amount">
+          <small>Amount</small>
+          <strong>{known(inv.amount) || '—'}</strong>
+        </div>
+      </section>
+      {CHANNEL_ROUTING_RULE[inv.channel] && (
+        <p className="inv-why"><HelpCircle size={13} />Why this channel: {CHANNEL_ROUTING_RULE[inv.channel]}</p>
+      )}
 
       {authType !== 'supplier' && (
         <>
-          <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Currently Handled By</label>
-          <div className="row" style={{ margin: '0.5rem 0 1rem' }}>
-            <div className="form-field" style={{ flex: 1 }}><label>Approver</label><input value={`${h.approver} · ${h.approverEmail}`} readOnly /></div>
-            <div className="form-field" style={{ flex: 1 }}><label>Accounts</label><input value={bookedOrLater ? `${h.accounts} · ${h.accountsEmail}` : 'Not yet assigned'} readOnly /></div>
+          <h4 className="inv-section-title">Currently Handled By</h4>
+          <div className="handler-grid">
+            <Handler role="Approver" name={h.approver} email={h.approverEmail} />
+            <Handler role="Accounts" name={bookedOrLater ? h.accounts : ''} email={h.accountsEmail} />
           </div>
         </>
       )}
 
-
-      <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Invoice Progress</label>
-      <div style={{ margin: '0.625rem 0 1.125rem' }}>
+      <h4 className="inv-section-title">Invoice Progress</h4>
+      <ol className="inv-stepper">
         {stages.map((s, i) => {
           const idx = i + 1;
           const st = failed && idx >= done ? 'fail' : idx < done || (idx === done && inv.status === 'Paid') ? 'done' : idx === done ? 'current' : 'todo';
-          const dotBg = st === 'fail' ? 'var(--red)' : st === 'done' ? 'var(--green)' : st === 'current' ? 'var(--blue)' : '#E2E8F0';
-          const dotFg = st === 'todo' ? 'var(--text-muted)' : '#fff';
-          const txtColor = st === 'todo' ? 'var(--text-muted)' : 'var(--text)';
           const dateStr = getStageDate(s);
           return (
-            <div style={{ display: 'flex', gap: '0.625rem' }} key={i}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ width: '1.375rem', height: '1.375rem', borderRadius: '50%', background: dotBg, color: dotFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6875rem', fontWeight: 700, flexShrink: 0 }}>
-                  {st === 'done' ? '✓' : st === 'fail' ? '✕' : idx}
-                </div>
-                {i < stages.length - 1 && <div style={{ width: '0.125rem', flex: 1, minHeight: '0.875rem', background: idx < done ? 'var(--blue)' : '#E2E8F0' }} />}
-              </div>
-              <div style={{ paddingBottom: '0.875rem', paddingTop: '0.0625rem' }}>
-                <div style={{ fontSize: '0.78125rem', fontWeight: st === 'current' ? 700 : 500, color: txtColor }}>{s}</div>
-                {st === 'current' && <div style={{ fontSize: '0.6875rem', color: 'var(--blue)', marginTop: '0.125rem' }}>In progress</div>}
-                {dateStr && <div style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', marginTop: '0.125rem' }}>{dateStr}</div>}
-              </div>
-            </div>
+            <li className={`inv-step ${st}`} key={s}>
+              <span className="inv-step-dot" aria-hidden="true">
+                {st === 'done' ? <Check size={12} /> : st === 'fail' ? <X size={12} /> : idx}
+              </span>
+              <span className="inv-step-text">
+                <span className="inv-step-name">{s}</span>
+                {st === 'current' && <span className="inv-step-state">In progress</span>}
+                {dateStr && <span className="inv-step-date">{dateStr}</span>}
+              </span>
+            </li>
           );
         })}
+      </ol>
+
+      <h4 className="inv-section-title">Status &amp; payment</h4>
+      <div className="detail-grid">
+        <Detail label="Current Status"><Badge tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge></Detail>
+        <Detail label="UTR No.">{inv.utr === '-' ? <span className="detail-empty">Not yet visible</span> : inv.utr}</Detail>
+        {inv.shortPayReason && <Detail label="Short-Payment Reason">{inv.shortPayReason}</Detail>}
       </div>
 
-      <div className="validation-row"><span>Current Status</span><Badge tone={STATUS_CHIP[inv.status] || 'gray'}>{inv.status}</Badge></div>
-      <div className="validation-row"><span>UTR No.</span><span>{inv.utr === '-' ? <span style={{ color: '#CBD5E1' }}>Not yet visible</span> : inv.utr}</span></div>
+      <h4 className="inv-section-title">Dates</h4>
+      <div className="detail-grid">
+        <Detail label="Invoice Date">{invoiceDateLabel(inv)}</Detail>
+        <Detail label="Upload Date">{displayDate(inv.rawUploadDate) || '-'}</Detail>
+        <Detail label="Payment Due Date">{displayDate(inv.sap?.net_due_date) || '-'}</Detail>
+        <Detail label="Payment Date">{displayDate(inv.sap?.clearing_date) || '-'}</Detail>
+      </div>
+
       <PoPortalDetails invoice={inv} internal={authType !== 'supplier'} />
-      {inv.shortPayReason && <div className="validation-row"><span>Short-Payment Reason</span><span style={{ textAlign: 'right', maxWidth: '17.5rem' }}>{inv.shortPayReason}</span></div>}
-      <div className="validation-row"><span>Invoice Date</span><span>{invoiceDateLabel(inv)}</span></div>
-      <div className="validation-row"><span>Upload Date</span><span>{displayDate(inv.rawUploadDate) || '-'}</span></div>
-      <div className="validation-row"><span>Payment Due Date</span><span>{displayDate(inv.sap?.net_due_date) || '-'}</span></div>
-      <div className="validation-row"><span>Payment Date</span><span>{displayDate(inv.sap?.clearing_date) || '-'}</span></div>
     </ModalShell>
   );
 }
-
-
-
-

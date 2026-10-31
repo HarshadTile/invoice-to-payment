@@ -64,17 +64,20 @@ export default function InquiryDeskPage() {
   ), [board, needle, category]);
 
   return (
-    <section className="ticket-desk">
-      <div className="row ticket-stats">
-        <StatCard tone="bad" icon={<Inbox />} label="Open" value={summary.open || 0} sub="Waiting for assignment" onClick={() => dispatch(setTicketFilterStatus('Open'))} active={statusFilter === 'Open'} />
-        <StatCard tone="warn" icon={<Clock />} label="In Progress" value={summary.in_progress || 0} sub="Owned and active" onClick={() => dispatch(setTicketFilterStatus('In Progress'))} active={statusFilter === 'In Progress'} />
-        <StatCard tone="bad" icon={<Clock />} label="SLA Breached" value={summary.sla_breached || 0} sub="Response overdue" onClick={() => dispatch(setTicketFilterStatus('SLA Breached'))} active={statusFilter === 'SLA Breached'} />
-        <StatCard icon={<CheckCircle />} label="Resolved / Closed" value={summary.resolved_closed || 0} onClick={() => dispatch(setTicketFilterStatus('Resolved'))} active={statusFilter === 'Resolved'} />
+    <section className="ticket-desk dash">
+      <div className="kpi-grid ticket-stats">
+        <StatCard tone="shade-miro" icon={<Inbox />} label="Open" value={summary.open || 0} sub="Waiting for assignment" onClick={() => dispatch(setTicketFilterStatus('Open'))} active={statusFilter === 'Open'} />
+        <StatCard tone="shade-pending" icon={<Clock />} label="In Progress" value={summary.in_progress || 0} sub="Owned and active" onClick={() => dispatch(setTicketFilterStatus('In Progress'))} active={statusFilter === 'In Progress'} />
+        <StatCard tone="shade-total" icon={<Clock />} label="SLA Breached" value={summary.sla_breached || 0} sub="Response overdue" onClick={() => dispatch(setTicketFilterStatus('SLA Breached'))} active={statusFilter === 'SLA Breached'} />
+        <StatCard tone="shade-neutral" icon={<CheckCircle />} label="Resolved / Closed" value={summary.resolved_closed || 0} onClick={() => dispatch(setTicketFilterStatus('Resolved'))} active={statusFilter === 'Resolved'} />
       </div>
 
-      <div className="ticket-toolbar" style={{ flexWrap: 'wrap' }}>
+      <div className="card ticket-toolbar">
         <span className="ticket-toolbar-hint">
-          {view === 'list' ? `${shownTickets.length} quer${shownTickets.length === 1 ? 'y' : 'ies'} · ${statusFilter && (FILTER_STATUS[statusFilter] || statusFilter === 'SLA Breached') ? statusFilter : 'Open + In Progress'}` : 'All queries by status'}
+          <b>Queries</b>
+          <span className="ticket-count">
+            {view === 'list' ? `${shownTickets.length} quer${shownTickets.length === 1 ? 'y' : 'ies'} · ${statusFilter && (FILTER_STATUS[statusFilter] || statusFilter === 'SLA Breached') ? statusFilter : 'Open + In Progress'}` : 'All queries by status'}
+          </span>
         </span>
         <label className="ticket-search">
           <Search />

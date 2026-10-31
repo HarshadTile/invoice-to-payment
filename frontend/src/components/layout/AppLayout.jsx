@@ -4,6 +4,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { closeSidebar, saveScope, saveSidebarCollapsed } from '../../features/ui/uiSlice';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
+import { BreadcrumbProvider, PageBreadcrumb } from './Breadcrumb.jsx';
 import ModalHost from '../modals/ModalHost.jsx';
 
 export default function AppLayout() {
@@ -19,6 +20,7 @@ export default function AppLayout() {
   useEffect(() => { saveScope(scope); }, [scope]);
 
   return (
+    <BreadcrumbProvider>
     <div className={`app-shell${navOpen ? ' nav-open' : ''}${collapsed ? ' sidebar-collapsed' : ''}`}>
       <Sidebar />
       <button type="button" className="nav-backdrop" tabIndex={-1} aria-hidden="true" onClick={() => dispatch(closeSidebar())} />
@@ -27,11 +29,13 @@ export default function AppLayout() {
         <div className="main-scroll">
           <Topbar />
           <div id="content">
+            <PageBreadcrumb />
             <Outlet />
           </div>
         </div>
       </div>
       <ModalHost />
     </div>
+    </BreadcrumbProvider>
   );
 }

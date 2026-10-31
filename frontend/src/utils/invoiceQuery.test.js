@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesInvoiceQuery, parseInvoiceQuery } from './invoiceQuery';
+import { matchesInvoiceQuery, parseInvoiceQuery, compileInvoiceQuery, searchInvoiceRows } from './invoiceQuery';
 
 const inv = { no: 'INV-2627000165', po: '6500017465', poItem: 10, utr: 'UTR2607290012', vcode: 'DIG00356AA', vendor: 'GBUSINESS INFOTECH SOLUTIONS' };
 const noUtr = { no: 'MTS26M39', po: '6500018553', poItem: 20, utr: '-' };
@@ -54,5 +54,26 @@ describe('invoice search', () => {
   it('parses the two modes', () => {
     expect(parseInvoiceQuery('abc').mode).toBe('any');
     expect(parseInvoiceQuery('a,b,c,d')).toMatchObject({ mode: 'fields', invoice: 'a', po: 'b', item: 'c', utr: 'd' });
+  });
+
+  it('preserves positional matching and counts statuses only within the supplied scope', () => {
+    const first = { ...inv, status: 'Approved' };
+    const second = { ...inv, no: 'OTHER', status: 'Paid' };
+    const scoped = [first, second];
+    const searched = searchInvoiceRows(scoped, ', 6500017465, 10');
+    expect(searched.rows).toEqual(scoped);
+    expect(searched.counts.get('Approved')).toBe(1);
+    expect(searched.counts.get('Paid')).toBe(1);
+    expect(searchInvoiceRows([second], inv.no).rows).toEqual([]);
+    expect(searchInvoiceRows([first], inv.no).rows).toEqual([first]);
+  });
+
+  it('does not keep stale field values or rows when the same query is reused', () => {
+    const row = { ...inv };
+    const matcher = compileInvoiceQuery('infotech');
+    expect(matcher(row)).toBe(true);
+    row.vendor = 'Different supplier';
+    expect(matcher(row)).toBe(false);
+    expect(matchesInvoiceQuery(row, 'infotech')).toBe(false);
   });
 });

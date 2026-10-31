@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.api.v1.invoice import router as invoice_router
 from app.api.v1.auth import router as auth_router
@@ -27,6 +28,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=1)
  
 app.include_router(invoice_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])

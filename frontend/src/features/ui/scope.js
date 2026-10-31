@@ -12,9 +12,6 @@ export function resolveScope(scope) {
     fyChosen: !!raw.fy,
     channel: raw.channel || '',
     vcode: raw.vcode || '',
-    productType: raw.productType || '',
-    plant: raw.plant || '',
-    division: raw.division || '',
     dateField: ['posting', 'payment', 'accounts'].includes(raw.dateField) ? 'invoice' : (raw.dateField || 'invoice'),
   };
 }

@@ -1,8 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useGetNotificationsQuery, useGetUnreadCountQuery, NOTIFICATION_LIVE } from '../features/notifications/notificationsApi';
 import { useNotificationActions } from '../features/notifications/useNotificationActions';
-import { Inbox, Search } from '../components/common/icons.jsx';
-import { NOTIFICATION_DETAIL, dayLabel, notificationLabel, notificationTime } from '../utils/notifications';
+import { CheckCircle, Clock, Inbox, Mail, MessageSquare, RotateCcw, Search, Send, User } from '../components/common/icons.jsx';
+import { NOTIFICATION_DETAIL, NOTIFICATION_TONE, dayLabel, notificationLabel, notificationTime } from '../utils/notifications';
+
+// One icon per event, in the event's tone, so the list reads at a glance.
+const NOTIFICATION_ICON = {
+  TICKET_CREATED: MessageSquare, TICKET_ASSIGNED: User, SUPPLIER_REPLIED: Mail, STAFF_REPLIED: Send,
+  TICKET_RESOLVED: CheckCircle, TICKET_REOPENED: RotateCcw, TICKET_CLOSED: CheckCircle,
+  TICKET_AUTO_CLOSED: CheckCircle, SLA_BREACHED: Clock,
+};
 
 const PAGE = 50;
 const MAX = 200; // the server's cap per request
@@ -33,12 +40,12 @@ export default function NotificationsPage() {
   const filtering = tab !== 'all' || search;
 
   return (
-    <section className="inbox-page">
+    <section className="inbox-page dash">
       <div className="inbox-card">
         <div className="inbox-head">
           <span className="inbox-title">
-            <b>Notifications</b>
-            <small>{unread ? `${unread} unread` : 'You are all caught up'}</small>
+            <b>Notifications {unread > 0 && <span className="inbox-count">{unread} unread</span>}</b>
+            <small>{unread ? 'Open a notification to mark it read' : 'You are all caught up'}</small>
           </span>
           <button type="button" className="inbox-markall" onClick={readAll} disabled={!unread}>Mark all read</button>
         </div>
@@ -71,9 +78,14 @@ export default function NotificationsPage() {
           {shown.length > 0 && (
             <div className="inbox-cols" aria-hidden="true"><span /><span>Event</span><span>Query</span><span>Received</span></div>
           )}
-          {shown.map((n) => (
+          {shown.map((n) => {
+            const Icon = NOTIFICATION_ICON[n.type] || Inbox;
+            return (
             <button type="button" className={`inbox-row${n.read_at ? '' : ' unread'}`} key={n.id} onClick={() => open(n)}>
-              <span className="inbox-dot" aria-label={n.read_at ? undefined : 'Unread'} />
+              <span className={`inbox-ic ${NOTIFICATION_TONE[n.type] || 'gray'}`} aria-hidden={n.read_at ? true : undefined}>
+                <Icon size={15} />
+                <span className="inbox-dot" aria-label={n.read_at ? undefined : 'Unread'} />
+              </span>
               <span className="inbox-event">
                 <b>{notificationLabel(n)}</b>
                 {NOTIFICATION_DETAIL[n.type] && <small>{NOTIFICATION_DETAIL[n.type]}</small>}
@@ -87,7 +99,8 @@ export default function NotificationsPage() {
                 <small>{notificationTime(n.created_at)}</small>
               </time>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {mayHaveMore && tab === 'all' && !search && (

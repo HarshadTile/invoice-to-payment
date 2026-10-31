@@ -4,6 +4,18 @@ FastAPI service backing the [frontend](../frontend). Invoice data is read
 straight from `data/tbl_dw_inv_paymt_SRM.xlsx` (sheet `in`); everything else (login accounts,
 tickets, settings, the audit log) lives in a SQL database.
 
+PO Portal reads `data/tbl_dw_inv_paymt_PO_PORTAL.csv`. The SRM workbook is parsed
+once per backend process. A compressed JSON snapshot in `data/.invoice-cache/`
+also survives restarts, avoiding repeated Excel parsing. This generated folder
+contains invoice data and is gitignored. A cold load checks the workbook's full
+SHA-256 hash before using the snapshot; changed or corrupt snapshots are rebuilt
+from Excel. The first read of a new workbook is therefore slower. Restart the
+backend after replacing the workbook to refresh the in-memory data. An unwritable
+cache folder falls back to Excel; the source workbook is never overwritten.
+
+Large API responses use gzip when the client supports it. Frontend loading keeps
+at most four additional invoice page requests in flight and preserves page order.
+
 ## Requirements
 
 - Python 3.11+

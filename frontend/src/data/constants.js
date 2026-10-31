@@ -18,12 +18,12 @@ const ALL_CHANNELS = [
   {
     key: 'msetuSrm', label: 'Msetu / SRM',
     desc: 'Supplier-facing portal. Supplier uploads invoices against each visible purchase order; ASN/IBD gets auto-created.',
-    views: ['Invoice Log', 'Approver Assignment', 'SAP Booking (MIRO)', 'Payment & UTR (FBL1N)', 'History'],
+    views: ['Invoice Log', 'History'],
   },
   {
     key: 'poPortal', label: 'PO Portal',
     desc: 'Service invoices for certain plant codes get processed through the PO Portal.',
-    views: ['Invoice Log', 'Approver Assignment', 'Service Entry (ML81N)', 'Payment Status', 'History'],
+    views: ['Invoice Log', 'History'],
   },
   {
     key: 'manual', label: 'Manual',

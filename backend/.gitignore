@@ -4,6 +4,7 @@ __pycache__/
 .env
 .pytest_cache/
 data/app.db
+data/.invoice-cache/
 data/~$*
 data/local-supplier-mobiles.xlsx
 backups/

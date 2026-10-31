@@ -35,3 +35,19 @@ export function formatInvoiceDate(value) {
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
+
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** 'YYYY-MM' -> the first and last day of that calendar month, as YYYY-MM-DD. */
+export function monthDateRange(monthKey) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  return { from: `${monthKey}-01`, to: `${monthKey}-${String(lastDay).padStart(2, '0')}` };
+}
+
+/** The calendar month a date range covers exactly ({ key: 'YYYY-MM', label: 'Mar 2026' }), or null. */
+export function calendarMonthOf(from, to) {
+  const key = /^(\d{4})-(\d{2})-01$/.exec(from || '') ? from.slice(0, 7) : null;
+  if (!key || monthDateRange(key).to !== to) return null;
+  return { key, label: `${MONTH_LABELS[Number(key.slice(5)) - 1]} ${key.slice(0, 4)}` };
+}

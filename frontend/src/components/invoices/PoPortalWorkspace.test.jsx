@@ -56,14 +56,33 @@ describe('PO Portal workspace', () => {
   it('keeps filters across tabs, exports matching lines and opens the selected source row', () => {
     const store = configureStore({ reducer: { ui: uiReducer, auth: () => ({ authType: 'internal', role: 'Admin', channelScope: 'all' }) } });
     render(<Provider store={store}><MemoryRouter><PoPortalWorkspace invoices={[invoice, second]} canExport /></MemoryRouter></Provider>);
-    fireEvent.click(screen.getByRole('button', { name: 'HOD2 Status' }));
-    fireEvent.click(screen.getByRole('option', { name: 'Not recorded' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by status' }));
+    fireEvent.click(screen.getByRole('option', { name: /^Pending for Approval/ }));
     expect(screen.getAllByRole('button', { name: 'INV/PO/1' })).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Approver Assignment' }));
+    fireEvent.click(screen.getByText('Columns'));
+    fireEvent.change(screen.getByLabelText('Column preset'), { target: { value: 'approvals' } });
     expect(screen.getByRole('columnheader', { name: 'HOD1 Status' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Export to Excel (1)' }));
     expect(downloadCSV.mock.lastCall[2]).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'INV/PO/1' }));
     expect(store.getState().ui.modal.ctx.sourceId).toBe('poPortal:one');
+  });
+
+  it('matches SRM: two tabs, three quick filters and saved obsolete filters ignored', () => {
+    const store = configureStore({ reducer: { ui: uiReducer, auth: () => ({ authType: 'internal', role: 'Admin', channelScope: 'all' }) },
+      preloadedState: { ui: { ...uiReducer(undefined, { type: 'init' }), pageFilters: { poPortalWorkspace: { hod2_status: 'REJECTED', payment_status: 'paid' } } } } });
+    render(<Provider store={store}><MemoryRouter><PoPortalWorkspace invoices={[invoice, second]} canExport /></MemoryRouter></Provider>);
+    expect(screen.getByRole('button', { name: 'Invoice Register' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'History' })).toBeTruthy();
+    for (const removed of ['Invoice Log', 'Approver Assignment', 'Service Entry (ML81N)', 'SAP Booking (MIRO)', 'Payment Status', 'HOD1 Status', 'HOD2 Status', 'Accounts Status', 'MIRO Status', 'Invoice Uploaded']) {
+      expect(screen.queryByRole('button', { name: removed })).toBeNull();
+    }
+    // the stale HOD2 / payment filters from an older version no longer hide rows
+    expect(screen.getAllByRole('button', { name: 'INV/PO/1' })).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by approver' }));
+    fireEvent.click(screen.getByRole('option', { name: /^Reviewer B/ }));
+    expect(screen.getAllByRole('button', { name: 'INV/PO/1' })).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by source approval stage' }));
+    expect(screen.getByRole('option', { name: /^HOD1/ })).toBeTruthy();
   });
 });

@@ -1,12 +1,16 @@
 """SRM invoice source; GCP can later supply the same source-row contract."""
+import re
 from datetime import date, datetime
 from pathlib import Path
+from threading import Lock
 
 from openpyxl import load_workbook
+from app.repositories.workbook_cache import read_workbook_snapshot
 
 EXCEL_FILE = Path(__file__).resolve().parents[2] / "data" / "tbl_dw_inv_paymt_SRM.xlsx"
 SHEET_NAME = "in"
 _cached_invoices = None
+_load_lock = Lock()
 
 STATUS_LABELS = {
     "D": "Rejected", "Y": "Rejected", "X": "Entry Deleted",
@@ -30,15 +34,32 @@ def text_value(value):
     return None if value in ("", "-") else value
 
 
+_DAY_MONTH_YEAR = re.compile(r"^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b")
+# The source's UTR_CLEARING_DATE_PAID is often the UTR with the date glued on the end,
+# e.g. "HDFCH008095981872026-02-17" -> 2026-02-17.
+_TRAILING_ISO_DATE = re.compile(r"(\d{4}-\d{2}-\d{2})(?:[ T]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$")
+
+
 def date_value(value):
     if isinstance(value, datetime):
         return value.date()
     if isinstance(value, date):
         return value
     value = text_value(value)
-    if value:
+    if not value:
+        return None
+    candidates = [value[:10]]
+    if match := _TRAILING_ISO_DATE.search(value):
+        candidates.append(match.group(1))
+    for candidate in candidates:
         try:
-            return date.fromisoformat(value[:10])
+            return date.fromisoformat(candidate)
+        except ValueError:
+            pass
+    if match := _DAY_MONTH_YEAR.match(value):
+        day, month, year = (int(part) for part in match.groups())
+        try:
+            return date(year, month, day)
         except ValueError:
             pass
     return None
@@ -61,22 +82,25 @@ def invoice_status(row):
 
 def _load_excel_data():
     global _cached_invoices
-    if _cached_invoices is None:
-        workbook = load_workbook(EXCEL_FILE, read_only=True, data_only=True)
-        try:
-            rows = workbook[SHEET_NAME].iter_rows(values_only=True)
-            headers = next(rows)
-            records = []
-            for values in rows:
-                if not any(value is not None for value in values):
-                    continue
-                row = dict(zip(headers, values))
+    if _cached_invoices is not None:
+        return _cached_invoices
+    with _load_lock:
+        if _cached_invoices is None:
+            records = read_workbook_snapshot(EXCEL_FILE, SHEET_NAME, _read_excel_rows)
+            for row in records:
                 row["OVERALL_STATUS"] = invoice_status(row)
-                records.append(row)
             _cached_invoices = records
-        finally:
-            workbook.close()
     return _cached_invoices
+
+
+def _read_excel_rows():
+    workbook = load_workbook(EXCEL_FILE, read_only=True, data_only=True, keep_links=False)
+    try:
+        rows = workbook[SHEET_NAME].iter_rows(values_only=True)
+        headers = next(rows)
+        return [dict(zip(headers, values)) for values in rows if any(value is not None for value in values)]
+    finally:
+        workbook.close()
 
 
 def filter_invoices(
@@ -86,7 +110,7 @@ def filter_invoices(
     date_type="invoice", date_from=None, date_to=None,
     approver=None, pending_with=None, approved_by=None, miro_status=None, payment_status=None,
     channel='msetuSrm', source_id=None, hod1_status=None, hod2_status=None,
-    accounts_status=None, approval_stage=None, invoice_uploaded=None, po_type=None,
+    accounts_status=None, approval_stage=None, invoice_uploaded=None, po_type=None, exclude_deleted=False,
 ):
     allowed = {c.strip().lower() for c in vendor_codes} if vendor_codes is not None else None
     records = []
@@ -96,6 +120,13 @@ def filter_invoices(
     if channel in ('poPortal', 'all'):
         from app.repositories.po_portal_invoice import get_all_cached_invoices
         sources.extend(get_all_cached_invoices())
+    if not exclude_deleted and vendor_codes is None and not any(value is not None and value != '' for value in (
+        status, vendor_code, invoice_number, po_number, po_item, product_type, plant, dv_type,
+        upload_date_from, upload_date_to, filter_fiscal_year, date_from, date_to,
+        approver, pending_with, approved_by, miro_status, payment_status, source_id,
+        hod1_status, hod2_status, accounts_status, approval_stage, invoice_uploaded, po_type,
+    )):
+        return sources
     for row in sources:
         is_po = row.get('__channel') == 'poPortal'
         po_filters = [(hod1_status, 'HOD1_Status'), (hod2_status, 'HOD2_Status'),
@@ -111,6 +142,8 @@ def filter_invoices(
         if allowed is not None and vendor not in allowed:
             continue
         if vendor_code and vendor != vendor_code.strip().lower():
+            continue
+        if exclude_deleted and invoice_status(row) in ('Entry Deleted', 'Deleted'):
             continue
         approver_columns = ('Created_by_HOD1', 'Created_by_HOD2', 'Created_by_ACCOUNTS') if is_po else tuple(f'APPROVER{i}' for i in range(1, 8))
         if approver and not any(approver.strip().lower() in (text_value(row.get(column)) or '').lower() for column in approver_columns):

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { openModal, setPageFilters, setTablePage } from '../../features/ui/uiSlice';
 import { SRM_COLUMNS, srmColumns, srmCell } from '../../utils/srmWorkspace';
@@ -8,6 +8,7 @@ import { STATUS_CHIP } from '../../data/constants';
 import PagerFoot from '../common/PagerFoot.jsx';
 import SortDateTh from '../common/SortDateTh.jsx';
 import Badge from '../common/Badge.jsx';
+import { Columns, Download, Eye } from '../common/icons.jsx';
 
 const PAGE_SIZE = 20;
 const STANDARD = { preset: 'standard' };
@@ -23,6 +24,20 @@ export default function SrmDataTable({ invoices, view, canExport, config }) {
   const page = useSelector((state) => state.ui.tablePage[pageKey] || 1);
   const columns = useMemo(() => resolveColumns(view, selection), [view, selection, resolveColumns]);
   const [sort, setSort] = useState({ key: null, dir: 'desc' });
+  // The Columns panel closes on a click anywhere outside it or on Escape, not only on its button.
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const columnsRef = useRef(null);
+  useEffect(() => {
+    if (!columnsOpen) return undefined;
+    const onPointer = (event) => { if (columnsRef.current && !columnsRef.current.contains(event.target)) setColumnsOpen(false); };
+    const onKey = (event) => { if (event.key === 'Escape') setColumnsOpen(false); };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [columnsOpen]);
   const sorted = useMemo(() => {
     const entry = columns.find((column) => column.key === sort.key);
     if (!entry) return invoices;
@@ -44,10 +59,13 @@ export default function SrmDataTable({ invoices, view, canExport, config }) {
 
   return <div className="card">
     <div className="toolbar">
-      <span><strong>{sorted.length.toLocaleString()}</strong> matching invoices</span>
+      <span className="srm-table-title">Invoices<span className="srm-count-pill">{sorted.length.toLocaleString()} matching</span></span>
       <div className="toolbar-right">
-        <details className="srm-columns">
-          <summary className="btn">Columns</summary>
+        <details className="srm-columns" ref={columnsRef} open={columnsOpen}>
+          {/* the button drives the panel itself (Enter / Space included), so outside clicks can close it */}
+          <summary className="btn btn-sm" onClick={(event) => { event.preventDefault(); setColumnsOpen((open) => !open); }}>
+            <Columns />Columns
+          </summary>
           <div className="srm-columns-panel">
             <label>Column preset
               <select aria-label="Column preset" className="search-box" value={selection.preset} onChange={(event) => save({ preset: event.target.value })}>
@@ -63,9 +81,9 @@ export default function SrmDataTable({ invoices, view, canExport, config }) {
             </label>)}
           </div>
         </details>
-        {canExport && <button type="button" className="btn" onClick={() => downloadCSV(
+        {canExport && <button type="button" className="btn btn-sm" onClick={() => downloadCSV(
           timestampedExportName(`${config?.label || 'SRM'}_${view}`), columns.map((entry) => entry.label), sorted.map((invoice) => columns.map((entry) => srmCell(invoice, entry))),
-        )}>Export to Excel ({sorted.length})</button>}
+        )}><Download />Export to Excel ({sorted.length})</button>}
       </div>
     </div>
     <div className="table-scroll">
@@ -78,11 +96,16 @@ export default function SrmDataTable({ invoices, view, canExport, config }) {
         <tbody>
           {!visible.length && <tr><td colSpan={columns.length + 1}>No invoices match these filters.</td></tr>}
           {visible.map((invoice, index) => <tr key={`${invoice.vcode}|${invoice.no}|${invoice.po}|${invoice.poItem}|${index}`}>
-            {columns.map((entry) => <td key={entry.key} className={entry.key === 'invoice' ? 'srm-pin-invoice' : entry.key === 'vendor' ? 'srm-pin-vendor' : undefined}>
-              {entry.key === 'invoice' ? <button type="button" className="link-hero" onClick={() => openInvoice(invoice)}>{invoice.no}</button>
-                : entry.key === 'status' ? <Badge tone={STATUS_CHIP[invoice.status] || 'gray'}>{invoice.status}</Badge> : srmCell(invoice, entry)}
-            </td>)}
-            <td><button type="button" className="btn" aria-label={`View details for ${invoice.no}, PO ${invoice.po}, item ${invoice.poItem}`} onClick={() => openInvoice(invoice)}>View</button></td>
+            {columns.map((entry) => {
+              const text = srmCell(invoice, entry);
+              // One line per row; long values are cut with an ellipsis and shown in full on hover.
+              return <td key={entry.key} title={text.length > 22 ? text : undefined}
+                className={entry.key === 'invoice' ? 'srm-pin-invoice' : entry.key === 'vendor' ? 'srm-pin-vendor' : undefined}>
+                {entry.key === 'invoice' ? <button type="button" className="link-hero" onClick={() => openInvoice(invoice)}>{invoice.no}</button>
+                  : entry.key === 'status' ? <Badge tone={STATUS_CHIP[invoice.status] || 'gray'}>{invoice.status}</Badge> : text}
+              </td>;
+            })}
+            <td><button type="button" className="btn btn-xs" aria-label={`View details for ${invoice.no}, PO ${invoice.po}, item ${invoice.poItem}`} onClick={() => openInvoice(invoice)}><Eye />View</button></td>
           </tr>)}
         </tbody>
       </table>

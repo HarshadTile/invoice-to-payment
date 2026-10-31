@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useDeferredValue } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
 import { currentStageName, invoiceProductType, downloadCSV, timestampedExportName } from '../../utils/businessLogic';
-import { matchesInvoiceQuery } from '../../utils/invoiceQuery';
+import { filterInvoiceQuery, INVOICE_SEARCH_PLACEHOLDER, INVOICE_SEARCH_LABEL } from '../../utils/invoiceQuery';
 import { setSearch, setTablePage, toggleSelectRow, setSelectAll, clearSelection, openModal, pushToast } from '../../features/ui/uiSlice';
 import Badge from '../common/Badge.jsx';
 import PagerFoot from '../common/PagerFoot.jsx';
@@ -11,6 +11,7 @@ import SortDateTh from '../common/SortDateTh.jsx';
 import { useDateColumnSort } from '../../utils/dateSort';
 import { invoiceDateLabel, formatInvoiceDate } from '../../utils/invoiceDates';
 import { totalsByCurrency } from '../../utils/amounts';
+import { isSupplierVisibleInvoice } from '../../utils/invoiceVisibility';
 import { Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
 
 const PAGE_SIZE = 10;
@@ -32,7 +33,7 @@ const stickyCell = (left, isHead = false) => ({
   position: 'sticky',
   left: `${left}rem`,
   zIndex: isHead ? 3 : 1,
-  background: isHead ? '#F7F8FA' : '#fff',
+  background: isHead ? 'var(--table-head)' : 'inherit', // rows carry the stripe / hover colour
   boxShadow: 'inset -0.0625rem 0 0 var(--border-soft)',
 });
 
@@ -43,7 +44,7 @@ const stickyCell = (left, isHead = false) => ({
  * filteredCount: pass current filtered count to label the Export button accurately
  * lead: optional heading shown on the left of the toolbar (the Export button stays on the right)
  */
-export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount, lead, showFilteredAmount = false, exportName }) {
+export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount, lead, showFilteredAmount = false, exportName, busy = false }) {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const [searchParams] = useSearchParams();
@@ -52,7 +53,10 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const selected  = useSelector((s) => s.ui.tableSelected[tableKey] || EMPTY_SELECTION);
   const isSupplierUser = useSelector((s) => s.auth.authType === 'supplier');
 
-  const matched = useMemo(() => (search ? invoices.filter((inv) => matchesInvoiceQuery(inv, search)) : invoices), [invoices, search]);
+  const deferredSearch = useDeferredValue(search);
+  const searchBusy = busy || deferredSearch !== search;
+  const visibleInvoices = useMemo(() => isSupplierUser ? invoices.filter(isSupplierVisibleInvoice) : invoices, [invoices, isSupplierUser]);
+  const matched = useMemo(() => filterInvoiceQuery(visibleInvoices, deferredSearch), [visibleInvoices, deferredSearch]);
   const { sorted: filtered, toggle: toggleDate, dirFor } = useDateColumnSort(matched, DATE_COLUMNS);
   const amountSummary = useMemo(() => {
     if (!showFilteredAmount) return null;
@@ -88,7 +92,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   // Suppliers see one vendor code, so vendor columns are noise.
   const supplierView = mode === 'supplierSafe' && isSupplierUser;
   const colCount = (bulk ? 1 : 0) + (supplierView ? 12 : 19);
-  const exportCount = filteredCount ?? filtered.length;
+  const exportCount = isSupplierUser ? filtered.length : filteredCount ?? filtered.length;
   const exportLabel = `Export to Excel (${exportCount})`;
   const portalExportNames = { msetuSrm: 'Msetu_SRM', poPortal: 'PO_Portal', mfoxPortal: 'MFOX' };
   const channelKey = tableKey.match(/^channel-(msetuSrm|poPortal|mfoxPortal)(?:-|$)/)?.[1];
@@ -108,7 +112,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   };
 
   return (
-    <div>
+    <div aria-busy={searchBusy}>
       <div className="toolbar">
         <div className="toolbar-left">
           {lead}
@@ -121,9 +125,9 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               <input
                 className="search-box"
                 style={{ width: '100%', paddingLeft: '2rem', paddingRight: search ? '1.875rem' : '0.75rem', fontSize: '0.8125rem' }}
-                placeholder="Invoice no, PO no, PO item, UTR or vendor…"
-                title="Type one thing to search invoice, PO, item and UTR, or use commas to match each in order: invoice, PO, item, UTR"
-                aria-label="Search invoice, PO, item, UTR or vendor - or comma-separated by position"
+                placeholder={INVOICE_SEARCH_PLACEHOLDER}
+                title="Search any table field, or use commas in this order: invoice, PO, item, UTR"
+                aria-label={INVOICE_SEARCH_LABEL}
                 value={search}
                 onChange={(e) => dispatch(setSearch({ key: tableKey, value: e.target.value }))}
               />
@@ -143,17 +147,17 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
         <div className="toolbar-right">
           {bulk && selected.length > 0 ? (
             <>
-              <button type="button" className="btn"
+              <button type="button" className="btn" disabled={searchBusy}
                 title={`Export ${selected.length} selected invoice(s) to Excel`}
                 onClick={() => {
-                  exportInvoices(invoices.filter((inv) => selected.includes(inv.no)), true);
+                  exportInvoices(visibleInvoices.filter((inv) => selected.includes(inv.no)), true);
                   dispatch(clearSelection(tableKey));
                 }}>
                 <Download />Export Selected to Excel
               </button>
             </>
           ) : (
-            <button type="button" className="btn"
+            <button type="button" className="btn" disabled={searchBusy}
               title={`Export the ${exportCount} currently filtered invoice(s) to Excel`}
               onClick={() => exportInvoices(filtered)}>
               <Download />{exportLabel}

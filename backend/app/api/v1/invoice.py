@@ -128,6 +128,7 @@ def _scoped_filters(filters, supplier_codes):
         if filters.get("date_type") == "accounts":
             raise HTTPException(status_code=403, detail="Internal account dates are unavailable to suppliers")
         filters["vendor_codes"] = _narrow(supplier_codes, filters.pop("vendor_code", None))
+        filters['exclude_deleted'] = True
     return filters
 
 

@@ -15,14 +15,18 @@ function dayStart(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+// One formatter each: toLocaleDateString builds a new one per call, which adds up over large logs.
+const DAY_FORMAT = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+const DAY_TIME_FORMAT = new Intl.DateTimeFormat('en-IN', {
+  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+});
+
 export function formatDay(date) {
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return DAY_FORMAT.format(date);
 }
 
 export function formatDayTime(date) {
-  return new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  }).format(date);
+  return DAY_TIME_FORMAT.format(date);
 }
 
 /** Gives every row a key that is unique within the list. The source data can repeat an invoice and
@@ -119,17 +123,30 @@ export function staffQueryLogRows(entries, invoices, scoped = true) {
     .filter(Boolean);
 }
 
-export function filterLogRows(rows, { search = '', type = 'all', from = '', to = '', channel = '' } = {}) {
+const rowText = new WeakMap();
+function searchText(row) {
+  let text = rowText.get(row);
+  if (text === undefined) {
+    text = [row.invoiceNo, row.po, row.vcode, row.event, row.detail, row.performedBy].join(' ').toLowerCase();
+    rowText.set(row, text);
+  }
+  return text;
+}
+
+/** The log filters as a row predicate (keeps the caller's order). */
+export function logRowFilter({ search = '', type = 'all', from = '', to = '', channel = '' } = {}) {
   const q = search.trim().toLowerCase();
-  const fromDate = from ? new Date(`${from}T00:00:00`) : null;
-  const toDate = to ? new Date(`${to}T23:59:59.999`) : null;
-  return rows
-    .filter((row) => (type === 'all' || row.type === type)
-      && (!channel || row.channel === channel)
-      && (!fromDate || row.when >= fromDate)
-      && (!toDate || row.when <= toDate)
-      && (!q || [row.invoiceNo, row.po, row.vcode, row.event, row.detail, row.performedBy].join(' ').toLowerCase().includes(q)))
-    .sort((a, b) => b.when - a.when);
+  const fromMs = from ? new Date(`${from}T00:00:00`).getTime() : null;
+  const toMs = to ? new Date(`${to}T23:59:59.999`).getTime() : null;
+  return (row) => (type === 'all' || row.type === type)
+    && (!channel || row.channel === channel)
+    && (fromMs === null || row.when.getTime() >= fromMs)
+    && (toMs === null || row.when.getTime() <= toMs)
+    && (!q || searchText(row).includes(q));
+}
+
+export function filterLogRows(rows, filters = {}) {
+  return rows.filter(logRowFilter(filters)).sort((a, b) => b.when - a.when);
 }
 
 export function logRowsToCsv(rows, { staff = false } = {}) {

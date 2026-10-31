@@ -25,6 +25,7 @@ import AppRoutes from '../routes/AppRoutes.jsx';
 import { api as mockApi } from '../api/client';
 import ToastStack from '../components/common/ToastStack.jsx';
 import { runtime } from '../data/runtime';
+import { selectScopedInvoices, selectFilteredInvoices, selectFilteredInvoicesAnyChannel, selectFilteredInvoicesAnyVendor } from '../features/invoices/selectors';
 
 function freshStore() {
   return configureStore({
@@ -45,6 +46,12 @@ function renderApp(store, path = '/login?account=internal') {
 }
 
 beforeEach(() => {
+  // Invoice selectors are memoised module-wide on (auth, dataVersion); each test's fresh store
+  // starts at the same dataVersion, so drop the cache or a test can see the previous test's rows.
+  for (const selector of [selectScopedInvoices, selectFilteredInvoices, selectFilteredInvoicesAnyChannel, selectFilteredInvoicesAnyVendor]) {
+    selector.clearCache();
+    selector.memoizedResultFunc.clearCache();
+  }
   window.HTMLElement.prototype.scrollBy = vi.fn();
   global.URL.createObjectURL = vi.fn(() => 'blob:stub');
   global.URL.revokeObjectURL = vi.fn();
@@ -191,8 +198,8 @@ describe('Internal admin - full navigation', () => {
     expect(await screen.findAllByText('Invoice uploaded')).not.toHaveLength(0);
     expect(screen.getByText('INV-MS-1001')).toBeInTheDocument();
     expect(screen.queryByText('INV-MS-1005')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Approver Assignment' }));
-    expect(screen.getByRole('columnheader', { name: 'Approver 7' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Invoice Register' }));
+    expect(screen.getByRole('button', { name: 'INV-MS-1001' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'INV-MS-1005' })).toBeNull();
   });
 
@@ -368,7 +375,7 @@ describe('Internal admin - full navigation', () => {
       const { user } = await loginAdmin();
       await user.click(document.querySelector('.nav-item[aria-label="Notifications"]'));
       await user.click(await screen.findByText('Third'));
-      await user.click(await screen.findByRole('button', { name: 'Back to notifications' }));
+      await user.click(await screen.findByRole('button', { name: 'Back to Notifications' }));
       await waitFor(() => expect(document.querySelectorAll('.inbox-row').length).toBe(3));
     });
 
@@ -496,10 +503,110 @@ describe('Internal admin - full navigation', () => {
     expect(await screen.findByText('Paid invoices')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Back to Invoice Tracking' }));
     expect(await screen.findByRole('heading', { name: 'Invoice Tracking' })).toBeInTheDocument();
-    // opening Search from the sidebar has no back link
+    // the dashboard is the first page here, so it has no breadcrumb of its own
+    expect(document.querySelector('#content > .back-banner')).toBeNull();
+    // opening Search from the sidebar shows the plain page name, still leading back to the dashboard
     await user.click(document.querySelector('.nav-item[aria-label="Search Invoice(s)"]'));
     await screen.findByPlaceholderText(/Invoice no, PO no/);
-    expect(screen.queryByRole('button', { name: 'Back to Invoice Tracking' })).toBeNull();
+    const crumb = document.querySelector('#content > .back-banner');
+    expect(crumb).toHaveTextContent('Invoice Tracking/Search Invoice(s)');
+    expect(screen.queryByText('Paid invoices')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Back to Invoice Tracking' }));
+    expect(await screen.findByRole('heading', { name: 'Invoice Tracking' })).toBeInTheDocument();
+  });
+
+  it('the invoice details dialog shows "<page> / Invoice Details" and its parent link closes it', async () => {
+    const { user } = await loginAdmin();
+    await user.click(screen.getAllByText('Search Invoice(s)')[0]);
+    await user.type(await screen.findByPlaceholderText(/invoice no, po no/i), 'INV-MS-1001');
+    await user.click(await screen.findByRole('button', { name: 'INV-MS-1001' }));
+    const dialogCrumb = await screen.findByText('Invoice Details');
+    expect(dialogCrumb.closest('.back-banner')).toHaveTextContent('Search Invoice(s)/Invoice Details');
+    await user.click(within(dialogCrumb.closest('.back-banner')).getByRole('button', { name: 'Back to Search Invoice(s)' }));
+    expect(screen.queryByText('Invoice Details')).toBeNull();
+    expect(screen.getByPlaceholderText(/invoice no, po no/i)).toHaveValue('INV-MS-1001');
+  });
+
+  it('clicking a month on the dashboard opens Search for that month and keeps the saved status', async () => {
+    const { store, user } = await loginAdmin();
+    const original = [...runtime.invoices];
+    try {
+      act(() => {
+        const base = runtime.invoices.find((invoice) => invoice.channel === 'msetuSrm') || runtime.invoices[0];
+        runtime.invoices.splice(0, runtime.invoices.length,
+          { ...base, no: 'MAR-PAID', status: 'Paid', rawDate: '2026-03-10', filterFiscalYear: undefined },
+          { ...base, no: 'MAR-OPEN', status: 'Approved', rawDate: '2026-03-20', filterFiscalYear: undefined },
+          { ...base, no: 'APR-PAID', status: 'Paid', rawDate: '2026-04-05', filterFiscalYear: undefined });
+        store.dispatch({ type: 'ui/bumpData' });
+        store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+        store.dispatch(setScopeFilter({ key: 'dateField', value: 'invoice' }));
+        store.dispatch({ type: 'ui/setPageFilters', payload: { key: 'searchInvoice', filters: { q: '', status: 'Paid', productType: '', dateFrom: '', dateTo: '' } } });
+      });
+      await screen.findByRole('heading', { name: 'Invoice Tracking' });
+      const march = [...document.querySelectorAll('.col-slot')].find((b) => b.querySelector('.col-x').textContent === 'Mar 26');
+      await user.click(march);
+      expect(screen.getByLabelText(/Date From$/)).toHaveValue('2026-03-01');
+      expect(screen.getByLabelText(/Date To$/)).toHaveValue('2026-03-31');
+      expect(screen.getByRole('button', { name: 'Filter by status' })).toHaveTextContent('Paid');
+      expect(screen.getByRole('button', { name: 'MAR-PAID' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'MAR-OPEN' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'APR-PAID' })).not.toBeInTheDocument();
+      expect(screen.getByText(/Mar 2026 ·/)).toBeInTheDocument();
+      // back on the dashboard the month stays highlighted and can be cleared there
+      await user.click(screen.getByRole('button', { name: 'Back to Invoice Tracking' }));
+      expect(await screen.findByText('Mar 26', { selector: '.col-slot.selected .col-x' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Clear' }));
+      expect(document.querySelector('.col-slot.selected')).toBeNull();
+      expect(store.getState().ui.pageFilters.searchInvoice).toMatchObject({ status: 'Paid', dateFrom: '', dateTo: '' });
+    } finally {
+      runtime.invoices.splice(0, runtime.invoices.length, ...original);
+    }
+  });
+
+  it('the Service and Material cards open Search filtered to that product type', async () => {
+    const { store, user } = await loginAdmin();
+    const original = [...runtime.invoices];
+    try {
+      act(() => {
+        const base = runtime.invoices.find((invoice) => invoice.channel === 'msetuSrm') || runtime.invoices[0];
+        runtime.invoices.splice(0, runtime.invoices.length,
+          { ...base, no: 'SVC-1', productType: 'S', invoiceType: 'Service', status: 'Paid', filterFiscalYear: undefined },
+          { ...base, no: 'SVC-2', productType: 'S', invoiceType: 'Service', status: 'Approved', filterFiscalYear: undefined },
+          { ...base, no: 'MAT-1', productType: 'M', invoiceType: 'Material', status: 'Paid', filterFiscalYear: undefined });
+        store.dispatch({ type: 'ui/bumpData' });
+        store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+      });
+      await screen.findByRole('heading', { name: 'Invoice Tracking' });
+      await user.click(screen.getByRole('button', { name: /^Service: 2 invoices/ }));
+      expect(await screen.findByText('Service invoices')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Filter by product type' })).toHaveTextContent('Service');
+      expect(screen.getByRole('button', { name: 'Filter by status' })).toHaveTextContent('All');
+      expect(screen.getByRole('button', { name: 'SVC-1' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'SVC-2' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'MAT-1' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back to Invoice Tracking' }));
+      await user.click(await screen.findByRole('button', { name: /^Material: 1 invoices/ }));
+      expect(await screen.findByText('Material invoices')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'MAT-1' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'SVC-1' })).not.toBeInTheDocument();
+    } finally {
+      runtime.invoices.splice(0, runtime.invoices.length, ...original);
+    }
+  });
+
+  it('the Total Invoices KPI opens Search with every status, keeping the top-bar filters', async () => {
+    const { store, user } = await loginAdmin();
+    act(() => store.dispatch(setScopeFilter({ key: 'vcode', value: 'DIT00388AC' })));
+    await screen.findByRole('heading', { name: 'Invoice Tracking' });
+    const totalCard = [...document.querySelectorAll('button.stat-card')].find((b) => b.querySelector('.lbl')?.textContent === 'Total Invoices');
+    expect(totalCard).toBeTruthy();
+    await user.click(totalCard);
+    expect(await screen.findByText('All invoices')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Filter by status' })).toHaveTextContent('All');
+    expect(store.getState().ui.scope.vcode).toBe('DIT00388AC');
+    const rows = [...document.querySelectorAll('.invoice-list-table tbody tr')];
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row.textContent).toContain('DIT00388AC');
   });
 
   it('invoice progress: a Paid invoice is complete, not "In progress"', async () => {
@@ -601,6 +708,28 @@ describe('Internal admin - full navigation', () => {
     expect(store.getState().ui.scope.vcode).toBe('');
   });
 
+  it('shows plant and division filters only on the SRM workspace; product type also on Search', async () => {
+    const { user } = await loginAdmin();
+    const srmControls = () => ['Filter by plant code', 'Filter by division', 'Filter by product type']
+      .map((name) => screen.queryByRole('button', { name }));
+    await user.click(screen.getAllByText('Search Invoice(s)')[0]);
+    const [plant, division, product] = srmControls();
+    expect(plant).toBeNull();
+    expect(division).toBeNull();
+    expect(product).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Date type' })).toBeInTheDocument();
+    await user.click(screen.getAllByText('Msetu / SRM')[0]);
+    srmControls().forEach((control) => expect(control).toBeInTheDocument());
+    await user.type(screen.getByLabelText('Search SRM invoices'), 'Material');
+    await user.click(screen.getAllByText('PO Portal')[0]);
+    srmControls().forEach((control) => expect(control).toBeNull());
+    await user.click(screen.getAllByText('Search Invoice(s)')[0]);
+    srmControls().slice(0, 2).forEach((control) => expect(control).toBeNull());
+    await user.click(screen.getAllByText('Msetu / SRM')[0]);
+    srmControls().forEach((control) => expect(control).toBeInTheDocument());
+    expect(screen.getByLabelText('Search SRM invoices')).toHaveValue('Material');
+  });
+
   it('Supplier Visibility updates its detailed view when the navbar vendor changes', async () => {
     const { store, user } = await loginAdmin();
     store.dispatch(setScopeFilter({ key: 'vcode', value: 'DIT00388AC' })); // a Tata Communications code
@@ -615,6 +744,55 @@ describe('Internal admin - full navigation', () => {
     const rows = document.querySelectorAll('.table-scroll tbody tr');
     expect(rows.length).toBeGreaterThan(0);
     rows.forEach((row) => expect(row).toHaveTextContent('BFL00456'));
+  });
+
+  it('Supplier Visibility picks a PAN, lists its vendor codes, and the KPIs follow the choice', async () => {
+    const { store, user } = await loginAdmin();
+    const original = [...runtime.invoices];
+    try {
+      act(() => {
+        const base = runtime.invoices.find((invoice) => invoice.channel === 'msetuSrm') || runtime.invoices[0];
+        runtime.invoices.splice(0, runtime.invoices.length,
+          { ...base, no: 'P1-A', vcode: 'V1AA', vendor: 'Alpha Works', pan: 'AAAAA1111A', status: 'Paid', filterFiscalYear: undefined },
+          { ...base, no: 'P1-B', vcode: 'V1AB', vendor: 'Alpha Works', pan: 'AAAAA1111A', status: 'Approved', filterFiscalYear: undefined },
+          { ...base, no: 'P2-A', vcode: 'V2AA', vendor: 'Beta Traders', pan: 'BBBBB2222B', status: 'Paid', filterFiscalYear: undefined });
+        store.dispatch({ type: 'ui/bumpData' });
+        store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+        store.dispatch(setScopeFilter({ key: 'vcode', value: '' }));
+      });
+      await user.click(screen.getAllByText('Supplier Visibility')[0]);
+      const kpis = document.querySelector('.supplier-visibility-kpis');
+      const total = () => within(kpis).getByRole('button', { name: /^Total Invoices/ });
+      expect(total()).toHaveTextContent('3');
+
+      // search by supplier name, pick the PAN
+      await user.click(screen.getByRole('combobox', { name: 'PAN' }));
+      await user.keyboard('alpha');
+      await user.click(screen.getByRole('option', { name: /^AAAAA1111A/ }));
+      expect(total()).toHaveTextContent('2');
+      expect(screen.getByLabelText('Supplier Name')).toHaveValue('Alpha Works');
+      expect(screen.getByRole('combobox', { name: 'Vendor Code' })).toHaveValue('All codes under this PAN (2)');
+
+      // only that PAN's vendor codes are offered
+      await user.click(screen.getByRole('combobox', { name: 'Vendor Code' }));
+      expect(screen.getByRole('option', { name: /^V1AA/ })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: /^V1AB/ })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: /^V2AA/ })).toBeNull();
+      await user.click(screen.getByRole('option', { name: /^V1AB/ }));
+      expect(total()).toHaveTextContent('1');
+      expect(store.getState().ui.scope.vcode).toBe('V1AB');
+      expect(screen.getByRole('combobox', { name: 'PAN' })).toHaveValue('AAAAA1111A');
+      expect(screen.getByRole('button', { name: 'P1-B' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'P1-A' })).toBeNull();
+
+      // back to every supplier
+      await user.click(screen.getByRole('combobox', { name: 'PAN' }));
+      await user.click(screen.getByRole('option', { name: /^All PANs/ }));
+      expect(total()).toHaveTextContent('3');
+      expect(store.getState().ui.scope.vcode).toBe('');
+    } finally {
+      runtime.invoices.splice(0, runtime.invoices.length, ...original);
+    }
   });
 
   it('Supplier Visibility opens the detailed view directly without duplicate navigation', async () => {
@@ -648,7 +826,7 @@ describe('Internal admin - full navigation', () => {
     paidRows.forEach((row) => expect(row.querySelector('.chip')).toHaveTextContent(/^Paid$/));
     const summary = screen.getByRole('status', { name: 'Filtered invoice amount' });
     expect(summary).toHaveTextContent('across all pages');
-    const search = screen.getByPlaceholderText('Invoice no, PO no, PO item, UTR or vendor…');
+    const search = screen.getByPlaceholderText(/^Search all fields/);
     await user.type(search, 'INV-MS-1001');
     expect(summary).toHaveTextContent('1 matching invoice across all pages');
     expect(summary).toHaveTextContent('₹1,24,500.00');
@@ -679,6 +857,75 @@ describe('Internal admin - full navigation', () => {
     await user.click(screen.getAllByText('Search Invoice(s)')[0]);
     await user.type(await screen.findByPlaceholderText(/invoice no, po no/i), 'INV-MS-1001');
     expect(await screen.findByText(/1 invoice/i)).toBeInTheDocument();
+  });
+
+  it('Search Invoice(s) searches product type and other table columns through the master bar', async () => {
+    const { store, user } = await loginAdmin();
+    act(() => {
+      const base = runtime.invoices.find((invoice) => invoice.no === 'INV-MS-1001');
+      runtime.invoices.splice(0, runtime.invoices.length,
+        { ...base, no: 'MASTER-M', productType: 'M', invoiceType: 'Material', plant: 'H001', dvType: 'AUTO DV',
+          filterFiscalYear: 2027, rawDate: '2026-10-30', status: 'Approved', rejectionReason: undefined, shortPayReason: undefined,
+          workflow: { pending_with: 'First Reviewer' }, sap: { currency: 'INR', net_due_date: '2026-11-01' } },
+        { ...base, no: 'MASTER-S', productType: 'S', invoiceType: 'Service', plant: 'AMKT', dvType: 'CORPORATE DV',
+          filterFiscalYear: 2027, rawDate: '2026-10-30', status: 'Paid', rejectionReason: undefined, shortPayReason: undefined,
+          workflow: {}, sap: { currency: 'INR' } });
+      store.dispatch({ type: 'ui/bumpData' });
+      store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+    });
+    await user.click(screen.getAllByText('Search Invoice(s)')[0]);
+    const input = screen.getByRole('textbox', { name: /Search all invoice table fields/ });
+    for (const query of ['Material', 'H001', 'AUTO DV', 'First Reviewer', '01 Nov 2026']) {
+      fireEvent.change(input, { target: { value: query } });
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Export to Excel (1)' })).toBeEnabled());
+      expect(screen.getByRole('button', { name: 'MASTER-M' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'MASTER-S' })).not.toBeInTheDocument();
+    }
+    expect(screen.getByText(/Searches all table fields/)).toBeInTheDocument();
+  });
+
+  it('Search Invoice(s) keeps the latest typed query, correct export count and clear behavior', async () => {
+    const { store, user } = await loginAdmin();
+    act(() => store.dispatch(setScopeFilter({ key: 'fy', value: 'all' })));
+    await user.click(screen.getAllByText('Search Invoice(s)')[0]);
+    const input = await screen.findByPlaceholderText(/invoice no, po no/i);
+    fireEvent.change(input, { target: { value: 'NO-SUCH-INVOICE' } });
+    fireEvent.change(input, { target: { value: 'INV-MS-1001' } });
+    expect(input).toHaveValue('INV-MS-1001');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Export to Excel (1)' })).toBeEnabled());
+    expect(screen.getByRole('button', { name: 'INV-MS-1001' })).toBeInTheDocument();
+    expect(store.getState().ui.pageFilters.searchInvoice.q).toBe('INV-MS-1001');
+    await user.click(screen.getByRole('button', { name: 'Clear', exact: true }));
+    expect(input).toHaveValue('');
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Export to Excel (1)' })).not.toBeInTheDocument());
+    expect(document.querySelector('.search-results')).toHaveAttribute('aria-busy', 'false');
+  });
+
+  it('Search Invoice(s) filters by product type from the chip row and clears it', async () => {
+    const { store, user } = await loginAdmin();
+    // Earlier tests may have swapped the shared runtime list, so copy any row and put it back afterwards.
+    const original = [...runtime.invoices];
+    try {
+      act(() => {
+        const base = runtime.invoices.find((invoice) => invoice.channel === 'msetuSrm') || runtime.invoices[0];
+        runtime.invoices.splice(0, runtime.invoices.length,
+          { ...base, no: 'TYPE-M', productType: 'M', invoiceType: 'Material', filterFiscalYear: undefined },
+          { ...base, no: 'TYPE-S', productType: 'S', invoiceType: 'Service', filterFiscalYear: undefined });
+        store.dispatch({ type: 'ui/bumpData' });
+        store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+      });
+      await user.click(screen.getAllByText('Search Invoice(s)')[0]);
+      await user.click(screen.getByRole('button', { name: 'Filter by product type' }));
+      await user.click(screen.getByRole('option', { name: /^Material/ }));
+      expect(screen.getByRole('button', { name: 'TYPE-M' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'TYPE-S' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Filter by product type' })).toHaveTextContent('Material');
+      expect(store.getState().ui.pageFilters.searchInvoice.productType).toBe('Material');
+      await user.click(screen.getByRole('button', { name: 'Clear', exact: true }));
+      expect(store.getState().ui.pageFilters.searchInvoice.productType).toBe('');
+    } finally {
+      runtime.invoices.splice(0, runtime.invoices.length, ...original);
+    }
   });
 
   it('signing in with the e-mail shows the full name of the account holder', async () => {
@@ -739,7 +986,7 @@ describe('Supplier session', () => {
   it('shows only this vendor code nav (no HQ items)', async () => {
     await loginSupplier();
     expect(screen.getAllByText('My Invoices').length).toBeGreaterThan(0);
-    expect(screen.getByText('My Queries')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My Queries', exact: true })).toBeInTheDocument();
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();
     expect(screen.queryByText('Vendor Status Reports')).not.toBeInTheDocument();
   });
@@ -768,6 +1015,48 @@ describe('Supplier session', () => {
     expect(await screen.findByLabelText('Search the log')).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { name: 'Logs' })).toHaveLength(1);
     expect(screen.queryByText(/invoice milestones, payments and your queries/)).not.toBeInTheDocument();
+  });
+
+  it('lands on the Dashboard; a KPI card opens My Invoices with that list', async () => {
+    const { user } = await loginSupplier();
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByText('Amount received')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Upcoming payments' })).toBeInTheDocument();
+    const paidCard = screen.getAllByRole('button').find((b) => b.classList.contains('stat-card') && b.textContent.includes('Fully Paid'));
+    const paidCount = paidCard.querySelector('.val').textContent;
+    await user.click(paidCard);
+    expect(await screen.findByRole('heading', { name: 'My Invoices' })).toBeInTheDocument();
+    const active = document.querySelector('.supplier-kpis .stat-card[data-active="true"]');
+    expect(active.textContent).toContain('Fully Paid');
+    expect(active.querySelector('.val').textContent).toBe(paidCount);
+    expect(screen.getByRole('button', { name: 'Back to Dashboard' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back to Dashboard' }));
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+  });
+
+  it('opens an invoice from My Invoices and goes back with the breadcrumb', async () => {
+    const { user } = await loginSupplier();
+    await user.click(screen.getAllByText('My Invoices')[0]);
+    await screen.findByRole('heading', { name: 'My Invoices' });
+    const first = document.querySelector('.supplier-register tbody .link-hero');
+    expect(first).not.toBeNull();
+    const no = first.textContent;
+    await user.click(first);
+    expect(await screen.findByText(`Invoice ${no}`)).toBeInTheDocument();
+    expect(screen.getAllByRole('navigation', { name: 'Breadcrumb' })).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Back to My Invoices' }));
+    expect(await screen.findByText(/^Invoice Register/)).toBeInTheDocument();
+  });
+
+  it('filters Logs by the type cards', async () => {
+    const { user } = await loginSupplier();
+    await user.click(screen.getAllByText('Logs')[0]);
+    await screen.findByLabelText('Search the log');
+    const payments = screen.getAllByRole('button').find((b) => b.classList.contains('stat-card') && b.textContent.includes('Payments'));
+    await user.click(payments);
+    expect(screen.getByLabelText('Filter by type')).toHaveValue('Payment');
+    await user.click(payments);
+    expect(screen.getByLabelText('Filter by type')).toHaveValue('all');
   });
 
   it('views its own profile with PAN and vendor code list', async () => {

@@ -1,4 +1,5 @@
-export default function StatCard({ label, value, sub, tone, icon, onClick, active }) {
+/** A KPI tile. Optional `meter` (0–1) draws a share bar; `foot` is a second line under it. */
+export default function StatCard({ label, value, sub, tone, icon, onClick, active, meter, foot }) {
   const cls = ['stat-card', tone, onClick ? 'clickable' : ''].filter(Boolean).join(' ');
   const Comp = onClick ? 'button' : 'div';
   return (
@@ -13,6 +14,10 @@ export default function StatCard({ label, value, sub, tone, icon, onClick, activ
       <div className="lbl">{label}</div>
       <div className="val">{value}</div>
       {sub && <div className="sub">{sub}</div>}
+      {meter != null && (
+        <div className="stat-meter" aria-hidden="true"><span style={{ width: `${Math.min(Math.max(meter, 0), 1) * 100}%` }} /></div>
+      )}
+      {foot && <div className="stat-foot">{foot}</div>}
     </Comp>
   );
 }
