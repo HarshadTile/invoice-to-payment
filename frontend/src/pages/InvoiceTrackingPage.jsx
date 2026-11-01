@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { invoiceApi, toWorkspaceInvoice, USE_FASTAPI_INVOICES } from '../api/invoiceApi';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { CHANNELS, CHANNEL_LABEL } from '../data/constants';
 import { useScope } from '../features/ui/scope';
 import { selectFilteredInvoices } from '../features/invoices/selectors';
-import { selectIsChannelLocked } from '../features/auth/authSlice';
+import { selectIsChannelLocked, selectPerm } from '../features/auth/authSlice';
 import { dashboardMetrics, formatCount, formatMoney, formatShare, share } from '../features/invoices/dashboardMetrics';
-import { api } from '../api/client';
 import { setPageFilters } from '../features/ui/uiSlice';
 import { calendarMonthOf, invoiceDateTypeLabel, monthDateRange } from '../utils/invoiceDates';
 import StatCard from '../components/common/StatCard.jsx';
@@ -18,8 +18,6 @@ import RankedBars from '../components/dashboard/RankedBars.jsx';
 import RecentInvoices from '../components/invoices/RecentInvoices.jsx';
 import { Banknote, CheckCircle, Clock, FileText, Layers, Package, Settings } from '../components/common/icons.jsx';
 
-const USE_FASTAPI_INVOICES = import.meta.env.MODE !== 'test'
-  && import.meta.env.VITE_USE_FASTAPI_INVOICES === 'true';
 const RECENT_LIMIT = 5;
 
 /* Mahindra red-and-white, checked with the dataviz palette validator on the white card:
@@ -51,11 +49,13 @@ function recentFrom(invoices) {
     .slice(0, RECENT_LIMIT);
 }
 
-export default function InvoicesPage() {
+export default function InvoiceTrackingPage() {
   // already narrowed to the top-bar scope (fiscal year / channel / vendor)
   const filteredInvoices = useSelector(selectFilteredInvoices);
   const topScope = useScope();
   const isChannelLocked = useSelector(selectIsChannelLocked);
+  // Without "Search invoices" the dashboard is view-only: nothing opens Search.
+  const canSearch = !!useSelector(selectPerm).createTrace;
   const { channelScope } = useSelector((s) => s.auth);
   const navigate = useNavigate();
 
@@ -105,19 +105,11 @@ export default function InvoicesPage() {
   const fetchKey = `${channelScope}:${dataVersion}`;
   useEffect(() => {
     let alive = true;
-    const scope = channelScope !== 'all' ? `scope=${channelScope}` : '';
-    (async () => {
-      try {
-        if (USE_FASTAPI_INVOICES) {
-          const { invoiceApi, toWorkspaceInvoice } = await import('../api/invoiceApi');
-          const r = await invoiceApi.recent({ limit: RECENT_LIMIT, channel: channelScope || 'all' });
-          if (alive && Array.isArray(r)) setRecent({ key: fetchKey, data: r.map(toWorkspaceInvoice) });
-        } else {
-          const r = await api.get(`/dashboard/latest-invoices?count=${RECENT_LIMIT}${scope ? `&${scope}` : ''}`);
-          if (alive && Array.isArray(r)) setRecent({ key: fetchKey, data: r });
-        }
-      } catch { /* fall back to the loaded list */ }
-    })();
+    // Without the live invoice API (unit tests) the list is taken from the loaded invoices.
+    if (!USE_FASTAPI_INVOICES) return undefined;
+    invoiceApi.recent({ limit: RECENT_LIMIT, channel: channelScope || 'all' })
+      .then((r) => { if (alive && Array.isArray(r)) setRecent({ key: fetchKey, data: r.map(toWorkspaceInvoice) }); })
+      .catch(() => { /* fall back to the loaded list */ });
     return () => { alive = false; };
   }, [fetchKey, channelScope]);
   const isFiltering = topScope.channel || topScope.vcode || topScope.fy !== 'all';
@@ -135,7 +127,7 @@ export default function InvoicesPage() {
       tone={shade} label={label} value={formatCount(bucket.count)} icon={icon} sub={sub}
       meter={share(bucket.count, total)}
       foot={<><b>{formatShare(bucket.count, total)}</b> of invoices · {valueOf(bucket)}</>}
-      onClick={() => openSearchByStatus(status)}
+      onClick={canSearch ? () => openSearchByStatus(status) : undefined}
     />
   );
 
@@ -146,7 +138,7 @@ export default function InvoicesPage() {
         <StatCard
           tone="shade-total" label="Total Invoices" value={formatCount(total)} icon={<FileText size={16} />} sub="All statuses in this selection"
           foot={<><span title={exact(m.total.value)}><b>{valueOf(m.total)}</b> total value</span> · {formatCount(exceptions)} rejected / deleted</>}
-          onClick={() => openSearchByStatus('')}
+          onClick={canSearch ? () => openSearchByStatus('') : undefined}
         />
         {statusTile('Pending Approval', m.kpi.pendingApproval, 'Pending for Approval', <Clock size={16} />, 'Awaiting approver action', 'shade-pending')}
         {statusTile('Approved', m.kpi.approved, 'Approved', <CheckCircle size={16} />, 'Approved by business', 'shade-approved')}
@@ -181,7 +173,7 @@ export default function InvoicesPage() {
             {productParts.map((p) => {
               const Icon = PRODUCT_ICON[p.key];
               // "Not specified" mixes several raw types, so no single Search filter reproduces it.
-              const clickable = p.key !== 'Other';
+              const clickable = canSearch && p.key !== 'Other';
               const Tile = clickable ? 'button' : 'div';
               return (
                 <Tile
@@ -221,7 +213,7 @@ export default function InvoicesPage() {
         >
           {m.months.length
             ? <ColumnChart columns={m.months} label={`Invoices per month by ${dateTypeLabel}, by product type. Click a month to open its invoices`}
-              onColumnClick={openMonth} selectedKey={selectedMonth?.key}
+              onColumnClick={canSearch ? openMonth : undefined} selectedKey={selectedMonth?.key}
               series={productParts.map((p) => ({ key: p.key, label: p.label, color: p.color }))} />
             : <p className="chart-empty">No invoices with a {dateTypeLabel} to chart.</p>}
         </ChartCard>
@@ -237,7 +229,7 @@ export default function InvoicesPage() {
           <RankedBars
             rows={m.statuses.map((x, i) => ({ key: x.key, label: x.key, count: x.count,
               color: x.exception ? EXCEPTION_FILL : flowShade(i, m.statuses.filter((st) => !st.exception).length) }))}
-            total={total} onPick={openSearchByStatus}
+            total={total} onPick={canSearch ? openSearchByStatus : undefined}
           />
         </ChartCard>
       </div>

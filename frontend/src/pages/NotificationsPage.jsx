@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
-import { useGetNotificationsQuery, useGetUnreadCountQuery, NOTIFICATION_LIVE } from '../features/notifications/notificationsApi';
+import { useGetNotificationsQuery, useGetUnreadCountQuery, NOTIFICATION_LIVE } from '../api/notificationsApi';
 import { useNotificationActions } from '../features/notifications/useNotificationActions';
-import { CheckCircle, Clock, Inbox, Mail, MessageSquare, RotateCcw, Search, Send, User } from '../components/common/icons.jsx';
-import { NOTIFICATION_DETAIL, NOTIFICATION_TONE, dayLabel, notificationLabel, notificationTime } from '../utils/notifications';
+import { CheckCircle, Clock, Inbox, Key, Mail, MessageSquare, RotateCcw, Search, Send, User, Users } from '../components/common/icons.jsx';
+import { NOTIFICATION_DETAIL, NOTIFICATION_TONE, dayLabel, notificationLabel, notificationRef, notificationSubject, notificationTime } from '../utils/notifications';
 
 // One icon per event, in the event's tone, so the list reads at a glance.
 const NOTIFICATION_ICON = {
   TICKET_CREATED: MessageSquare, TICKET_ASSIGNED: User, SUPPLIER_REPLIED: Mail, STAFF_REPLIED: Send,
   TICKET_RESOLVED: CheckCircle, TICKET_REOPENED: RotateCcw, TICKET_CLOSED: CheckCircle,
   TICKET_AUTO_CLOSED: CheckCircle, SLA_BREACHED: Clock,
+  SUPPLIER_ACCESS_REQUEST: Users, SUPPLIER_ACCESS_CHANGE: Key,
 };
 
 const PAGE = 50;
@@ -32,7 +33,7 @@ export default function NotificationsPage() {
     const needle = search.trim().toLowerCase();
     return list.filter((n) => (
       (tab === 'all' || !n.read_at)
-      && (!needle || [notificationLabel(n), n.ticket_no, n.subject].some((v) => String(v || '').toLowerCase().includes(needle)))
+      && (!needle || [notificationLabel(n), notificationRef(n), notificationSubject(n)].some((v) => String(v || '').toLowerCase().includes(needle)))
     ));
   }, [list, tab, search]);
 
@@ -91,8 +92,8 @@ export default function NotificationsPage() {
                 {NOTIFICATION_DETAIL[n.type] && <small>{NOTIFICATION_DETAIL[n.type]}</small>}
               </span>
               <span className="inbox-query">
-                <span className="inbox-ref">{n.ticket_no || 'Query'}</span>
-                {n.subject && <span className="inbox-subject">{n.subject}</span>}
+                <span className="inbox-ref">{notificationRef(n)}</span>
+                {notificationSubject(n) && <span className="inbox-subject">{notificationSubject(n)}</span>}
               </span>
               <time className="inbox-when" dateTime={n.created_at}>
                 <span>{dayLabel(n.created_at)}</span>

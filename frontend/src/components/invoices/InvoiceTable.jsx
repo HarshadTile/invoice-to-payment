@@ -1,8 +1,10 @@
 import { useMemo, useDeferredValue } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { selectPerm } from '../../features/auth/authSlice';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
-import { currentStageName, invoiceProductType, downloadCSV, timestampedExportName } from '../../utils/businessLogic';
+import { currentStageName, invoiceProductType } from '../../features/invoices/invoice';
+import { downloadCSV, timestampedExportName } from '../../utils/csv';
 import { filterInvoiceQuery, INVOICE_SEARCH_PLACEHOLDER, INVOICE_SEARCH_LABEL } from '../../utils/invoiceQuery';
 import { setSearch, setTablePage, toggleSelectRow, setSelectAll, clearSelection, openModal, pushToast } from '../../features/ui/uiSlice';
 import Badge from '../common/Badge.jsx';
@@ -52,6 +54,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const page      = useSelector((s) => s.ui.tablePage[tableKey] || 1);
   const selected  = useSelector((s) => s.ui.tableSelected[tableKey] || EMPTY_SELECTION);
   const isSupplierUser = useSelector((s) => s.auth.authType === 'supplier');
+  const canExport = useSelector((s) => s.auth.authType === 'supplier' || !!selectPerm(s).importExport);
 
   const deferredSearch = useDeferredValue(search);
   const searchBusy = busy || deferredSearch !== search;
@@ -71,7 +74,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const pageRows     = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const pageAllSelected = pageRows.length > 0 && pageRows.every((inv) => selected.includes(inv.no));
 
-  const action = mode === 'simple' ? 'stageSimple' : mode === 'supplierSafe' ? 'supplierInvoiceDetail' : 'invoiceDetail';
+  const action = mode === 'simple' ? 'invoiceStage' : mode === 'supplierSafe' ? 'supplierInvoiceDetail' : 'invoiceDetail';
   const rowTitle = mode === 'simple' ? 'Click to see current stage' : mode === 'supplierSafe' ? (isSupplierUser ? 'Click to view invoice progress' : 'Click for supplier-facing status') : 'Click for full stage-by-stage status';
 
   const openInvoice    = (no, poItem, inv = {}) => {
@@ -145,7 +148,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
         </div>
 
         <div className="toolbar-right">
-          {bulk && selected.length > 0 ? (
+          {!canExport ? null : bulk && selected.length > 0 ? (
             <>
               <button type="button" className="btn" disabled={searchBusy}
                 title={`Export ${selected.length} selected invoice(s) to Excel`}

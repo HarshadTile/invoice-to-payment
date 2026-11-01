@@ -3,7 +3,7 @@ import { useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { useScope } from '../../features/ui/scope';
 import { openModal } from '../../features/ui/uiSlice';
-import { useGetTicketSummaryQuery } from '../../features/tickets/ticketsApi';
+import { useGetTicketSummaryQuery } from '../../api/ticketsApi';
 import { formatCount, formatMoney, formatShare, share } from '../../features/invoices/dashboardMetrics';
 import { UPCOMING_DAYS, supplierMetrics } from '../../features/invoices/supplierMetrics';
 import { formatInvoiceDate, invoiceDateTypeLabel, monthDateRange } from '../../utils/invoiceDates';

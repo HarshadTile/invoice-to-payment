@@ -6,7 +6,7 @@ import useEnabledChannels from '../features/settings/useEnabledChannels';
 import { CHANNELS, VIEW_COLUMNS, CHANNEL_LABEL, CHANNEL_SYNC_LABELS } from '../data/constants';
 import { runtime } from '../data/runtime';
 import { selectFilteredInvoicesAnyChannel } from '../features/invoices/selectors';
-import { channelViewRows } from '../utils/businessLogic';
+import { channelViewRows } from '../features/invoices/channelViews';
 import PoPortalWorkspace from '../components/invoices/PoPortalWorkspace.jsx';
 import { setChannelViewTab, openModal, setPageFilters } from '../features/ui/uiSlice';
 import { setRowsLocal, selectTable } from '../features/tables/tablesSlice';

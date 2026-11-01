@@ -9,7 +9,7 @@
  *  - the monthly chart groups by the chosen date type (the same one Search filters on) and only
  *    uses invoices that have that date, saying how many do not.
  */
-import { invoiceProductType } from '../../utils/businessLogic';
+import { invoiceProductType } from './invoice';
 import { invoiceFilterDate } from '../../utils/invoiceDates';
 
 /** Workflow order for the status chart; anything else is listed after these. */
@@ -172,8 +172,9 @@ export const formatCount = (n) => n.toLocaleString('en-IN');
 export const share = (part, whole) => (whole ? part / whole : 0);
 export const formatShare = (part, whole) => {
   const pct = share(part, whole) * 100;
-  // never round a sliver up to 0% or a near-whole up to 100%
-  if (pct > 0 && pct < 1) return '<1%';
-  if (pct > 99 && pct < 100) return '>99%';
+  // never round a sliver down to 0% or a near-whole up to 100%: show one decimal instead
+  if (pct > 0 && pct < 0.1) return 'under 0.1%';
+  if (pct > 0 && pct < 1) return `${pct.toFixed(1)}%`;
+  if (pct > 99 && pct < 100) return `${Math.min(pct, 99.9).toFixed(1)}%`;
   return `${Math.round(pct)}%`;
 };

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { invoiceFiscalYear, selectScopedInvoices } from '../../features/invoices/selectors';
-import { timestampedExportName } from '../../utils/businessLogic';
+import { timestampedExportName } from '../../utils/csv';
 import { useScope } from '../../features/ui/scope';
-import { api } from '../../api/client';
+import { workspaceApi } from '../../api/workspaceApi';
 import {
   filterLogRows, formatDay, formatDayTime, invoiceLogRows, withUniqueKeys, logRowsToCsv, queryLogRows,
 } from '../../utils/supplierLog';
@@ -39,7 +39,7 @@ export default function SupplierLogsPage() {
   const [queryError, setQueryError] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    api.get('/v1/tickets/supplier-activity-log')
+    workspaceApi.supplierActivityLog()
       .then((data) => { if (!cancelled) setQueryEntries(Array.isArray(data) ? data : []); })
       .catch(() => { if (!cancelled) setQueryError(true); });
     return () => { cancelled = true; };

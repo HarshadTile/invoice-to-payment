@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import ModalShell from '../modals/ModalShell.jsx';
+import { SUPPORT_EMAIL } from './support';
 
-const SUPPORT_EMAIL = 'i2p-support@mahindra.com';
 
 /** Policy notices and support links shown on authentication screens. */
 export default function SupportFooter() {

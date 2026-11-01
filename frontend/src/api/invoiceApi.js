@@ -1,15 +1,15 @@
 import { api } from './client';
 import { invoiceSearchDocument } from '../utils/invoiceSearchDocument';
+import { formatInvoiceDate } from '../utils/invoiceDates';
 
 const INVOICE_BASE_URL = '/api/v1/invoices';
-const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+/** The real FastAPI invoice source (off in unit tests, which use the bundled sample data). */
+export const USE_FASTAPI_INVOICES = import.meta.env.MODE !== 'test'
+  && import.meta.env.VITE_USE_FASTAPI_INVOICES === 'true';
 const amountFormatters = new Map();
 
-function displayDate(value) {
-  if (!value) return '-';
-  const parsed = new Date(`${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? '-' : dateFormatter.format(parsed);
-}
+const displayDate = formatInvoiceDate;
 
 function displayAmount(invoice) {
   const amount = invoice.sap?.payable_amount ?? invoice.sap?.amount;

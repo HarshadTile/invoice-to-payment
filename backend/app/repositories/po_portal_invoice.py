@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from app.repositories.gcp_invoice import date_value, text_value
+from app.repositories.srm_invoice import date_value, text_value
 
 CSV_FILE = Path(__file__).resolve().parents[2] / 'data' / 'tbl_dw_inv_paymt_PO_PORTAL.csv'
 _cached_invoices = None

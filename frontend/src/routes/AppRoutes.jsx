@@ -5,7 +5,8 @@ import {
   RequireSupplier,
   RequireHQ,
   RequireCapability,
-  RequireTicketAccess,
+  RequireOwnChannel,
+  RequireNotifications, RequireTicketAccess,
   SettingsIndexRedirect,
   RedirectIfLoggedIn,
 } from './ProtectedRoute.jsx';
@@ -13,7 +14,7 @@ import AppLayout from '../components/layout/AppLayout.jsx';
 import LoginPage from '../pages/LoginPage.jsx';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage from '../pages/ResetPasswordPage.jsx';
-import InvoicesPage from '../pages/InvoicesPage.jsx';
+import InvoiceTrackingPage from '../pages/InvoiceTrackingPage.jsx';
 import SearchInvoicePage from '../pages/SearchInvoicePage.jsx';
 import ChannelPage from '../pages/ChannelPage.jsx';
 import SupplierVisibilityPage from '../pages/SupplierVisibilityPage.jsx';
@@ -21,12 +22,13 @@ import SuppliersPage from '../pages/SuppliersPage.jsx';
 import SupplierSetupPage from '../pages/SupplierSetupPage.jsx';
 import VendorCodePage from '../pages/VendorCodePage.jsx';
 import InquiryDeskPage from '../pages/InquiryDeskPage.jsx';
-import OutputsPage from '../pages/OutputsPage.jsx';
+import VendorStatusReportsPage from '../pages/VendorStatusReportsPage.jsx';
 import GlobalLogsPage from '../pages/GlobalLogsPage.jsx';
-import SettingsPage from '../pages/SettingsPage.jsx';
+import SettingsPage from '../pages/settings/SettingsPage.jsx';
 import ProfilePage from '../pages/ProfilePage.jsx';
-import SupplierHomePage from '../pages/supplier/SupplierHomePage.jsx';
+import SupplierInvoicesPage from '../pages/supplier/SupplierInvoicesPage.jsx';
 import SupplierDashboardPage from '../pages/supplier/SupplierDashboardPage.jsx';
+import SupplierRequestPage from '../pages/SupplierRequestPage.jsx';
 import SupplierLogsPage from '../pages/supplier/SupplierLogsPage.jsx';
 import SupplierTicketsPage from '../pages/supplier/SupplierTicketsPage.jsx';
 import TicketDetailPage from '../pages/TicketDetailPage.jsx';
@@ -43,18 +45,27 @@ export default function AppRoutes() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       {/* The link a team member shares with a new supplier; public, like reset-password. */}
       <Route path="/supplier/setup" element={<SupplierSetupPage />} />
+      <Route path="/supplier/request-access" element={<SupplierRequestPage />} />
 
       {/* Internal / HQ side */}
       <Route element={<RequireInternal />}>
         <Route element={<AppLayout />}>
           <Route path="/app" element={<Navigate to="/app/invoices" replace />} />
-          <Route path="/app/invoices" element={<InvoicesPage />} />
-          <Route path="/app/search" element={<SearchInvoicePage />} />
-          <Route path="/app/channel/:key" element={<ChannelPage />} />
-          <Route path="/app/vendor-code/:code" element={<VendorCodePage />} />
+          <Route path="/app/invoices" element={<InvoiceTrackingPage />} />
+          <Route element={<RequireCapability cap="createTrace" />}>
+            <Route path="/app/search" element={<SearchInvoicePage />} />
+          </Route>
+          <Route element={<RequireOwnChannel />}>
+            <Route path="/app/channel/:key" element={<ChannelPage />} />
+          </Route>
+          <Route element={<RequireCapability cap="viewSupplierVisibility" />}>
+            <Route path="/app/vendor-code/:code" element={<VendorCodePage />} />
+          </Route>
           <Route element={<RequireTicketAccess />}>
             <Route path="/app/inquiry-desk" element={<InquiryDeskPage />} />
             <Route path="/app/inquiry-desk/:id" element={<TicketDetailPage />} />
+          </Route>
+          <Route element={<RequireNotifications />}>
             <Route path="/app/notifications" element={<NotificationsPage />} />
           </Route>
           <Route path="/app/profile" element={<ProfilePage />} />
@@ -64,9 +75,15 @@ export default function AppRoutes() {
           </Route>
 
           <Route element={<RequireHQ />}>
-            <Route path="/app/supplier-visibility" element={<SupplierVisibilityPage />} />
-            <Route path="/app/outputs" element={<OutputsPage />} />
-            <Route path="/app/logs" element={<GlobalLogsPage />} />
+            <Route element={<RequireCapability cap="viewSupplierVisibility" />}>
+              <Route path="/app/supplier-visibility" element={<SupplierVisibilityPage />} />
+            </Route>
+            <Route element={<RequireCapability cap="viewReports" />}>
+              <Route path="/app/outputs" element={<VendorStatusReportsPage />} />
+            </Route>
+            <Route element={<RequireCapability cap="viewLogs" />}>
+              <Route path="/app/logs" element={<GlobalLogsPage />} />
+            </Route>
             {/* the Sync Log page was removed (nothing ever filled it) */}
             <Route path="/app/sync-log" element={<Navigate to="/app/logs" replace />} />
             <Route element={<RequireCapability cap="manageConfig" />}>
@@ -92,7 +109,7 @@ export default function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route path="/supplier" element={<Navigate to="/supplier/dashboard" replace />} />
           <Route path="/supplier/dashboard" element={<SupplierDashboardPage />} />
-          <Route path="/supplier/home" element={<SupplierHomePage />} />
+          <Route path="/supplier/home" element={<SupplierInvoicesPage />} />
           <Route path="/supplier/vendor-code/:code" element={<Navigate to="/supplier/dashboard" replace />} />
           <Route path="/supplier/logs" element={<SupplierLogsPage />} />
           <Route path="/supplier/tickets" element={<SupplierTicketsPage />} />

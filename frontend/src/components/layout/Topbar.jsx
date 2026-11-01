@@ -3,9 +3,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useLocation } from 'react-router-dom';
 import { CHANNEL_LABEL } from '../../data/constants';
 import { pageTitle } from '../../utils/pageTitle';
-import { getFiscalYear } from '../../utils/businessLogic';
+import { getFiscalYear } from '../../utils/fiscalYear';
 import { invoiceFiscalYear, selectScopedInvoices } from '../../features/invoices/selectors';
-import { pushToast, setScopeFilter, toggleSidebar, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
+import { setScopeFilter, toggleSidebar, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
 import { useScope } from '../../features/ui/scope';
 import { HelpCircle, ChevronDown, Menu, Calendar, Layers, Building } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
@@ -279,6 +279,14 @@ function TopbarFiscalYearDropdown({ scope, onUpdate, defaultFY }) {
   );
 }
 
+/** The user manual (PDF in public/user-manual) for this sign-in: suppliers get the Vendor View guide,
+ *  internal users the guide for the portal they chose. */
+const USER_MANUALS = { msetuSrm: 'msetu-srm.pdf', poPortal: 'po-portal.pdf' };
+export function userManualUrl(authType, channelScope) {
+  const file = authType === 'supplier' ? 'vendor-view.pdf' : USER_MANUALS[channelScope] || 'all-channels-hq.pdf';
+  return `/user-manual/${file}`;
+}
+
 export default function Topbar() {
   const dispatch = useDispatch();
   const location = useLocation();
@@ -336,10 +344,10 @@ export default function Topbar() {
         )}
 
         <NotificationBell />
-        <button type="button" className="icon-btn help-button" aria-label="Help"
-          onClick={() => dispatch(pushToast('Help & documentation coming soon.'))}>
+        <a className="icon-btn help-button" href={userManualUrl(authType, channelScope)} target="_blank" rel="noreferrer"
+          aria-label="Help: open the user manual" title="User manual">
           <HelpCircle size={18} />
-        </button>
+        </a>
 
         <UserMenu />
       </div>

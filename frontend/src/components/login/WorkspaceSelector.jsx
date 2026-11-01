@@ -5,7 +5,7 @@ import { DEFAULT_CHANNEL_AVAILABILITY } from '../../data/constants';
    to preview that channel's view; an account locked to one portal (Settings > Users) can
    only ever land on its own — the backend enforces that regardless of what's picked here. */
 const OPTIONS = [
-  { value: 'all',        label: 'All Channels — HQ / Admin' },
+  { value: 'all',        label: 'All channels (HQ)' },
   { value: 'msetuSrm',  label: 'Msetu / SRM' },
   { value: 'poPortal',  label: 'PO Portal' },
   { value: 'mfoxPortal', label: 'MFOX Portal' },

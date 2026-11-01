@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { useGetNotificationsQuery, useGetUnreadCountQuery, NOTIFICATION_LIVE } from '../../features/notifications/notificationsApi';
-import { selectHasTicketAccess } from '../../features/auth/authSlice';
+import { useGetNotificationsQuery, useGetUnreadCountQuery, NOTIFICATION_LIVE } from '../../api/notificationsApi';
+import { selectHasNotifications } from '../../features/auth/authSlice';
 import { useNotificationActions } from '../../features/notifications/useNotificationActions';
-import { notificationDate, notificationLabel } from '../../utils/notifications';
+import { notificationDate, notificationLabel, notificationRef, notificationSubject } from '../../utils/notifications';
 import { Bell } from '../common/icons.jsx';
 
 const MENU_LIMIT = 30;
@@ -15,9 +15,9 @@ export default function NotificationBell() {
   const wrapRef = useRef(null);
   const navigate = useNavigate();
   const supplier = useSelector((s) => s.auth.authType === 'supplier');
-  const hasTicketAccess = useSelector(selectHasTicketAccess);
+  const hasNotifications = useSelector(selectHasNotifications);
   const { identity, open: openNotification, readAll } = useNotificationActions();
-  const skip = !identity || !hasTicketAccess;
+  const skip = !identity || !hasNotifications;
 
   const { data: count, isError: countFailed } = useGetUnreadCountQuery({ identity }, { ...NOTIFICATION_LIVE, skip });
   const { data: items, isLoading, isError, refetch } = useGetNotificationsQuery({ identity, limit: MENU_LIMIT }, { ...NOTIFICATION_LIVE, skip: skip || !open });
@@ -36,7 +36,7 @@ export default function NotificationBell() {
   }, [open]);
 
   const list = items || [];
-  if (!hasTicketAccess) return null; // staff without a ticket role have no notifications
+  if (!hasNotifications) return null; // staff with neither a ticket role nor supplier management have none
   return (
     <div className="notification-menu-wrap" ref={wrapRef}>
       <button
@@ -65,7 +65,7 @@ export default function NotificationBell() {
             {list.map((item) => (
               <button type="button" className={`notification-item${item.read_at ? '' : ' unread'}`} key={item.id} onClick={() => openNotification(item, () => setOpen(false))}>
                 <span className="notification-item-dot" />
-                <span><b>{notificationLabel(item)}</b><small>{item.ticket_no || 'Query'}{item.subject ? ` - ${item.subject}` : ''}</small><time>{notificationDate(item.created_at)}</time></span>
+                <span><b>{notificationLabel(item)}</b><small>{notificationRef(item)}{notificationSubject(item) ? ` - ${notificationSubject(item)}` : ''}</small><time>{notificationDate(item.created_at)}</time></span>
               </button>
             ))}
           </div>

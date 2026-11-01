@@ -5,7 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.v1.auth import get_ticket_user
+from sqlalchemy import and_, false, or_
+
+from app.api.deps import get_current_user, get_ticket_user
 from app.core.database import get_db
 from app.schemas.common import UTCDateTime
 from app.models.ticket import Ticket
@@ -23,27 +25,42 @@ class NotificationOut(BaseModel):
     payload: dict[str, Any] | None
     ticket_no: str | None = None
     subject: str | None = None
+    request_id: int | None = None
     read_at: UTCDateTime | None
     created_at: UTCDateTime
 
 
-def _scoped_notifications(db: Session, user: dict):
-    query = recipient_filter(
-        db.query(Notification).join(Ticket, Ticket.id == Notification.ticket_id),
-        user,
-    ).filter(Ticket.legacy_unlinked.is_(False))
+def _ticket_scope(user: dict):
+    """Which tickets' notifications this person may still see (access can change after a
+    notification was written)."""
     if user["auth_type"] == "supplier":
-        return query.filter(Ticket.vendor_code.in_(user["vendor_codes"]))
+        return Ticket.vendor_code.in_(user["vendor_codes"])
     if user["ticket_role"] == "ADMIN":
-        return query
+        return Ticket.id.isnot(None)
     if user["ticket_role"] == "CHANNEL_LEAD":
-        return query.filter(Ticket.channel.in_(user["allowed_channels"]))
-    return query.filter(Ticket.assignee_id == user["user_id"])
+        return Ticket.channel.in_(user["allowed_channels"])
+    if user["ticket_role"] == "ASSIGNEE":
+        return Ticket.assignee_id == user["user_id"]
+    return false()  # no Inquiry Desk access: only notifications that aren't about a query
+
+
+def _scoped_notifications(db: Session, user: dict):
+    """This person's notifications: query notifications within their ticket access, plus ones
+    that aren't about a query at all (e.g. supplier access requests)."""
+    query = recipient_filter(
+        db.query(Notification).outerjoin(Ticket, Ticket.id == Notification.ticket_id),
+        user,
+    )
+    return query.filter(or_(
+        Notification.ticket_id.is_(None),
+        and_(Ticket.legacy_unlinked.is_(False), _ticket_scope(user)),
+    ))
 
 
 def _notification_out(db: Session, notification: Notification):
-    ticket = db.get(Ticket, notification.ticket_id)
+    ticket = db.get(Ticket, notification.ticket_id) if notification.ticket_id else None
     return {
+        "request_id": (notification.payload or {}).get("request_id"),
         "id": notification.id,
         "ticket_id": notification.ticket_id,
         "type": notification.type,
@@ -74,7 +91,7 @@ def list_notifications(
     unread: bool = False,
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user: dict = Depends(get_ticket_user),
+    user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     query = _scoped_notifications(db, user)
@@ -95,7 +112,7 @@ def list_notifications(
     summary="Get the unread notification count",
 )
 @router.get("/notifications/unread-count", include_in_schema=False)
-def unread_notification_count(user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
+def unread_notification_count(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Exact number of unread notifications, however many there are (the list is paged)."""
     count = _scoped_notifications(db, user).filter(Notification.read_at.is_(None)).count()
     return {"unread": count}
@@ -107,7 +124,7 @@ def unread_notification_count(user: dict = Depends(get_ticket_user), db: Session
     operation_id="markAllNotificationsAsRead",
     summary="Mark all notifications as read",
 )
-def read_all_notifications(user: dict = Depends(get_ticket_user), db: Session = Depends(get_db)):
+def read_all_notifications(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = _scoped_notifications(db, user).filter(Notification.read_at.is_(None)).all()
     now = datetime.utcnow()
     for notification in rows:
@@ -124,7 +141,7 @@ def read_all_notifications(user: dict = Depends(get_ticket_user), db: Session = 
 )
 def read_notification(
     notification_id: int,
-    user: dict = Depends(get_ticket_user),
+    user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     notification = _scoped_notifications(db, user).filter(Notification.id == notification_id).first()
@@ -143,7 +160,7 @@ def read_notification(
 )
 def read_ticket_notifications(
     ticket_id: str,
-    user: dict = Depends(get_ticket_user),
+    user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Opening a query clears this person's notifications about it."""

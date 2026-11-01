@@ -8,6 +8,8 @@ export const NOTIFICATION_LABEL = {
   TICKET_CLOSED: 'Query closed',
   TICKET_AUTO_CLOSED: 'Query automatically closed',
   SLA_BREACHED: 'Response SLA breached',
+  SUPPLIER_ACCESS_REQUEST: 'Supplier account request',
+  SUPPLIER_ACCESS_CHANGE: 'Vendor code change request',
 };
 
 // One plain-language line per event, shown under the title.
@@ -21,6 +23,8 @@ export const NOTIFICATION_DETAIL = {
   TICKET_CLOSED: 'The query was closed.',
   TICKET_AUTO_CLOSED: 'Closed automatically after being resolved.',
   SLA_BREACHED: 'No reply was sent within the target time.',
+  SUPPLIER_ACCESS_REQUEST: 'A supplier asked for a portal account. Review it in Supplier Management.',
+  SUPPLIER_ACCESS_CHANGE: 'An existing supplier asked to change their vendor codes.',
 };
 
 // Colour per event, using the app's chip tones (blue, amber, green, red, gray).
@@ -34,6 +38,8 @@ export const NOTIFICATION_TONE = {
   TICKET_CLOSED: 'gray',
   TICKET_AUTO_CLOSED: 'gray',
   SLA_BREACHED: 'red',
+  SUPPLIER_ACCESS_REQUEST: 'red',
+  SUPPLIER_ACCESS_CHANGE: 'amber',
 };
 
 export function notificationLabel(item) {
@@ -58,4 +64,18 @@ export function dayLabel(value, now = new Date()) {
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Yesterday';
   return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(day);
+}
+
+/** The short reference shown on a notification: the query number, or who sent an access request. */
+export function notificationRef(item) {
+  if (item.ticket_no) return item.ticket_no;
+  if (item.request_id) return item.payload?.name || 'Supplier';
+  return 'Query';
+}
+
+/** The second line: the query subject, or the requester's email and PAN. */
+export function notificationSubject(item) {
+  if (item.subject) return item.subject;
+  if (item.request_id) return [item.payload?.email, item.payload?.pan && `PAN ${item.payload.pan}`].filter(Boolean).join(' · ');
+  return '';
 }

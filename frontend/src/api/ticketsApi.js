@@ -1,5 +1,6 @@
+import { api } from './client';
 import { createApi } from '@reduxjs/toolkit/query/react';
-import { api } from '../../api/client';
+import { restBaseQuery } from './baseQuery';
 
 function queryString(params = {}) {
   const search = new URLSearchParams();
@@ -10,19 +11,6 @@ function queryString(params = {}) {
   return value ? `?${value}` : '';
 }
 
-const customBaseQuery = async (args) => {
-  try {
-    const request = typeof args === 'string' ? { url: args } : args;
-    const method = (request.method || 'GET').toLowerCase();
-    const path = `/v1/tickets${request.url || ''}`;
-    const data = method === 'get'
-      ? await api.get(path, { headers: request.headers })
-      : await api[method](path, request.body, { headers: request.headers });
-    return { data };
-  } catch (error) {
-    return { error: { status: error.status || 500, data: { message: error.message } } };
-  }
-};
 
 const ticketTags = (result) => [
   ...(result?.items || []).map(({ id }) => ({ type: 'Ticket', id })),
@@ -36,9 +24,12 @@ const mutationTags = (_result, _error, { id }) => [
   { type: 'Summary', id: 'CURRENT' },
 ];
 
+/** One page of the ticket list, outside the cache (for screens that gather every page). */
+export const fetchTicketPage = (filters) => api.get(`/v1/tickets/list-tickets${queryString(filters)}`);
+
 export const ticketsApi = createApi({
   reducerPath: 'ticketsApi',
-  baseQuery: customBaseQuery,
+  baseQuery: restBaseQuery('/v1/tickets'),
   tagTypes: ['Ticket', 'TicketList', 'Summary', 'Activity', 'Assignable'],
   endpoints: (builder) => ({
     getTickets: builder.query({

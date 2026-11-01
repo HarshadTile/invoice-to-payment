@@ -16,4 +16,16 @@ export const suppliersApi = {
   deactivateSupplier: (id) => api.post(`/v1/suppliers/${id}/deactivate-supplier`),
   activateSupplier: (id) => api.post(`/v1/suppliers/${id}/activate-supplier`),
   deleteSupplier: (id) => api.delete(`/v1/suppliers/${id}/delete-supplier`),
+
+  // Access requests (app/api/v1/supplier_requests.py)
+  listRequests: (status) => api.get(`/v1/supplier-requests/list-requests${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  getRequest: (id) => api.get(`/v1/supplier-requests/${id}/request-details`),
+  approveRequest: (id, payload) => api.post(`/v1/supplier-requests/${id}/approve-request`, payload),
+  rejectRequest: (id, payload) => api.post(`/v1/supplier-requests/${id}/reject-request`, payload),
+};
+
+/** The signed-in supplier's own vendor code access requests. */
+export const supplierAccessApi = {
+  requestChange: (payload) => api.post('/v1/supplier-requests/request-access-change', payload),
+  latestRequest: () => api.get('/v1/supplier-requests/my-latest-request'),
 };

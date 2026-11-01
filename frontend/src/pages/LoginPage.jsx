@@ -1,19 +1,18 @@
 import { useState, useEffect } from 'react';
-import { api } from '../api/client';
+import { settingsApi } from '../api/settingsApi';
 import { DEFAULT_CHANNEL_AVAILABILITY } from '../data/constants';
 import { useDispatch } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { loginThunk } from '../features/bootstrap/hydrateThunks';
 import { pushToast } from '../features/ui/uiSlice';
-import AppHeader from '../components/login/AppHeader.jsx';
-import BrandPanel from '../components/login/BrandPanel.jsx';
-import AuthCard from '../components/login/AuthCard.jsx';
+import AuthLayout from '../components/login/AuthLayout.jsx';
+import SupportFooter from '../components/login/SupportFooter.jsx';
 import AccountTypeSelector from '../components/login/AccountTypeSelector.jsx';
 import WorkspaceSelector from '../components/login/WorkspaceSelector.jsx';
 import FormField from '../components/login/FormField.jsx';
 import PasswordField from '../components/login/PasswordField.jsx';
 import PrimaryButton from '../components/login/PrimaryButton.jsx';
-import { IdIcon, AlertIcon, CheckIcon } from '../components/login/icons.jsx';
+import { IdIcon, MailIcon, AlertIcon, CheckIcon } from '../components/login/icons.jsx';
 import './login.css';
 
 export default function LoginPage() {
@@ -33,7 +32,7 @@ export default function LoginPage() {
   const [availability, setAvailability] = useState(DEFAULT_CHANNEL_AVAILABILITY);
   useEffect(() => {
     let stale = false;
-    api.get('/v1/auth/portal-availability').then((data) => {
+    settingsApi.portalAvailability().then((data) => {
       if (!stale && data.channelAvailability) {
         setAvailability(data.channelAvailability);
         setChannelScope((current) => data.channelAvailability[current] === false ? 'all' : current);
@@ -42,7 +41,7 @@ export default function LoginPage() {
     return () => { stale = true; };
   }, [tab]);
   const [empId, setEmpId] = useState('');
-  const [pan, setPan] = useState(searchParams.get('pan') || '');
+  const [supplierEmail, setSupplierEmail] = useState(searchParams.get('email') || '');
   const [password, setPassword] = useState('');
 
   const busy = status === 'busy';
@@ -62,7 +61,7 @@ export default function LoginPage() {
         setError(form.mode === 'supplier'
           ? 'Invalid vendor code.'
           : form.mode === 'supplierPassword'
-            ? 'PAN or password is incorrect, or the account is inactive.'
+            ? 'Email or password is incorrect, or the account is inactive.'
             : 'Invalid email or password.');
       } else {
         setError(err.message || 'Something went wrong. Please try again.');
@@ -84,11 +83,11 @@ export default function LoginPage() {
   async function submitSupplier(e) {
     e.preventDefault();
     const fe = {};
-    if (!pan.trim()) fe.pan = 'Enter your PAN.';
+    if (!supplierEmail.trim()) fe.email = 'Enter your email address.';
     if (!password) fe.password = 'Enter your password.';
     setFieldErr(fe);
     if (Object.keys(fe).length) return;
-    runLogin({ mode: 'supplierPassword', pan: pan.trim().toUpperCase(), password }, '/supplier/dashboard');
+    runLogin({ mode: 'supplierPassword', email: supplierEmail.trim().toLowerCase(), password }, '/supplier/dashboard');
   }
 
 
@@ -102,7 +101,7 @@ export default function LoginPage() {
   }
 
   const forgotLink = (
-    <button type="button" className="lgn-link" onClick={() => navigate('/forgot-password')}>
+    <button type="button" className="lgn-link" onClick={() => navigate(tab === 'supplier' ? '/forgot-password?account=supplier' : '/forgot-password')}>
       Forgot password?
     </button>
   );
@@ -135,7 +134,7 @@ export default function LoginPage() {
       )}
       {setupComplete && !error && (
         <div className="lgn-alert success" role="status">
-          <CheckIcon /><span>Your password is set. Sign in with your PAN and password.</span>
+          <CheckIcon /><span>Your password is set. Sign in with your email and password.</span>
         </div>
       )}
       {done && (
@@ -147,68 +146,59 @@ export default function LoginPage() {
   );
 
   return (
-    <div className="lgn-page">
-      <AppHeader />
+    <AuthLayout
+      kicker="Welcome back"
+      title="Sign in to Invoice to Payment Tracker"
+      subtitle="Sign in to continue."
+      footer={<SupportFooter />}
+    >
+      <AccountTypeSelector value={tab} onChange={selectAccountType} />
+      {alerts}
 
-      <div className="lgn-hero">
-        <BrandPanel />
-
-        <section className="lgn-hero-right">
-          <AuthCard>
-            <AccountTypeSelector value={tab} onChange={selectAccountType} />
-            {alerts}
-
-            {tab === 'internal' ? (
-              <form className="lgn-form" onSubmit={submitInternal} noValidate>
-                <WorkspaceSelector value={channelScope} onChange={setChannelScope} availability={availability} />
-                <FormField
-                  id="lgn-empid"
-                  label="Enter Email ID"
-                  icon={<IdIcon className="lgn-ic" />}
-                  error={fieldErr.empId}
-                  type="text"
-                  autoComplete="username"
-                  placeholder="name@mahindra.com"
-                  value={empId}
-                  onChange={(e) => setEmpId(e.target.value)}
-                />
-                {passwordField}
-                {rememberRow}
-                <PrimaryButton loading={busy} done={done} />
-              </form>
-            ) : (
-              <form className="lgn-form" onSubmit={submitSupplier} noValidate>
-                <div className="lgn-supplier-note">
-                  <strong>Supplier portal</strong>
-                  <span>Use the PAN registered to your supplier account.</span>
-                </div>
-                <FormField
-                  id="lgn-pan"
-                  label="PAN"
-                  icon={<IdIcon className="lgn-ic" />}
-                  error={fieldErr.pan}
-                  type="text"
-                  autoComplete="username"
-                  placeholder="e.g. ABCDE1234F"
-                  maxLength={10}
-                  value={pan}
-                  onChange={(e) => setPan(e.target.value.toUpperCase())}
-                />
-                <PasswordField
-                  value={password}
-                  onChange={setPassword}
-                  error={fieldErr.password}
-                  visible={showPw}
-                  onToggleVisible={() => setShowPw((v) => !v)}
-                  placeholder="Enter your supplier password"
-                />
-                {rememberRow}
-                <PrimaryButton loading={busy} done={done} />
-              </form>
-            )}
-          </AuthCard>
-        </section>
-      </div>
-    </div>
+      {tab === 'internal' ? (
+        <form className="lgn-form" onSubmit={submitInternal} noValidate>
+          <WorkspaceSelector value={channelScope} onChange={setChannelScope} availability={availability} />
+          <FormField
+            id="lgn-empid"
+            label="Enter Email ID"
+            icon={<IdIcon className="lgn-ic" />}
+            error={fieldErr.empId}
+            type="text"
+            autoComplete="username"
+            placeholder="name@mahindra.com"
+            value={empId}
+            onChange={(e) => setEmpId(e.target.value)}
+          />
+          {passwordField}
+          {rememberRow}
+          <PrimaryButton loading={busy} done={done} />
+        </form>
+      ) : (
+        <form className="lgn-form" onSubmit={submitSupplier} noValidate>
+          <div className="lgn-supplier-note">
+            <strong>Supplier portal</strong>
+            <span>Sign in with the email your supplier account was set up with.</span>
+          </div>
+          <FormField
+            id="lgn-supplier-email"
+            label="Email"
+            icon={<MailIcon className="lgn-ic" />}
+            error={fieldErr.email}
+            type="email"
+            autoComplete="username"
+            placeholder="you@company.com"
+            value={supplierEmail}
+            onChange={(e) => setSupplierEmail(e.target.value)}
+          />
+          {passwordField}
+          {rememberRow}
+          <PrimaryButton loading={busy} done={done} />
+          <div className="lgn-register">
+            <span>New supplier, or no account yet?</span>
+            <button type="button" className="lgn-link" onClick={() => navigate('/supplier/request-access')}>Request an account</button>
+          </div>
+        </form>
+      )}
+    </AuthLayout>
   );
 }

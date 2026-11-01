@@ -61,3 +61,34 @@ def recipient_filter(query, user: dict):
     if user["auth_type"] == "supplier":
         return query.filter(Notification.recipient_key.in_([f"supplier:{c}" for c in user["vendor_codes"]]))
     return query.filter(Notification.user_id == user["user_id"])
+
+
+def supplier_manager_ids(db: Session, channels) -> set[int]:
+    """Active internal users whose role may manage suppliers. Admins always; other managers
+    when the request's vendor codes are in one of their channels (or the channels aren't known)."""
+    if isinstance(channels, str):
+        channels = [channels]
+    wanted = set(channels or [])
+    from app.core.permissions import load_role_matrix
+
+    matrix = load_role_matrix(db)
+    roles = [role for role, caps in matrix.items() if caps.get("manageSuppliers")]
+    if not roles:
+        return set()
+    ids = set()
+    for user in db.query(User).filter(User.status == "Active", User.role.in_(roles)).all():
+        if user.role == "Admin" or not wanted:
+            ids.add(user.id)
+            continue
+        # The same channels Supplier Management shows this user (see suppliers._visible).
+        channels = {membership.channel for membership in user.ticket_channels}
+        if user.channel_scope and user.channel_scope != "all":
+            channels.add(user.channel_scope)
+        if wanted & channels:
+            ids.add(user.id)
+    return ids
+
+
+def add_for_supplier_managers(db: Session, channels, event_type: str, payload: dict) -> None:
+    for user_id in supplier_manager_ids(db, channels):
+        add_for_user(db, user_id, None, event_type, payload)

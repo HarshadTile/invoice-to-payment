@@ -8,19 +8,19 @@ from sqlalchemy import func
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
-from app.api.v1.auth import get_current_user_token
+from app.api.deps import get_current_user_token
 from app.core.audit import write_audit
 from app.core.database import get_db
 from app.core.email import is_configured as smtp_is_configured, send_email
-from app.core.email_templates import email_changed_email, invite_email, password_reset_email
-from app.core.permissions import require_capability, require_internal_user
+from app.core.email_templates import email_changed_email, invite_access_note, invite_email, password_reset_email
+from app.core.password_reset import FRONTEND_URL
+from app.core.permissions import load_role_matrix, require_capability, require_internal_user
 from app.core.password_reset import issue_invite, issue_password_reset
 from app.core.security import get_password_hash
 from app.models.user import PasswordResetToken, User, UserChannelAccess
 
 router = APIRouter()
 
-VALID_ROLES = ["Admin", "Invoice Team", "Approver", "Accounts", "Viewer"]
 VALID_STATUSES = ["Active", "Inactive", "Invited"]
 CHANNEL_SCOPES = ["all", "msetuSrm", "poPortal", "mfoxPortal"]
 TICKET_ROLES = ["CHANNEL_LEAD", "ASSIGNEE", "NO_ACCESS"]
@@ -115,12 +115,27 @@ def _username_from_email(db: Session, email: str) -> str:
     return candidate
 
 
+PORTAL_LABEL = {"all": "All channels (HQ)", "msetuSrm": "Msetu / SRM", "poPortal": "PO Portal", "mfoxPortal": "MFOX Portal"}
+
+
+def _access_note(user: User) -> str:
+    """The portal to pick at sign-in (the same names as the login page's Portal / Team list),
+    the person's Inquiry Desk role, and the sign-in steps."""
+    if user.role == "Admin" or user.channel_scope == "all":
+        portal = PORTAL_LABEL["all"]
+    else:
+        channels = sorted(m.channel for m in user.ticket_channels) or [user.channel_scope]
+        portal = " or ".join(PORTAL_LABEL.get(c, c) for c in channels)
+    desk = "ADMIN" if user.role == "Admin" else user.ticket_role
+    return invite_access_note(user.role, portal, desk, user.email, f"{FRONTEND_URL}/login?account=internal")
+
+
 def _send_account_link(user: User, link: dict, admin_initiated: bool = True) -> bool:
     """Email a setup/reset link. Raw links stay out of API responses."""
     if not smtp_is_configured():
         return False
     if link.get("linkType") == "invite":
-        text, html = invite_email(user.name, user.role, link["setupLink"], link["expiryMinutes"])
+        text, html = invite_email(user.name, user.role, link["setupLink"], link["expiryMinutes"], _access_note(user))
         subject = "Set up your Invoice to Payment Tracker account"
     else:
         text, html = password_reset_email(
@@ -136,9 +151,11 @@ def _send_account_link(user: User, link: dict, admin_initiated: bool = True) -> 
         return False
 
 
-def _validate_role(role: Optional[str]):
-    if role is not None and role not in VALID_ROLES:
-        raise HTTPException(status_code=400, detail=f"Unknown role. Use one of: {', '.join(VALID_ROLES)}")
+def _validate_role(db: Session, role: Optional[str]):
+    """A role exists when it is in the saved role matrix (roles are managed on Roles & Permissions)."""
+    roles = list(load_role_matrix(db))
+    if role is not None and role not in roles:
+        raise HTTPException(status_code=400, detail=f"Unknown role. Use one of: {', '.join(roles)}")
 
 
 def _validate_status(status: Optional[str]):
@@ -186,7 +203,7 @@ def create_user(
     db: Session = Depends(get_db),
     actor: User = Depends(require_manage_users),
 ):
-    _validate_role(user_in.role)
+    _validate_role(db, user_in.role)
     email = str(user_in.email).strip().lower()
     username = (user_in.username or "").strip().lower() or _username_from_email(db, email)
     existing = db.query(User).filter(
@@ -243,7 +260,7 @@ def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    _validate_role(patch.role)
+    _validate_role(db, patch.role)
     _validate_status(patch.status)
     if patch.email:
         patch.email = str(patch.email).strip().lower()

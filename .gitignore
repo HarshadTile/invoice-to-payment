@@ -1,2 +1,5 @@
 ~$*.xlsx
 backend/data/attachments/
+
+# Office lock files (a document is open)
+~$*

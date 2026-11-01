@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { suppliersApi } from '../../api/suppliersApi';
 import ModalShell from './ModalShell.jsx';
+import VendorCodeOption, { useCodeOwner } from '../supplier/VendorCodeOption.jsx';
 
 /** Edit supplier email and permitted vendor codes together. */
 export default function SupplierEditModal({ supplier, onClose, onSaved }) {
   const [options, setOptions] = useState(supplier.vendorCodes);
+  const [codeChannels, setCodeChannels] = useState(supplier.codeChannels || {});
+  const ownerOf = useCodeOwner(codeChannels);
   const [codes, setCodes] = useState(supplier.vendorCodes);
   const [email, setEmail] = useState(supplier.email || '');
   const [busy, setBusy] = useState(false);
@@ -14,7 +17,11 @@ export default function SupplierEditModal({ supplier, onClose, onSaved }) {
   useEffect(() => {
     suppliersApi.searchVendors(supplier.pan).then((found) => {
       const match = found.find((item) => item.pan === supplier.pan);
-      if (match) setOptions(match.vendorCodes);
+      if (match) {
+        // Every code the PAN has, plus any already on the account that the data no longer lists.
+        setOptions([...new Set([...supplier.vendorCodes, ...match.vendorCodes])]);
+        setCodeChannels((prev) => ({ ...prev, ...(match.codeChannels || {}) }));
+      }
     }).catch(() => {});
   }, [supplier.pan]);
 
@@ -95,12 +102,7 @@ export default function SupplierEditModal({ supplier, onClose, onSaved }) {
       </div>
       <div className="codes-modal-options">
         {options.map((code) => (
-          <label key={code} className={`supplier-code-option${codes.includes(code) ? ' is-selected' : ''}`}>
-            <input type="checkbox" checked={codes.includes(code)} onChange={() => toggle(code)} />
-            <span className="supplier-code-check" aria-hidden="true" />
-            <span className="supplier-code-text">{code}</span>
-            <span className="supplier-code-state">{codes.includes(code) ? 'Included' : 'Excluded'}</span>
-          </label>
+          <VendorCodeOption key={code} code={code} checked={codes.includes(code)} onToggle={() => toggle(code)} owner={ownerOf(code)} />
         ))}
       </div>
     </ModalShell>

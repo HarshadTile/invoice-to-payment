@@ -4,11 +4,12 @@ import Badge from '../common/Badge.jsx';
 import SortDateTh from '../common/SortDateTh.jsx';
 import { useDateSort } from '../../utils/dateSort';
 import { channelLabel, formatDate, PRIORITY_TONE, STATUS_LABEL, STATUS_TONE, ticketPath } from '../../utils/tickets.js';
+import { initialsOf } from '../../utils/initials';
 
 /** Who owns the query: initials in a small circle, or a muted "Unassigned". */
 function Owner({ name }) {
   if (!name) return <span className="cell-muted">Unassigned</span>;
-  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  const initials = initialsOf(name);
   return <span className="log-actor"><span className="log-actor-badge" aria-hidden="true">{initials}</span><span>{name}</span></span>;
 }
 

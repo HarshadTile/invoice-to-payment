@@ -348,7 +348,10 @@
   .topbar-context-filters{display:none;}
   .topbar-right .help-button{display:none;}
   .role-select{max-width:9.375rem;}
-  .topbar-supplier-code{width:clamp(6.75rem,30vw,9.25rem);min-width:6.75rem;max-width:none;flex:0 1 auto;}
+  .topbar-supplier-code{width:clamp(6rem,28vw,9.25rem);min-width:6rem;max-width:none;flex:0 1 auto;}
+  /* a supplier's bar holds FY + vendor code + bell + avatar: keep it all on screen */
+  .topbar-right{gap:0.375rem;}
+  .topbar-right .scope-pill-ic{display:none;}
   .topbar-supplier-code-menu{max-height:calc(100dvh - 5.625rem);}
   .crumb b{font-size:0.875rem;}
   #content{padding:1rem 0.875rem 1.75rem;}
@@ -385,3 +388,56 @@
 .user-menu-item.danger:hover svg{color:var(--brand);}
 .user-menu-item:focus-visible{outline:0.125rem solid var(--brand);outline-offset:-0.125rem;}
 
+
+/* ===================== Sidebar brand: emblem + bold wordmark, in line with the top bar ===================== */
+/* Exactly the top bar's height, so the two bottom borders meet in one line. */
+.sidebar .brand{
+  box-sizing:border-box;
+  height:4rem;
+  padding:0 0.875rem;
+  background:#fff;
+}
+.sidebar .brand:hover{background:#fff;}
+.sidebar .brand:focus-visible{outline:none;}
+/* clean white container: subtle #EAEAEA border, 12px corners */
+.brand-card{
+  display:inline-flex;align-items:center;gap:0.5rem;
+  height:2.75rem;
+  padding:0 0.875rem 0 0.5rem;
+  border:1px solid #EAEAEA;
+  border-radius:12px;
+  background:#fff;
+  box-shadow:0 1px 2px rgba(16,24,40,.04);
+  transition:border-color .18s ease,box-shadow .18s ease;
+}
+.sidebar .brand:hover .brand-card{border-color:#DADADA;box-shadow:0 2px 6px rgba(16,24,40,.07);}
+.sidebar .brand:focus-visible .brand-card{outline:2px solid #C8102E;outline-offset:2px;}
+/* the original red emblem: the left part of the logo image, unchanged */
+.sidebar .brand img.brand-emblem{
+  width:1.875rem;height:1.8125rem;flex:none;
+  object-fit:cover;object-position:left center;
+  filter:none;
+}
+/* two lines, both starting at the same edge and centred on the emblem */
+.brand-text{display:flex;flex-direction:column;justify-content:center;gap:0.125rem;line-height:1;}
+.brand-text b{
+  font-family:var(--font-display);
+  font-size:1.0625rem;font-weight:800;
+  letter-spacing:-0.015em;
+  color:#252525;
+}
+.brand-text small{
+  font-family:var(--font-body);
+  font-size:0.625rem;font-weight:600;
+  letter-spacing:0.1em;
+  color:#3A3A3A;
+}
+@media (prefers-reduced-motion:reduce){.brand-card{transition:none;}}
+
+/* icon-only rail: just the emblem */
+@media (min-width:53.8125em){
+  .sidebar-collapsed .sidebar .brand{padding:0 0.5rem;}
+  .sidebar-collapsed .brand-card{padding:0 0.375rem;gap:0;}
+  .sidebar-collapsed .brand-text{display:none;}
+  .sidebar-collapsed .sidebar .brand img.brand-emblem{width:1.875rem;height:1.8125rem;}
+}

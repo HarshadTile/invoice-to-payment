@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { api } from '../api/client';
-import { hydrateSettings } from '../features/settings/settingsSlice';
-import { LINK_EXPIRY_OPTIONS } from '../utils/linkExpiry';
-import { Clock, Shield, CheckCircle } from './common/icons.jsx';
+import { settingsApi } from '../../api/settingsApi';
+import { hydrateSettings } from '../../features/settings/settingsSlice';
+import { LINK_EXPIRY_OPTIONS } from '../../utils/linkExpiry';
+import { Clock, Shield, CheckCircle } from '../common/icons.jsx';
 import './PasswordLinkExpirySettings.css';
 
 export default function PasswordLinkExpirySettings({ accountType = 'internal' }) {
@@ -24,7 +24,7 @@ export default function PasswordLinkExpirySettings({ accountType = 'internal' })
     event.preventDefault();
     setBusy(true); setMessage(''); setError('');
     try {
-      await api.put('/v1/settings', values);
+      await settingsApi.save(values);
       dispatch(hydrateSettings(values));
       setDraft({});
       setMessage('Password link expiry saved. Applies to newly generated links.');

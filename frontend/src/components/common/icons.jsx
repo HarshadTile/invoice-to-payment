@@ -53,3 +53,9 @@ export const CheckCircle = (p) => <Ic {...p} d={<><circle cx="12" cy="12" r="9" 
 export const RotateCcw = (p) => <Ic {...p} d={<><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></>} />;
 export const AlertTriangle = (p) => <Ic {...p} d={<><path d="M10.3 4.2 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z" /><path d="M12 9.5v4M12 17h.01" /></>} />;
 export const LayoutGrid = (p) => <Ic {...p} d={<><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" /></>} />;
+export const Lock = (p) => <Ic {...p} d={<><rect x="4.5" y="10.5" width="15" height="10" rx="2" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></>} />;
+export const Activity = (p) => <Ic {...p} d={<path d="M3 12h4l2.5-6 5 12 2.5-6h4" />} />;
+export const Link2 = (p) => <Ic {...p} d={<><path d="M10 13.5a4 4 0 0 0 5.66 0l2.83-2.83a4 4 0 0 0-5.66-5.66l-1.06 1.06" /><path d="M14 10.5a4 4 0 0 0-5.66 0l-2.83 2.83a4 4 0 0 0 5.66 5.66l1.06-1.06" /></>} />;
+export const LogIn = (p) => <Ic {...p} d={<><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" /><path d="m10 16 4-4-4-4M14 12H4" /></>} />;
+export const UserPlus = (p) => <Ic {...p} d={<><circle cx="9.5" cy="8" r="3.5" /><path d="M3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" /></>} />;
+export const Database = (p) => <Ic {...p} d={<><ellipse cx="12" cy="5.5" rx="7.5" ry="2.75" /><path d="M4.5 5.5v13c0 1.52 3.36 2.75 7.5 2.75s7.5-1.23 7.5-2.75v-13M4.5 12c0 1.52 3.36 2.75 7.5 2.75s7.5-1.23 7.5-2.75" /></>} />;

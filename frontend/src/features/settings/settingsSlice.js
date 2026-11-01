@@ -1,6 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit';
 import { ROLE_MATRIX, DEFAULT_CHANNEL_AVAILABILITY } from '../../data/constants';
-import { api } from '../../api/client';
+import { settingsApi } from '../../api/settingsApi';
 
 // Seeded with the static defaults so selectors work before bootstrap; replaced
 // by hydrateSettings once the API responds.
@@ -51,7 +51,7 @@ export default settingsSlice.reducer;
 export const togglePermission = (payload) => async (dispatch, getState) => {
   dispatch(togglePermissionLocal(payload));
   try {
-    await api.put('/v1/settings', { roleMatrix: getState().settings.roleMatrix });
+    await settingsApi.save({ roleMatrix: getState().settings.roleMatrix });
   } catch (err) {
     dispatch(togglePermissionLocal(payload));
     throw err;
@@ -61,9 +61,19 @@ export const togglePermission = (payload) => async (dispatch, getState) => {
 export const toggleTwoFactor = () => async (dispatch, getState) => {
   dispatch(toggleTwoFactorLocal());
   try {
-    await api.put('/v1/settings', { twoFactorOn: getState().settings.twoFactorOn });
+    await settingsApi.save({ twoFactorOn: getState().settings.twoFactorOn });
   } catch (err) {
     dispatch(toggleTwoFactorLocal());
     throw err;
   }
 };
+
+/* ---- roles: create, rename, delete (the server keeps users' roles in step) ---- */
+const applyRoles = (dispatch, result) => {
+  dispatch(hydrateSettings({ roleMatrix: result.roleMatrix }));
+  return result;
+};
+export const loadRoleSummary = () => async (dispatch) => applyRoles(dispatch, await settingsApi.roleSummary());
+export const createRole = ({ name, copyFrom }) => async (dispatch) => applyRoles(dispatch, await settingsApi.createRole(name, copyFrom));
+export const renameRole = (name, newName) => async (dispatch) => applyRoles(dispatch, await settingsApi.renameRole(name, newName));
+export const deleteRole = (name, moveTo) => async (dispatch) => applyRoles(dispatch, await settingsApi.deleteRole(name, moveTo));

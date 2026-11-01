@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { pushToast } from '../ui/uiSlice';
-import { useMarkAllNotificationsReadMutation, useMarkNotificationReadMutation } from './notificationsApi';
+import { useMarkAllNotificationsReadMutation, useMarkNotificationReadMutation } from '../../api/notificationsApi';
 
 /** Who is signed in, as a cache key: notifications are per person and must never carry over to the next login. */
 export function useNotificationIdentity() {
@@ -29,7 +29,8 @@ export function useNotificationActions() {
     }
     if (afterOpen) afterOpen();
     // `from` lets the query's Back button return to this page instead of the queries list
-    if (item.ticket_id) navigate(supplier ? `/supplier/tickets/${item.ticket_id}` : `/app/inquiry-desk/${item.ticket_id}`, { state: { from: location.pathname + location.search } });
+    if (item.request_id) navigate(`/app/settings/suppliers?tab=requests&request=${item.request_id}`);
+    else if (item.ticket_id) navigate(supplier ? `/supplier/tickets/${item.ticket_id}` : `/app/inquiry-desk/${item.ticket_id}`, { state: { from: location.pathname + location.search } });
   }, [dispatch, identity, location.pathname, location.search, markRead, navigate, supplier]);
 
   const readAll = useCallback(

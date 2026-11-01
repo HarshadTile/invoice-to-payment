@@ -1,20 +1,11 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
-import { api } from '../../api/client';
+import { restBaseQuery } from './baseQuery';
 
 /* One shared source of truth for notifications. The bell and the Notifications page both read
  * from here, so reading something in one place updates the other straight away and there is a
  * single poll instead of two. Every query carries `identity` (who is signed in) purely as a cache
  * key, so one person's notifications can never be shown to the next person on the same browser. */
 
-const customBaseQuery = async ({ url, method = 'GET', body }) => {
-  try {
-    const verb = method.toLowerCase();
-    const data = verb === 'get' ? await api.get(`/v1/notifications${url}`) : await api[verb](`/v1/notifications${url}`, body);
-    return { data };
-  } catch (error) {
-    return { error: { status: error.status || 500, message: error.message } };
-  }
-};
 
 export const NOTIFICATION_POLL_MS = 60000;
 export const NOTIFICATION_LIVE = { pollingInterval: NOTIFICATION_POLL_MS, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true };
@@ -50,7 +41,7 @@ function isCachedUnread(state, identity, id) {
 
 export const notificationsApi = createApi({
   reducerPath: 'notificationsApi',
-  baseQuery: customBaseQuery,
+  baseQuery: restBaseQuery('/v1/notifications'),
   tagTypes: ['Notification'],
   endpoints: (builder) => ({
     getNotifications: builder.query({

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { setTicketFilterStatus } from '../../features/ui/uiSlice';
-import { useGetTicketsQuery, useGetTicketSummaryQuery } from '../../features/tickets/ticketsApi';
+import { useGetTicketsQuery, useGetTicketSummaryQuery } from '../../api/ticketsApi';
 import StatCard from '../../components/common/StatCard.jsx';
 import TicketTable from '../../components/tickets/TicketTable.jsx';
 import TicketExportButton from '../../components/tickets/TicketExportButton.jsx';

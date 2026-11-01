@@ -29,11 +29,13 @@ export function invoiceDateLabel(invoice) {
   return formatInvoiceDate(invoice.rawDate);
 }
 
+// one cached formatter: this runs for every date of every invoice
+const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
 export function formatInvoiceDate(value) {
   if (!value) return '-';
   const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return Number.isNaN(date.getTime()) ? '-' : dateFormatter.format(date);
 }
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

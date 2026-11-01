@@ -1,8 +1,24 @@
 import { useSelector } from 'react-redux';
+import { selectPerm } from '../features/auth/authSlice';
 import { useScope } from '../features/ui/scope';
 import { runtime } from '../data/runtime';
 import { CHANNEL_LABEL } from '../data/constants';
-import { Building, Mail, Shield, User } from '../components/common/icons.jsx';
+import { Building, Check, Key, Mail, Shield, User, X } from '../components/common/icons.jsx';
+import VendorAccessCard from '../components/supplier/VendorAccessCard.jsx';
+
+// What each permission lets this person do, in plain words.
+const PERMISSIONS = [
+  ['createTrace', 'Search invoices'],
+  ['importExport', 'Export data to Excel'],
+  ['viewSupplierVisibility', 'View Supplier Visibility'],
+  ['viewReports', 'View Vendor Status Reports'],
+  ['viewLogs', 'View Logs / History'],
+  ['manageSuppliers', 'Manage suppliers and their access requests'],
+  ['manageUsers', 'Manage users'],
+  ['manageRoles', 'Change roles and permissions'],
+  ['manageConfig', 'Manage integration settings'],
+  ['viewAuditLog', 'View audit logs'],
+];
 
 const TICKET_ROLE_LABEL = {
   ADMIN: 'Admin',
@@ -13,8 +29,9 @@ const TICKET_ROLE_LABEL = {
 
 /** Profile: a banner with who you are, then cards for contact, work and access details. Read-only. */
 export default function ProfilePage() {
-  const { authType, currentUser, supplierQuery, supplierPAN, supplierVendorCodes, channelScope, role, ticketRole } = useSelector((s) => s.auth);
+  const { authType, currentUser, supplierQuery, supplierPAN, supplierVendorCodes, channelScope, role, ticketRole, email: supplierEmail } = useSelector((s) => s.auth);
   const scope = useScope();
+  const perm = useSelector(selectPerm);
 
   if (authType === 'supplier') {
     const pan = supplierPAN || runtime.invoices.find((invoice) => invoice.vcode === supplierVendorCodes?.[0])?.pan || '-';
@@ -23,10 +40,11 @@ export default function ProfilePage() {
     const filterLabel = selectedCode || 'All assigned vendor codes';
     const initials = String(supplierQuery || 'S').trim().slice(0, 2).toUpperCase();
     return (
-      <section className="pf-page">
+      <section className="pf-page dash">
         <Banner initials={initials} name={supplierQuery} subtitle="Supplier account" chips={[{ text: `Viewing ${filterLabel}`, tone: 'brand', mono: !!selectedCode }]} />
         <div className="pf-cards">
           <InfoCard icon={<Building />} title="Account">
+            {supplierEmail && <Row label="Sign-in email" value={supplierEmail} />}
             <Row label="Vendor code filter" value={filterLabel} mono={!!selectedCode} />
             <Row label="PAN" value={pan} mono />
           </InfoCard>
@@ -40,6 +58,8 @@ export default function ProfilePage() {
               ))}
             </div>
           </InfoCard>
+          {/* Only accounts created in Supplier Management (they sign in by email) can ask for changes. */}
+          {supplierEmail && <VendorAccessCard codes={codes} />}
         </div>
       </section>
     );
@@ -49,7 +69,7 @@ export default function ProfilePage() {
   const ticketAccess = ticketRole ? (TICKET_ROLE_LABEL[String(ticketRole).toUpperCase()] || ticketRole) : '';
 
   return (
-    <section className="pf-page">
+    <section className="pf-page dash">
       <Banner
         initials={currentUser.initials} name={currentUser.name}
         subtitle={[currentUser.title || role, currentUser.dept].filter(Boolean).join(' · ')}
@@ -72,6 +92,17 @@ export default function ProfilePage() {
           <Row label="Role" value={role} />
           <Row label="Portal access" value={accessScope} />
           {ticketAccess && <Row label="Inquiry Desk" value={ticketAccess} />}
+        </InfoCard>
+        <InfoCard icon={<Key />} title="What you can do" hint={`${PERMISSIONS.filter(([k]) => perm[k]).length} of ${PERMISSIONS.length}`} wide>
+          <ul className="pf-perms">
+            {PERMISSIONS.map(([key, label]) => (
+              <li key={key} className={perm[key] ? 'on' : 'off'}>
+                <span className="pf-perm-ic" aria-hidden="true">{perm[key] ? <Check size={12} /> : <X size={12} />}</span>
+                {label}
+                <span className="sr-only">{perm[key] ? ' (allowed)' : ' (not allowed)'}</span>
+              </li>
+            ))}
+          </ul>
         </InfoCard>
       </div>
       <p className="pf-footnote">Contact your administrator to update your details or access.</p>

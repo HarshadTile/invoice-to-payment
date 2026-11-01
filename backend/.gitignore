@@ -8,3 +8,7 @@ data/.invoice-cache/
 data/~$*
 data/local-supplier-mobiles.xlsx
 backups/
+
+# Real invoice extracts: local only, never committed
+data/tbl_dw_inv_paymt_SRM.xlsx
+data/tbl_dw_inv_paymt_PO_PORTAL.csv

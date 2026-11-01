@@ -4,10 +4,12 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
+from app.core.email import wait_for_outgoing_email
 from app.api.v1.invoice import router as invoice_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router
 from app.api.v1.suppliers import router as suppliers_router
+from app.api.v1.supplier_requests import router as supplier_requests_router
 from app.api.v1.workspace import router as workspace_router
 from app.api.v1.tickets import router as tickets_router
 from app.api.v1.settings import router as settings_router
@@ -34,6 +36,7 @@ app.include_router(invoice_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(users_router, prefix="/api/v1/users", tags=["users"])
 app.include_router(suppliers_router, prefix="/api/v1/suppliers", tags=["suppliers"])
+app.include_router(supplier_requests_router, prefix="/api/v1/supplier-requests", tags=["supplier requests"])
 app.include_router(workspace_router, prefix="/api/v1")
 app.include_router(tickets_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
@@ -67,6 +70,8 @@ def start_ticket_jobs():
 @app.on_event("shutdown")
 def stop_ticket_jobs():
     stop_jobs()
+    # Emails are sent in the background; let any still queued go out before the process ends.
+    wait_for_outgoing_email(timeout=20)
 
 @app.get("/health")
 def health_check():

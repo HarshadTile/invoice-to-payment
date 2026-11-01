@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { CHANNEL_LABEL, TICKET_CATEGORIES, TICKET_PRIORITIES } from '../../data/constants';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
-import { useCreateTicketMutation, useUploadAttachmentMutation } from '../../features/tickets/ticketsApi';
+import { useCreateTicketMutation, useUploadAttachmentMutation } from '../../api/ticketsApi';
 import { closeModal, pushToast } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
 

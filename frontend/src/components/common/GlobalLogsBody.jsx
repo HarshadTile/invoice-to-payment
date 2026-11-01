@@ -1,9 +1,10 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { selectPerm } from '../../features/auth/authSlice';
 import { CHANNEL_LABEL } from '../../data/constants';
 import { openModal } from '../../features/ui/uiSlice';
-import { api } from '../../api/client';
-import { timestampedExportName } from '../../utils/businessLogic';
+import { workspaceApi } from '../../api/workspaceApi';
+import { timestampedExportName } from '../../utils/csv';
 import {
   formatDay, formatDayTime, invoiceLogRows, logRowFilter, logRowsToCsv, staffQueryLogRows,
 } from '../../utils/supplierLog';
@@ -12,6 +13,7 @@ import PagerFoot from './PagerFoot.jsx';
 import SortDateTh from './SortDateTh.jsx';
 import Badge from './Badge.jsx';
 import { Banknote, Calendar, CheckCircle, Clock, FileText, Layers, MessageSquare, Send, Settings, Trash, Upload, X } from './icons.jsx';
+import { initialsOf } from '../../utils/initials';
 
 const PAGE_SIZE = 20;
 const TYPE_TONE = { Invoice: 'blue', Payment: 'green', Query: 'amber' };
@@ -97,7 +99,7 @@ export function TypeBadge({ type }) {
 /** Who did it: initials in a small circle, or a gear for automatic (System) entries. */
 function Actor({ name }) {
   const system = !name || name === 'System';
-  const initials = system ? '' : String(name).split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  const initials = system ? '' : initialsOf(name);
   return <span className="log-actor">
     <span className={`log-actor-badge${system ? ' system' : ''}`} aria-hidden="true">{system ? <Settings size={11} /> : initials}</span>
     {name || 'System'}
@@ -113,13 +115,14 @@ const NO_FILTERS = { search: '', type: 'all', from: '', to: '' };
  * tickets this person may see), each with who did it.
  */
 export default function GlobalLogsBody({ invoiceList, getInvoiceRows = invoiceLogRows, strictInvoiceScope = false }) {
+  const canExport = !!useSelector(selectPerm).importExport;
   const dispatch = useDispatch();
 
   const [entries, setEntries] = useState([]);
   const [queryError, setQueryError] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    api.get('/v1/tickets/internal-activity-log')
+    workspaceApi.internalActivityLog()
       .then((data) => { if (!cancelled) setEntries(Array.isArray(data) ? data : []); })
       .catch(() => { if (!cancelled) setQueryError(true); });
     return () => { cancelled = true; };
@@ -158,7 +161,7 @@ export default function GlobalLogsBody({ invoiceList, getInvoiceRows = invoiceLo
     <div className="card">
       <LogFilterBar
         filters={filters} onChange={setFilter} filtersActive={filtersActive}
-        onClear={() => { setFilters(NO_FILTERS); setPage(1); }} onExport={exportCsv} exportCount={rows.length}
+        onClear={() => { setFilters(NO_FILTERS); setPage(1); }} onExport={canExport ? exportCsv : undefined} exportCount={rows.length}
       />
       {queryError && (
         <p style={{ color: 'var(--text-muted)', fontSize: '0.78125rem', margin: '0 0 0.625rem' }}>Query activity couldn't be loaded right now. Invoice and payment activity is shown below.</p>

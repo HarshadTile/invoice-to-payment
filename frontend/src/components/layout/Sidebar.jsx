@@ -4,16 +4,18 @@ import { Link } from 'react-router-dom';
 import { CHANNEL_LABEL } from '../../data/constants';
 import { ensureNavExpanded, setSidebarCollapsed, toggleNavExpanded } from '../../features/ui/uiSlice';
 import { askLogout } from '../../features/auth/logoutPrompt';
-import { selectHasTicketAccess, selectPerm } from '../../features/auth/authSlice';
+import { selectHasNotifications, selectHasTicketAccess, selectPerm } from '../../features/auth/authSlice';
 import {
   FileText, Search, Layers, Building, MessageSquare, BarChart3, History,
   Settings, Sliders, Users, Shield, Bell, User, LogOut, ChevronRight,
   LayoutGrid,
 } from '../common/icons.jsx';
-import logo from '../../assets/Mahindra Digital Engine.png';
+import logo from '../../assets/mahindra-digital-engine.png';
 import useEnabledChannels from '../../features/settings/useEnabledChannels';
 
 function NavItem({ icon, label, active, badge, onClick, hasChildren, open }) {
+  // The name is already written next to the icon; only the icon-only rail needs it as a tooltip.
+  const collapsed = useSelector((s) => s.ui.sidebarCollapsed);
   return (
     <button
       type="button"
@@ -21,7 +23,7 @@ function NavItem({ icon, label, active, badge, onClick, hasChildren, open }) {
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       aria-label={label}
-      title={label}
+      title={collapsed ? label : undefined}
     >
       <span className="ic" aria-hidden="true">{icon}</span>
       <span className="nav-label">{label}{badge != null ? ` (${badge})` : ''}</span>
@@ -38,6 +40,7 @@ export default function Sidebar() {
   const perm = useSelector(selectPerm);
   const enabledChannels = useEnabledChannels();
   const hasTicketAccess = useSelector(selectHasTicketAccess);
+  const hasNotifications = useSelector(selectHasNotifications);
   const expandedNav = useSelector((s) => s.ui.expandedNav);
   const collapsed = useSelector((s) => s.ui.sidebarCollapsed);
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
@@ -94,7 +97,9 @@ export default function Sidebar() {
             active={isActive('/app/invoices')}
             onClick={() => navigate('/app/invoices')}
           />
-          <NavItem icon={<Search />} label="Search Invoice(s)" active={isActive('/app/search')} onClick={() => navigate('/app/search')} />
+          {perm.createTrace && (
+            <NavItem icon={<Search />} label="Search Invoice(s)" active={isActive('/app/search')} onClick={() => navigate('/app/search')} />
+          )}
 
           {isChannelLocked ? (
             // Only one channel to show — a dropdown that expands to itself is just an
@@ -125,24 +130,24 @@ export default function Sidebar() {
           )}
 
           {/* Supplier Visibility and Reports — HQ only */}
-          {isHQ && (
+          {isHQ && perm.viewSupplierVisibility && (
             <NavItem icon={<Building />} label="Supplier Visibility" active={isActive('/app/supplier-visibility')} onClick={() => navigate('/app/supplier-visibility')} />
           )}
           {hasTicketAccess && (
-            <>
-              <NavItem icon={<MessageSquare />} label="Inquiry Desk" active={isActive('/app/inquiry-desk')} onClick={() => navigate('/app/inquiry-desk')} />
-              <NavItem icon={<Bell />} label="Notifications" active={isActive('/app/notifications')} onClick={() => navigate('/app/notifications')} />
-            </>
+            <NavItem icon={<MessageSquare />} label="Inquiry Desk" active={isActive('/app/inquiry-desk')} onClick={() => navigate('/app/inquiry-desk')} />
+          )}
+          {hasNotifications && (
+            <NavItem icon={<Bell />} label="Notifications" active={isActive('/app/notifications')} onClick={() => navigate('/app/notifications')} />
           )}
         </nav>
 
         <div className="nav-bottom">
-          {isHQ && (
-            <>
-              <p className="nav-section">Reports &amp; admin</p>
-              <NavItem icon={<BarChart3 />} label="Vendor Status Reports" active={isActive('/app/outputs')} onClick={() => navigate('/app/outputs')} />
-              <NavItem icon={<History />} label="Logs / History" active={isActive('/app/logs')} onClick={() => navigate('/app/logs')} />
-            </>
+          {isHQ && (perm.viewReports || perm.viewLogs || canUseSettings) && <p className="nav-section">Reports &amp; admin</p>}
+          {isHQ && perm.viewReports && (
+            <NavItem icon={<BarChart3 />} label="Vendor Status Reports" active={isActive('/app/outputs')} onClick={() => navigate('/app/outputs')} />
+          )}
+          {isHQ && perm.viewLogs && (
+            <NavItem icon={<History />} label="Logs / History" active={isActive('/app/logs')} onClick={() => navigate('/app/logs')} />
           )}
           {canUseSettings && (
             <NavItem
@@ -174,8 +179,15 @@ function Brand() {
   const authType = useSelector((s) => s.auth.authType);
   const home = authType === 'supplier' ? '/supplier/dashboard' : '/app/invoices';
   return (
-    <Link className="brand" to={home} aria-label="Go to home">
-      <img src={logo} alt="Mahindra Digital Engine" />
+    <Link className="brand" to={home} aria-label="Mahindra Digital Engine, go to home">
+      {/* The red emblem from the original logo, with the name set as text so it reads bold and clear */}
+      <span className="brand-card">
+        <img className="brand-emblem" src={logo} alt="" />
+        <span className="brand-text" aria-hidden="true">
+          <b>mahindra</b>
+          <small>DIGITAL ENGINE</small>
+        </span>
+      </span>
     </Link>
   );
 }

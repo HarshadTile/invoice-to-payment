@@ -1,16 +1,18 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { supplierForVendorCode, panFor, posForVendorCode } from '../../utils/businessLogic';
+import { supplierForVendorCode, panFor, posForVendorCode } from '../../features/suppliers/supplierIdentity';
 import { runtime } from '../../data/runtime';
 import { closeModal } from '../../features/ui/uiSlice';
-import { selectHasTicketAccess } from '../../features/auth/authSlice';
-import { useGetTicketsQuery } from '../../features/tickets/ticketsApi';
+import { selectHasTicketAccess, selectPerm } from '../../features/auth/authSlice';
+import { useGetTicketsQuery } from '../../api/ticketsApi';
 import ModalShell from './ModalShell.jsx';
 
 export default function VendorCodePreviewModal({ ctx }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { authType } = useSelector((s) => s.auth);
+  // The full page is Supplier Visibility, which needs its own permission.
+  const canOpenFull = useSelector((s) => s.auth.authType === 'supplier' || !!selectPerm(s).viewSupplierVisibility);
   const code = ctx.code;
   const supplier = supplierForVendorCode(code);
   const invoices = runtime.invoices.filter((i) => i.vcode === code);
@@ -25,16 +27,18 @@ export default function VendorCodePreviewModal({ ctx }) {
       width={420}
       foot={(
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              dispatch(closeModal());
-              navigate(authType === 'supplier' ? `/supplier/vendor-code/${code}` : `/app/vendor-code/${code}`);
-            }}
-          >
-            Open Full View →
-          </button>
+          {canOpenFull ? (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                dispatch(closeModal());
+                navigate(authType === 'supplier' ? `/supplier/vendor-code/${code}` : `/app/vendor-code/${code}`);
+              }}
+            >
+              Open Full View →
+            </button>
+          ) : <span />}
           <button type="button" className="btn" onClick={() => dispatch(closeModal())}>Close</button>
         </div>
       )}

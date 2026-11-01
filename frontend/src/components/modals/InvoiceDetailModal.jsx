@@ -1,6 +1,6 @@
 ﻿import { useDispatch, useSelector } from 'react-redux';
 import { CHANNEL_LABEL, CHANNEL_ROUTING_RULE, STATUS_CHIP } from '../../data/constants';
-import { handlerFor, findInvoice } from '../../utils/businessLogic';
+import { handlerFor, findInvoice } from '../../features/invoices/invoice';
 import PoPortalDetails from '../invoices/PoPortalDetails.jsx';
 import { closeModal } from '../../features/ui/uiSlice';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
@@ -9,20 +9,17 @@ import { useLocation } from 'react-router-dom';
 import { Breadcrumb } from '../layout/Breadcrumb.jsx';
 import { shortPageTitle } from '../../utils/pageTitle';
 import Badge from '../common/Badge.jsx';
-import { Check, HelpCircle, X } from '../common/icons.jsx';
-import { invoiceDateLabel } from '../../utils/invoiceDates';
-
-function displayDate(value) {
-  if (!value) return null;
-  return new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
+import { HelpCircle } from '../common/icons.jsx';
+import InvoiceStepper from '../invoices/InvoiceStepper.jsx';
+import { formatInvoiceDate, invoiceDateLabel } from '../../utils/invoiceDates';
+import { initialsOf } from '../../utils/initials';
 
 const known = (value) => (value && value !== '-' ? value : '');
 
 /** One person handling the invoice: initials, role, name and e-mail (or "Not assigned"). */
 function Handler({ role, name, email }) {
   const who = known(name);
-  const initials = who.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  const initials = initialsOf(who);
   return <div className={`handler-card${who ? '' : ' empty'}`}>
     <span className="handler-avatar" aria-hidden="true">{initials || '–'}</span>
     <span className="handler-who">
@@ -46,33 +43,9 @@ export default function InvoiceDetailModal({ ctx }) {
   const inv = findInvoice(ctx.no, ctx.poItem, invoices, ctx);
   if (!inv) return null;
 
-  const stages = ['Initial', 'Invoice Uploaded', 'Pending for Approval', 'Approved', 'Miro Booked', 'Paid'];
-  const currentIndex = stages.indexOf(['Pending Approval', 'Level Approved', 'Action Required'].includes(inv.status) ? 'Pending for Approval' : inv.status);
-  const failed = inv.status === 'Rejected' || ['Deleted', 'Entry Deleted'].includes(inv.status);
-  const done = failed ? 1 : (currentIndex >= 0 ? currentIndex + 1 : 1);
   const h = handlerFor(inv);
-  const bookedOrLater = done >= Math.ceil(stages.length * 0.7) || inv.status === 'Paid';
-
-  const getStageDate = (stage) => {
-    switch (stage) {
-      case 'Initial':
-        return displayDate(inv.rawDate);
-      case 'Invoice Uploaded':
-        return displayDate(inv.rawUploadDate);
-      case 'Pending for Approval':
-        return null;
-      case 'Approved':
-        return displayDate(inv.workflow?.final_approval_date);
-      case 'Miro Booked':
-        return displayDate(inv.sap?.miro_booking_date || inv.sap?.document_date);
-      case 'Payment Due':
-        return displayDate(inv.sap?.net_due_date);
-      case 'Paid':
-        return inv.utr && inv.utr !== '-' ? `${displayDate(inv.sap?.clearing_date) || '-'} (${inv.utr})` : displayDate(inv.sap?.clearing_date);
-      default:
-        return null;
-    }
-  };
+  // Accounts only owns the invoice once it is booked in SAP
+  const bookedOrLater = ['Miro Booked', 'Paid'].includes(inv.status);
 
   return (
     <ModalShell
@@ -115,25 +88,7 @@ export default function InvoiceDetailModal({ ctx }) {
       )}
 
       <h4 className="inv-section-title">Invoice Progress</h4>
-      <ol className="inv-stepper">
-        {stages.map((s, i) => {
-          const idx = i + 1;
-          const st = failed && idx >= done ? 'fail' : idx < done || (idx === done && inv.status === 'Paid') ? 'done' : idx === done ? 'current' : 'todo';
-          const dateStr = getStageDate(s);
-          return (
-            <li className={`inv-step ${st}`} key={s}>
-              <span className="inv-step-dot" aria-hidden="true">
-                {st === 'done' ? <Check size={12} /> : st === 'fail' ? <X size={12} /> : idx}
-              </span>
-              <span className="inv-step-text">
-                <span className="inv-step-name">{s}</span>
-                {st === 'current' && <span className="inv-step-state">In progress</span>}
-                {dateStr && <span className="inv-step-date">{dateStr}</span>}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+      <InvoiceStepper inv={inv} />
 
       <h4 className="inv-section-title">Status &amp; payment</h4>
       <div className="detail-grid">
@@ -145,9 +100,9 @@ export default function InvoiceDetailModal({ ctx }) {
       <h4 className="inv-section-title">Dates</h4>
       <div className="detail-grid">
         <Detail label="Invoice Date">{invoiceDateLabel(inv)}</Detail>
-        <Detail label="Upload Date">{displayDate(inv.rawUploadDate) || '-'}</Detail>
-        <Detail label="Payment Due Date">{displayDate(inv.sap?.net_due_date) || '-'}</Detail>
-        <Detail label="Payment Date">{displayDate(inv.sap?.clearing_date) || '-'}</Detail>
+        <Detail label="Upload Date">{formatInvoiceDate(inv.rawUploadDate)}</Detail>
+        <Detail label="Payment Due Date">{formatInvoiceDate(inv.sap?.net_due_date)}</Detail>
+        <Detail label="Payment Date">{formatInvoiceDate(inv.sap?.clearing_date)}</Detail>
       </div>
 
       <PoPortalDetails invoice={inv} internal={authType !== 'supplier'} />

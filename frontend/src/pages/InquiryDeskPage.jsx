@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { selectPerm } from '../features/auth/authSlice';
 import { setInquiryViewMode, setTicketFilterStatus } from '../features/ui/uiSlice';
-import { useGetTicketBoardQuery, useGetTicketsQuery, useGetTicketSummaryQuery } from '../features/tickets/ticketsApi';
+import { useGetTicketBoardQuery, useGetTicketsQuery, useGetTicketSummaryQuery } from '../api/ticketsApi';
 import StatCard from '../components/common/StatCard.jsx';
 import TicketTable from '../components/tickets/TicketTable.jsx';
 import TicketBoard from '../components/tickets/TicketBoard.jsx';
@@ -28,6 +29,7 @@ export default function InquiryDeskPage() {
   const needle = search.trim().toLowerCase();
   const view = useSelector((state) => state.ui.inquiryViewMode === 'board' ? 'board' : 'list');
   const statusFilter = useSelector((state) => state.ui.ticketFilterStatus);
+  const canExport = !!useSelector(selectPerm).importExport;
   const filters = useMemo(() => ({
     channel: scope.channel || undefined,
     fy: scope.fy,
@@ -90,10 +92,12 @@ export default function InquiryDeskPage() {
           <option value="">All categories</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <TicketExportButton
-          tickets={view === 'list' ? shownTickets : ['open', 'in_progress', 'resolved', 'closed'].flatMap((key) => shownBoard[key] || [])}
-          loading={view === 'list' ? isLoading : boardLoading}
-        />
+        {canExport && (
+          <TicketExportButton
+            tickets={view === 'list' ? shownTickets : ['open', 'in_progress', 'resolved', 'closed'].flatMap((key) => shownBoard[key] || [])}
+            loading={view === 'list' ? isLoading : boardLoading}
+          />
+        )}
         <div className="view-switch" role="group" aria-label="Query view">
           <button type="button" className={view === 'list' ? 'active' : ''} onClick={() => dispatch(setInquiryViewMode('list'))} title="List view"><List /> <span>List</span></button>
           <button type="button" className={view === 'board' ? 'active' : ''} onClick={() => dispatch(setInquiryViewMode('board'))} title="Board view"><Columns /> <span>Board</span></button>

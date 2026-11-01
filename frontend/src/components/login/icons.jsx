@@ -16,6 +16,7 @@ export const EyeIcon = (p) => <Ic {...p} d={<><path d="M2 12s4-7 10-7 10 7 10 7-
 export const EyeOffIcon = (p) => <Ic {...p} d={<><path d="M3 3l18 18M10.6 10.6a3 3 0 0 0 4.2 4.2M9.9 5.1A9.5 9.5 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.5 6.5A17 17 0 0 0 2 12s4 7 10 7a9.4 9.4 0 0 0 3.5-.7" /></>} />;
 export const AlertIcon = (p) => <Ic {...p} d={<><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></>} />;
 export const CheckIcon = (p) => <Ic {...p} d={<><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></>} />;
+export const MailIcon = (p) => <Ic {...p} d={<><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></>} />;
 
 /* Abstract, non-cartoon invoice → approval → payment workflow. */
 export function WorkflowVisual() {

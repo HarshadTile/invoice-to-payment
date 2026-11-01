@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { openModal, setPageFilters, setTablePage } from '../../features/ui/uiSlice';
 import { SRM_COLUMNS, srmColumns, srmCell } from '../../utils/srmWorkspace';
-import { downloadCSV, timestampedExportName } from '../../utils/businessLogic';
+import { downloadCSV, timestampedExportName } from '../../utils/csv';
 import { dateValue } from '../../utils/dateSort';
 import { STATUS_CHIP } from '../../data/constants';
 import PagerFoot from '../common/PagerFoot.jsx';

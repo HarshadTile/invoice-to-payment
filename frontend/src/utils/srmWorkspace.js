@@ -1,5 +1,5 @@
 import { formatInvoiceDate, invoiceFilterDate } from './invoiceDates';
-import { invoiceProductType } from './businessLogic';
+import { invoiceProductType } from '../features/invoices/invoice';
 import { matchesSrmFilters } from '../features/invoices/selectors';
 import { matchesInvoiceQuery } from './invoiceQuery';
 

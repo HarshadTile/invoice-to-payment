@@ -17,7 +17,7 @@ const DATE_COLUMNS = { invoice: (inv) => inv.rawDate, status: (inv) => inv.date 
 export default function RecentInvoices({ rows = [] }) {
   const dispatch = useDispatch();
   const { sorted, toggle, dirFor } = useDateColumnSort(rows, DATE_COLUMNS);
-  const openStage = (no, poItem) => dispatch(openModal({ kind: 'stageSimple', ctx: { no, poItem } }));
+  const openStage = (no, poItem) => dispatch(openModal({ kind: 'invoiceStage', ctx: { no, poItem } }));
   const openVendorCode = (code) => dispatch(openModal({ kind: 'vendorCodePreview', ctx: { code } }));
 
   return (

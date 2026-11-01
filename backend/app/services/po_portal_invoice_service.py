@@ -1,7 +1,7 @@
 """PO Portal business mapping; no dependency on SRM approval flags."""
 from decimal import Decimal
 
-from app.repositories.gcp_invoice import date_value, text_value
+from app.repositories.srm_invoice import date_value, text_value
 from app.repositories.po_portal_invoice import approval_stage, invoice_status, pending_hod2, upper
 from app.schemas.invoice import (ApproversResponse, InvoiceResponse, POPortalResponse,
                                  PurchaseOrderResponse, SAPResponse, SupplierResponse, WorkflowResponse)

@@ -1,5 +1,5 @@
 import { useDispatch } from 'react-redux';
-import { downloadCSV } from '../../utils/businessLogic';
+import { downloadCSV } from '../../utils/csv';
 import { closeModal, pushToast } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
 

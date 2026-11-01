@@ -98,6 +98,8 @@ const uiSlice = createSlice({
     },
     pushToast: {
       reducer(state, action) {
+        // repeated clicks show one toast, not a stack of the same message
+        if (state.toasts.some((t) => t.msg === action.payload.msg)) return;
         state.toasts.push(action.payload);
       },
       prepare(msg) {

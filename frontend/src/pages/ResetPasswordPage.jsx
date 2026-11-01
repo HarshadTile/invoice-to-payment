@@ -4,8 +4,7 @@ import { useDispatch } from 'react-redux';
 import { api } from '../api/client';
 import { authApi } from '../api/authApi';
 import { logoutThunk } from '../features/bootstrap/hydrateThunks';
-import AppHeader from '../components/login/AppHeader.jsx';
-import BrandPanel from '../components/login/BrandPanel.jsx';
+import AuthLayout from '../components/login/AuthLayout.jsx';
 import PasswordField from '../components/login/PasswordField.jsx';
 import { AlertIcon, CheckIcon } from '../components/login/icons.jsx';
 import './login.css';
@@ -58,64 +57,55 @@ function PasswordSetupForm({ token }) {
   }
 
   return (
-    <div className="lgn-page">
-      <AppHeader />
-      <div className="lgn-hero">
-        <BrandPanel />
-        <section className="lgn-hero-right">
-          <div className="lgn-card">
-            <div className="lgn-card-head">
-              <p className="lgn-kicker">{identity?.linkType === 'invite' ? 'Welcome to your account' : 'Reset your password'}</p>
-              <h2>Choose a new password</h2>
-              {!token && <p className="lgn-card-sub">This link is incomplete. Ask your administrator for a new password setup or reset link.</p>}
-            </div>
+    <AuthLayout
+      kicker={identity?.linkType === 'invite' ? 'Welcome to your account' : 'Reset your password'}
+      title="Choose a new password"
+      subtitle={!token && <>This link is incomplete. Ask your administrator for a new password setup or reset link.</>}
+    >
 
-            {identity && <div className="lgn-setup-identity"><span>Sign-in email</span><strong>{identity.email}</strong><small>Use this email and your new password to sign in.</small></div>}
+      {identity && <div className="lgn-setup-identity"><span>Sign-in email</span><strong>{identity.email}</strong><small>Use this email and your new password to sign in.</small></div>}
 
-            {error && (
-              <div className="lgn-alert error" role="alert"><AlertIcon /><span>{error}</span></div>
-            )}
+      {error && (
+        <div className="lgn-alert error" role="alert"><AlertIcon /><span>{error}</span></div>
+      )}
 
-            {status === 'done' ? (
-              <>
-                <div className="lgn-alert success" role="status">
-                  <CheckIcon /><span>Password updated. You can now sign in with your new password.</span>
-                </div>
-                <button type="button" className="lgn-submit" onClick={() => navigate('/login?account=internal')}>Go to sign in</button>
-              </>
-            ) : checking ? <p role="status">Verifying your setup link...</p> : token && identity ? (
-              <form className="lgn-form" onSubmit={submit} noValidate>
-                <PasswordField
-                  id="rp-password"
-                  label="New password"
-                  value={password}
-                  onChange={setPassword}
-                  visible={showPw}
-                  onToggleVisible={() => setShowPw((v) => !v)}
-                  autoFocus
-                  autoComplete="new-password"
-                  placeholder="At least 8 characters"
-                />
-                <PasswordField
-                  id="rp-confirm"
-                  label="Confirm new password"
-                  value={confirm}
-                  onChange={setConfirm}
-                  visible={showPw}
-                  onToggleVisible={() => setShowPw((v) => !v)}
-                  autoComplete="new-password"
-                  placeholder="Re-enter the password above"
-                />
-                <button type="submit" className="lgn-submit" disabled={status === 'busy'}>
-                  {status === 'busy' ? 'Saving…' : 'Set new password'}
-                </button>
-              </form>
-            ) : (
-              <button type="button" className="lgn-submit" onClick={() => navigate('/forgot-password')}>Request a new link</button>
-            )}
+      {status === 'done' ? (
+        <>
+          <div className="lgn-alert success" role="status">
+            <CheckIcon /><span>Password updated. You can now sign in with your new password.</span>
           </div>
-        </section>
-      </div>
-    </div>
+          <button type="button" className="lgn-submit" onClick={() => navigate('/login?account=internal')}>Go to sign in</button>
+        </>
+      ) : checking ? <p role="status">Verifying your setup link...</p> : token && identity ? (
+        <form className="lgn-form" onSubmit={submit} noValidate>
+          <PasswordField
+            id="rp-password"
+            label="New password"
+            value={password}
+            onChange={setPassword}
+            visible={showPw}
+            onToggleVisible={() => setShowPw((v) => !v)}
+            autoFocus
+            autoComplete="new-password"
+            placeholder="At least 8 characters"
+          />
+          <PasswordField
+            id="rp-confirm"
+            label="Confirm new password"
+            value={confirm}
+            onChange={setConfirm}
+            visible={showPw}
+            onToggleVisible={() => setShowPw((v) => !v)}
+            autoComplete="new-password"
+            placeholder="Re-enter the password above"
+          />
+          <button type="submit" className="lgn-submit" disabled={status === 'busy'}>
+            {status === 'busy' ? 'Saving…' : 'Set new password'}
+          </button>
+        </form>
+      ) : (
+        <button type="button" className="lgn-submit" onClick={() => navigate('/forgot-password')}>Request a new link</button>
+      )}
+    </AuthLayout>
   );
 }

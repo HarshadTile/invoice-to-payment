@@ -1,4 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+import re
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.audit import AUDIT_TABLE_KEY, write_audit
@@ -6,6 +11,7 @@ from app.core.database import get_db
 from app.core.channels import channel_availability
 from app.core.permissions import (
     ADMIN_LOCKED_CAPABILITIES,
+    ADMIN_ROLE,
     CAPABILITIES,
     has_capability,
     load_role_matrix,
@@ -168,3 +174,125 @@ def get_ticket_permissions(_: User = Depends(require_internal_user)):
     """What each ticket role may do, generated from the same rules the ticket endpoints
     enforce, for the read-only reference on the Roles & Permissions page."""
     return permission_matrix()
+
+
+# ── Roles: create, rename, delete ──────────────────────────────────────────────
+# Which roles exist is the saved role matrix. Admin is fixed: it can't be renamed, deleted or
+# lose the capabilities that let someone fix a mistake. Every change keeps users.role in step.
+
+ROLE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 &.()\-]{1,39}$")
+manage_roles = require_capability("manageRoles", "You don't have permission to change roles and permissions.")
+
+
+class RoleCreate(BaseModel):
+    name: str
+    copyFrom: Optional[str] = None
+
+
+class RoleRename(BaseModel):
+    newName: str
+
+
+def _settings_row(db: Session) -> AppSettings:
+    settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    if not settings:
+        settings = AppSettings(
+            id=1, role_matrix_json=load_role_matrix(db), two_factor=False, sender_email="i2ptracker@company.com",
+            invite_link_expiry_minutes=10080, reset_link_expiry_minutes=1440,
+            supplier_invite_link_expiry_minutes=10080, supplier_reset_link_expiry_minutes=1440,
+        )
+        db.add(settings)
+    return settings
+
+
+def _role_counts(db: Session) -> dict[str, int]:
+    return {role: count for role, count in db.query(User.role, func.count(User.id)).group_by(User.role).all()}
+
+
+def _roles_response(db: Session, matrix: dict) -> dict:
+    counts = _role_counts(db)
+    return {"roleMatrix": matrix, "counts": {role: counts.get(role, 0) for role in matrix}}
+
+
+def _clean_name(name: str, matrix: dict, ignore: Optional[str] = None) -> str:
+    cleaned = " ".join(str(name or "").split())
+    if not ROLE_NAME.match(cleaned):
+        raise HTTPException(
+            status_code=400,
+            detail="A role name is 2 to 40 characters: letters, numbers, spaces and - & . ( ).",
+        )
+    if cleaned.lower() == ADMIN_ROLE.lower() and ignore != ADMIN_ROLE:
+        raise HTTPException(status_code=400, detail="Admin is a reserved role name.")
+    if any(existing.lower() == cleaned.lower() and existing != ignore for existing in matrix):
+        raise HTTPException(status_code=400, detail=f"A role named {cleaned} already exists.")
+    return cleaned
+
+
+def _existing_role(matrix: dict, name: str) -> str:
+    if name not in matrix:
+        raise HTTPException(status_code=404, detail="Role not found.")
+    if name == ADMIN_ROLE:
+        raise HTTPException(status_code=400, detail="The Admin role can't be renamed or deleted.")
+    return name
+
+
+@router.get("/settings/role-summary")
+def role_summary(db: Session = Depends(get_db), _: User = Depends(require_internal_user)):
+    """How many users each role has, for the Roles & Permissions page."""
+    return _roles_response(db, load_role_matrix(db))
+
+
+@router.post("/settings/roles")
+def create_role(body: RoleCreate, db: Session = Depends(get_db), actor: User = Depends(manage_roles)):
+    matrix = load_role_matrix(db)
+    name = _clean_name(body.name, matrix)
+    if body.copyFrom and body.copyFrom not in matrix:
+        raise HTTPException(status_code=400, detail="The role to copy from was not found.")
+    base = matrix[body.copyFrom] if body.copyFrom else {}
+    # A copy of Admin is an ordinary role: it starts with Admin's switches but can lose any of them.
+    matrix = {**matrix, name: {cap: bool(base.get(cap, False)) for cap in CAPABILITIES}}
+    _settings_row(db).role_matrix_json = matrix
+    db.commit()
+    write_audit(db, actor, "Created role", f"{name}{f' (copied from {body.copyFrom})' if body.copyFrom else ''}")
+    return _roles_response(db, matrix)
+
+
+@router.put("/settings/roles/{name}")
+def rename_role(name: str, body: RoleRename, db: Session = Depends(get_db), actor: User = Depends(manage_roles)):
+    matrix = load_role_matrix(db)
+    old = _existing_role(matrix, name)
+    new = _clean_name(body.newName, matrix, ignore=old)
+    if new == old:
+        return _roles_response(db, matrix)
+    # Keep the order of the roles; only the key changes.
+    matrix = {(new if role == old else role): caps for role, caps in matrix.items()}
+    _settings_row(db).role_matrix_json = matrix
+    moved = db.query(User).filter(User.role == old).update({"role": new}, synchronize_session=False)
+    db.commit()
+    write_audit(db, actor, "Renamed role", f"{old} -> {new} ({moved} user{'s' if moved != 1 else ''})")
+    return _roles_response(db, matrix)
+
+
+@router.delete("/settings/roles/{name}")
+def delete_role(
+    name: str,
+    moveTo: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+    actor: User = Depends(manage_roles),
+):
+    matrix = load_role_matrix(db)
+    role = _existing_role(matrix, name)
+    if len([r for r in matrix if r != ADMIN_ROLE]) <= 1:
+        raise HTTPException(status_code=400, detail="Keep at least one role besides Admin.")
+    users = db.query(User).filter(User.role == role).count()
+    if users:
+        if not moveTo or moveTo not in matrix or moveTo == role:
+            raise HTTPException(status_code=400, detail=f"{role} has {users} user{'s' if users != 1 else ''}. Pick the role to move them to.")
+        if moveTo == ADMIN_ROLE:
+            raise HTTPException(status_code=400, detail="Users can't be moved to Admin in bulk. Pick another role.")
+        db.query(User).filter(User.role == role).update({"role": moveTo}, synchronize_session=False)
+    matrix = {r: caps for r, caps in matrix.items() if r != role}
+    _settings_row(db).role_matrix_json = matrix
+    db.commit()
+    write_audit(db, actor, "Deleted role", f"{role}{f'; {users} user(s) moved to {moveTo}' if users else ''}")
+    return _roles_response(db, matrix)

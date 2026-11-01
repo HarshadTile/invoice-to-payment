@@ -9,7 +9,7 @@
 --   mysql -u root -p < sql/create_database.sql
 --
 -- Invoice data itself is NOT stored here — it's read from
--- data/gcp_invoice_data.xlsx on every request.
+-- data/tbl_dw_inv_paymt_SRM.xlsx and data/tbl_dw_inv_paymt_PO_PORTAL.csv on every request.
 
 CREATE DATABASE IF NOT EXISTS mahindra_i2p
   CHARACTER SET utf8mb4

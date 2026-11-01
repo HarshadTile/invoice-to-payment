@@ -15,7 +15,7 @@ from app.services import notification_service, sla_service
 from app.services import attachment_service
 from app.services.ticket_permissions import authorize, can_create, get_allowed_actions
 from app.services.ticket_state_machine import transition
-from app.services.invoice import get_gcp_invoice_response
+from app.services.invoice_service import get_invoice_response
 
 
 CREATE_LIMIT_PER_HOUR = 10
@@ -56,8 +56,8 @@ def _fy_from_invoice(invoice) -> str:
 
 def _invoice_context(invoice_no: str, *, channel='msetuSrm', source_id=None, vendor_codes=None) -> dict:
     try:
-        invoice = (get_gcp_invoice_response(invoice_no) if channel == 'msetuSrm'
-                   else get_gcp_invoice_response(invoice_no, channel=channel, source_id=source_id, vendor_codes=vendor_codes))
+        invoice = (get_invoice_response(invoice_no) if channel == 'msetuSrm'
+                   else get_invoice_response(invoice_no, channel=channel, source_id=source_id, vendor_codes=vendor_codes))
     except ValueError:
         _error(422, 'VALIDATION_ERROR', 'Select a specific service line for this invoice.')
     if not invoice:
@@ -153,12 +153,12 @@ def _invoice_summary(ticket: Ticket):
         return None
     if ticket.channel == 'poPortal':
         try:
-            invoice = get_gcp_invoice_response(ticket.invoice_no, channel='poPortal', vendor_code=ticket.vendor_code)
+            invoice = get_invoice_response(ticket.invoice_no, channel='poPortal', vendor_code=ticket.vendor_code)
         except ValueError:
             # Tickets are invoice-level records. Never pick an arbitrary line amount.
             return {'invoice_no': ticket.invoice_no}
     else:
-        invoice = get_gcp_invoice_response(ticket.invoice_no)
+        invoice = get_invoice_response(ticket.invoice_no)
     if not invoice:
         return {"invoice_no": ticket.invoice_no}
     amount = invoice.sap.payable_amount if invoice.sap.payable_amount is not None else invoice.sap.amount
@@ -251,7 +251,9 @@ def create_ticket(db: Session, user: dict, ticket_in, idempotency_key: str | Non
             return format_ticket(db, user, existing)
     _check_creation_rate(db, user)
     channel = getattr(ticket_in, 'invoice_channel', 'msetuSrm')
-    if user['auth_type'] == 'supplier' and channel != (user.get('channel_scope') or 'msetuSrm'):
+    # A managed supplier (channel_scope "all") may query an invoice from any channel its vendor
+    # codes are in; the vendor-code check below still applies. Legacy vendor-code logins stay on SRM.
+    if user['auth_type'] == 'supplier' and user.get('channel_scope') != 'all' and channel != (user.get('channel_scope') or 'msetuSrm'):
         _error(403, 'FORBIDDEN', 'Invoice channel is outside your supplier workspace.')
     context = (_invoice_context(ticket_in.invoice_no) if channel == 'msetuSrm' else
                _invoice_context(ticket_in.invoice_no, channel=channel,

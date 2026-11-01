@@ -1,16 +1,34 @@
-import logo from '../../assets/Mahindra Digital Engine.png';
+import logo from '../../assets/mahindra-digital-engine.png';
+import { useLocation } from 'react-router-dom';
+import { SUPPORT_EMAIL } from './support';
 
-/** Slim corporate header: brand lockup + low-key support links. */
+/** Help opens the supplier manual on supplier pages (the sign-in page defaults to the supplier
+ *  form), otherwise the internal (HQ) manual. */
+export function helpManual({ pathname, search }) {
+  const account = new URLSearchParams(search).get('account');
+  const supplier = pathname.startsWith('/supplier') || account === 'supplier' || (pathname === '/login' && account !== 'internal');
+  return supplier ? '/user-manual/vendor-view.pdf' : '/user-manual/all-channels-hq.pdf';
+}
+
+/** Slim corporate header: brand lockup + Help (the user manual) and Contact Us (an email to the helpdesk).
+ *  The lockup matches the app's sidebar: the red emblem from the logo with the name set as bold text. */
 export default function AppHeader() {
+  const location = useLocation();
   return (
     <header className="lgn-hdr">
       <div className="lgn-hdr-brand">
-        <img src={logo} alt="Mahindra Digital Engine" />
-        <span>Invoice to Payment Tracker</span>
+        <span className="lgn-logo" role="img" aria-label="Mahindra Digital Engine">
+          <img className="lgn-logo-emblem" src={logo} alt="" />
+          <span className="lgn-logo-text" aria-hidden="true">
+            <b>mahindra</b>
+            <small>DIGITAL ENGINE</small>
+          </span>
+        </span>
+        <span className="lgn-hdr-title">Invoice to Payment Tracker</span>
       </div>
       <nav className="lgn-hdr-nav" aria-label="Support">
-        <a href="https://i2p-help.mahindra.internal" target="_blank" rel="noreferrer">Help</a>
-        <a href="mailto:i2p-support@mahindra.com?subject=Invoice%20to%20Payment%20Tracker%20support">Contact Support</a>
+        <a href={helpManual(location)} target="_blank" rel="noreferrer">Help</a>
+        <a href={`mailto:${SUPPORT_EMAIL}?subject=Invoice%20Tracker%20support`}>Contact Us</a>
       </nav>
     </header>
   );

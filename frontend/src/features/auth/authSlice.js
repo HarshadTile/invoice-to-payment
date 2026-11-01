@@ -1,7 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { panFor, supplierForVendorCode } from '../../utils/businessLogic';
+import { panFor, supplierForVendorCode } from '../suppliers/supplierIdentity';
 import { runtime } from '../../data/runtime';
 import { CHANNEL_LABEL, ROLE_MATRIX } from '../../data/constants';
+import { initialsOf } from '../../utils/initials';
 
 export const AUTH_BYPASS = import.meta.env.MODE !== 'test'
   && import.meta.env.VITE_DISABLE_AUTH === 'true';
@@ -17,7 +18,7 @@ const initialState = {
   loggedIn: AUTH_BYPASS,
   authType: 'internal', // 'internal' | 'supplier'
   channelScope: 'all', // 'all' | 'msetuSrm' | 'poPortal' | 'mfoxPortal'
-  role: 'Admin', // 'Admin' | 'Invoice Team'
+  role: 'Admin', // 'Admin' or a role from Settings > Roles & Permissions
   supplierQuery: null,
   supplierPAN: null,
   supplierLoginVcode: null,
@@ -30,7 +31,7 @@ const CHANNEL_KEYS = new Set(['msetuSrm', 'poPortal', 'mfoxPortal']);
 /** Profile details for the signed-in internal user, from the auth payload the API returns. */
 function userFromAuth(auth) {
   const name = auth.name || auth.username || '';
-  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  const initials = initialsOf(name);
   return { name, fullName: name, initials, title: auth.title || '', dept: auth.dept || '', email: auth.email || '' };
 }
 
@@ -51,7 +52,7 @@ const authSlice = createSlice({
       } else {
         state.authType = 'internal';
         state.channelScope = CHANNEL_KEYS.has(val) ? val : 'all';
-        state.role = state.channelScope === 'all' ? 'Admin' : 'Invoice Team';
+        state.role = state.channelScope === 'all' ? 'Admin' : 'Invoice Team L2';
         state.supplierQuery = null;
         state.supplierPAN = null;
         state.supplierLoginVcode = null;
@@ -87,7 +88,8 @@ export default authSlice.reducer;
 // fallback before it loads. The server enforces the same matrix on every protected endpoint.
 export const selectPerm = (state) => {
   const { role } = state.auth;
-  return state.settings?.roleMatrix?.[role] || ROLE_MATRIX[role] || ROLE_MATRIX.Viewer || {};
+  // An unknown role (e.g. one that was just deleted) has no permissions.
+  return state.settings?.roleMatrix?.[role] || ROLE_MATRIX[role] || {};
 };
 
 const TICKET_ROLES_WITH_ACCESS = new Set(['ADMIN', 'CHANNEL_LEAD', 'ASSIGNEE']);
@@ -101,6 +103,10 @@ export const selectHasTicketAccess = (state) => {
   if (authType === 'supplier') return true;
   return ticketRole == null || TICKET_ROLES_WITH_ACCESS.has(String(ticketRole).toUpperCase());
 };
+
+/** Does this login receive notifications? Inquiry Desk users get query updates, and supplier
+ *  managers get supplier access requests, even without a ticket role. */
+export const selectHasNotifications = (state) => selectHasTicketAccess(state) || !!selectPerm(state).manageSuppliers;
 
 /** Is the current login locked to a single channel? */
 export const selectIsChannelLocked = (state) => state.auth.channelScope !== 'all' && state.auth.authType === 'internal';

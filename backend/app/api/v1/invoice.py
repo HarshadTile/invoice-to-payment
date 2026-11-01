@@ -5,16 +5,16 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.v1.auth import get_current_user_token
+from app.api.deps import get_current_user_token
 from app.core.database import get_db
 from app.services.supplier_service import supplier_vendor_codes_from_token, is_managed_supplier_token, load_active_supplier
 from app.schemas.invoice import ApproversResponse, InvoiceListResponse, InvoiceResponse
-from app.services.invoice import (
-    get_gcp_invoice_list,
-    get_gcp_invoice_response,
-    get_recent_gcp_invoices,
+from app.services.invoice_service import (
+    get_invoice_list,
+    get_invoice_response,
+    get_latest_invoices,
 )
-from app.repositories.gcp_invoice import filter_invoices, invoice_status
+from app.repositories.srm_invoice import filter_invoices, invoice_status
 
 
 router = APIRouter(
@@ -65,7 +65,10 @@ def _channel_scope(filters, user, db):
     filters = dict(filters)
     scope = (user.get('scope') or {}).get('channelScope')
     if is_managed_supplier_token(user):
-        scope = load_active_supplier(db, user).channel
+        # Scoped by vendor codes, not by channel: a vendor in both Msetu / SRM and PO Portal
+        # sees its invoices from both.
+        load_active_supplier(db, user)
+        scope = 'all'
     elif user.get('auth_type') == 'supplier':
         # Legacy vendor-code sessions predate PO Portal and retain SRM access.
         scope = 'msetuSrm'
@@ -143,7 +146,7 @@ def get_all_invoices(
     db: Session = Depends(get_db),
 ):
     supplier_codes = _supplier_codes(user, db)
-    invoices, total = get_gcp_invoice_list(
+    invoices, total = get_invoice_list(
         page=page, page_size=page_size, **_scoped_filters(_channel_scope(filters, user, db), supplier_codes))
     if supplier_codes is not None:
         invoices = [_redact_for_supplier(i) for i in invoices]
@@ -179,7 +182,7 @@ def get_recent_invoices(
     db: Session = Depends(get_db),
 ):
     supplier_codes = _supplier_codes(user, db)
-    invoices = get_recent_gcp_invoices(limit=limit, **_scoped_filters(_channel_scope(filters, user, db), supplier_codes))
+    invoices = get_latest_invoices(limit=limit, **_scoped_filters(_channel_scope(filters, user, db), supplier_codes))
     return [_redact_for_supplier(i) for i in invoices] if supplier_codes is not None else invoices
 
 
@@ -199,7 +202,7 @@ def get_invoice_by_number(
     supplier_codes = _supplier_codes(user, db)
     filters = _scoped_filters(_channel_scope(dict(channel=channel, vendor_code=vendor_code), user, db), supplier_codes)
     try:
-        invoice = get_gcp_invoice_response(invoice_number, po_item=po_item, source_id=source_id, po_number=po_number, **filters)
+        invoice = get_invoice_response(invoice_number, po_item=po_item, source_id=source_id, po_number=po_number, **filters)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if invoice is None:

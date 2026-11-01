@@ -3,7 +3,7 @@
  * Before the DB existed these came from the static arrays in ./invoices.js.
  * Now they are filled once, after login, by the bootstrap call (see
  * src/features/bootstrap/hydrateThunks.js). Tests fill them via
- * src/test/hydrateStore.js.
+ * setRuntimeData() directly.
  *
  * The arrays are mutated in place and never reassigned, so modules that keep a
  * reference to `runtime.invoices` always see the current data. */

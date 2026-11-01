@@ -1,7 +1,7 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { selectScopedInvoices } from '../../features/invoices/selectors';
 import { CHANNEL_LABEL } from '../../data/constants';
-import { combinedStatusFor, currentStageName, findInvoice, invoiceProductType } from '../../utils/businessLogic';
+import { combinedStatusFor, currentStageName, findInvoice, invoiceProductType } from '../../features/invoices/invoice';
 import PoPortalDetails from '../invoices/PoPortalDetails.jsx';
 import { formatInvoiceDate } from '../../utils/invoiceDates';
 import { closeModal } from '../../features/ui/uiSlice';

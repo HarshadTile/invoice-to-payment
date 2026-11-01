@@ -14,8 +14,8 @@ import {
   useResolveTicketMutation,
   useUpdateTicketMutation,
   useUploadAttachmentMutation,
-} from '../features/tickets/ticketsApi.js';
-import { useMarkTicketNotificationsReadMutation } from '../features/notifications/notificationsApi';
+} from '../api/ticketsApi.js';
+import { useMarkTicketNotificationsReadMutation } from '../api/notificationsApi';
 import Badge from '../components/common/Badge.jsx';
 import { CheckCircle, Clock, Paperclip, RotateCcw, Send } from '../components/common/icons.jsx';
 import { TICKET_CATEGORIES } from '../data/constants.js';

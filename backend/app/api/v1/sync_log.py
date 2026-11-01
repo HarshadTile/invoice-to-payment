@@ -2,7 +2,7 @@
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.api.v1.auth import get_current_user_token
+from app.api.deps import get_current_user_token
 from app.core.database import get_db
 from app.models.sync_log import SyncLog
 from app.schemas.sync_log import SyncLogResponse

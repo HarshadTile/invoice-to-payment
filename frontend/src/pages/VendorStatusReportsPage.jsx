@@ -7,7 +7,7 @@ import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import StatCard from '../components/common/StatCard.jsx';
 import { Banknote, Building, CheckCircle, Users, X } from '../components/common/icons.jsx';
 
-export default function OutputsPage() {
+export default function VendorStatusReportsPage() {
   const scoped = useSelector(selectFilteredInvoices); // the top-bar scope applies here too
   const completed = useMemo(() => scoped.filter((i) => i.status === 'Paid'), [scoped]);
 

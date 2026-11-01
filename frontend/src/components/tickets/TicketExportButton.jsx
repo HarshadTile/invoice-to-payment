@@ -1,5 +1,5 @@
 import { useSelector } from 'react-redux';
-import { downloadCSV, timestampedExportName } from '../../utils/businessLogic';
+import { downloadCSV, timestampedExportName } from '../../utils/csv';
 import { channelLabel, formatDate, STATUS_LABEL } from '../../utils/tickets';
 import { Download } from '../common/icons.jsx';
 

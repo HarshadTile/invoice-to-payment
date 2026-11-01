@@ -9,7 +9,7 @@ import { useScope } from '../features/ui/scope';
 import { clearScopeFilters, setPageFilters, setScopeFilter } from '../features/ui/uiSlice';
 import { CHANNELS, INVOICE_FILTER_STATUSES } from '../data/constants';
 import { searchInvoiceRows, parseInvoiceQuery, INVOICE_SEARCH_PLACEHOLDER, INVOICE_SEARCH_LABEL } from '../utils/invoiceQuery';
-import { invoiceProductType } from '../utils/businessLogic';
+import { invoiceProductType } from '../features/invoices/invoice';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import Dropdown from '../components/common/Dropdown.jsx';
 import { Clock, RotateCcw, Search, X } from '../components/common/icons.jsx';

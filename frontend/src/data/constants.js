@@ -3,12 +3,13 @@
    Ported 1:1 from the working prototype: same channels, same stage lists,
    same role matrix, same status vocabulary. */
 
+// The starting roles (the server's DEFAULT_ROLE_MATRIX). Roles can be created, renamed and
+// deleted on Settings > Roles & Permissions; the saved matrix from the server replaces this.
 export const ROLE_MATRIX = {
-  Admin: { importExport: true, createTrace: true, manageConfig: true, manageUsers: true, manageRoles: true, viewAuditLog: true, manageSuppliers: true },
-  'Invoice Team': { importExport: true, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false, manageSuppliers: true },
-  Approver: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false, manageSuppliers: false },
-  Accounts: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false, manageSuppliers: false },
-  Viewer: { importExport: false, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false, manageSuppliers: false },
+  Admin: { importExport: true, createTrace: true, manageConfig: true, manageUsers: true, manageRoles: true, viewAuditLog: true, manageSuppliers: true, viewSupplierVisibility: true, viewReports: true, viewLogs: true },
+  'Invoice Team L1': { importExport: true, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false, manageSuppliers: false, viewSupplierVisibility: false, viewReports: false, viewLogs: false },
+  'Invoice Team L2': { importExport: true, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: false, manageSuppliers: true, viewSupplierVisibility: false, viewReports: true, viewLogs: true },
+  'Invoice Team L3': { importExport: true, createTrace: true, manageConfig: false, manageUsers: false, manageRoles: false, viewAuditLog: true, manageSuppliers: true, viewSupplierVisibility: true, viewReports: true, viewLogs: true },
 };
 
 // Every channel the data model knows about. The Manual (e-mail) channel is kept here so

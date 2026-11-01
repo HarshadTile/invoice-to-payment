@@ -1,7 +1,7 @@
 import { useSelector } from 'react-redux';
 import InvoiceDetailModal from './InvoiceDetailModal.jsx';
 import SupplierInvoiceDetailModal from './SupplierInvoiceDetailModal.jsx';
-import StageSimpleModal from './StageSimpleModal.jsx';
+import InvoiceStageModal from './InvoiceStageModal.jsx';
 import VendorCodePreviewModal from './VendorCodePreviewModal.jsx';
 import RaiseTicketModal from './RaiseTicketModal.jsx';
 import ExportModal from './ExportModal.jsx';
@@ -10,7 +10,7 @@ import ConfirmModal from './ConfirmModal.jsx';
 const REGISTRY = {
   invoiceDetail: InvoiceDetailModal,
   supplierInvoiceDetail: SupplierInvoiceDetailModal,
-  stageSimple: StageSimpleModal,
+  invoiceStage: InvoiceStageModal,
   vendorCodePreview: VendorCodePreviewModal,
   raiseTicket: RaiseTicketModal,
   export: ExportModal,

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Navigate, Outlet } from 'react-router-dom';
-import { AUTH_BYPASS, selectHasTicketAccess, selectPerm } from '../features/auth/authSlice';
+import { Navigate, Outlet, useParams } from 'react-router-dom';
+import { AUTH_BYPASS, selectHasNotifications, selectHasTicketAccess, selectPerm } from '../features/auth/authSlice';
 import { pushToast } from '../features/ui/uiSlice';
 
 function PortalRedirect({ to, message }) {
@@ -47,11 +47,25 @@ export function RequireTicketAccess() {
   return <Outlet />;
 }
 
+export function RequireNotifications() {
+  const allowed = useSelector(selectHasNotifications);
+  if (!allowed) return <Navigate to="/app/invoices" replace />;
+  return <Outlet />;
+}
+
 /** HQ-only pages (Outputs, Logs, Settings, Supplier Visibility) are hidden
  * from an Internal Team (channel-scoped) login, same rule the sidebar itself enforces. */
 export function RequireHQ() {
   const { channelScope } = useSelector((s) => s.auth);
   if (channelScope !== 'all') return <Navigate to="/app/invoices" replace />;
+  return <Outlet />;
+}
+
+/** A user signed in to one portal only opens that portal's channel page; HQ opens any. */
+export function RequireOwnChannel() {
+  const { key } = useParams();
+  const channelScope = useSelector((s) => s.auth.channelScope);
+  if (channelScope && channelScope !== 'all' && key !== channelScope) return <Navigate to={`/app/channel/${channelScope}`} replace />;
   return <Outlet />;
 }
 

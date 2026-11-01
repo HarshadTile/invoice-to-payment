@@ -4,7 +4,7 @@ from sqlalchemy import false
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timezone
 
-from app.api.v1.auth import get_current_user_token
+from app.api.deps import get_current_user_token
 from app.core.audit import AUDIT_TABLE_KEY
 from app.core.database import get_db
 from app.core.password_reset import link_expiry_settings

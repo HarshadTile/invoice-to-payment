@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from app.repositories.gcp_invoice import (
+from app.repositories.srm_invoice import (
     STATUS_LABELS, date_value, filter_invoices,
     get_invoices, invoice_status, text_value,
 )
@@ -15,10 +15,10 @@ def _integer(value):
     return int(value) if text_value(value) is not None else None
 
 
-def map_gcp_invoice_to_response(row: dict) -> InvoiceResponse:
+def map_invoice_to_response(row: dict) -> InvoiceResponse:
     """Map actual SRM columns without inventing values absent from the source."""
     if row.get('__channel') == 'poPortal':
-        from app.services.po_portal_invoice import map_po_portal_invoice_to_response
+        from app.services.po_portal_invoice_service import map_po_portal_invoice_to_response
         return map_po_portal_invoice_to_response(row)
     flag = (text_value(row.get("STATUS_FLAG")) or "").upper()
     product = text_value(row.get("PRODUCT_TYPE"))
@@ -66,7 +66,7 @@ def map_gcp_invoice_to_response(row: dict) -> InvoiceResponse:
     )
 
 
-def get_gcp_invoice_response(invoice_number: str, po_item: int | None = None, *, vendor_codes=None,
+def get_invoice_response(invoice_number: str, po_item: int | None = None, *, vendor_codes=None,
                              channel='msetuSrm', source_id=None, vendor_code=None, po_number=None, exclude_deleted=False):
     records = filter_invoices(invoice_number=invoice_number, po_item=po_item, vendor_codes=vendor_codes,
                               channel=channel, source_id=source_id, vendor_code=vendor_code, po_number=po_number,
@@ -74,15 +74,15 @@ def get_gcp_invoice_response(invoice_number: str, po_item: int | None = None, *,
     if len(records) > 1 and any(row.get('__channel') == 'poPortal' for row in records):
         raise ValueError('Multiple source rows match; supply source_id from the invoice list')
     row = records[0] if records else None
-    return map_gcp_invoice_to_response(row) if row is not None else None
+    return map_invoice_to_response(row) if row is not None else None
 
 
-def get_gcp_invoice_list(page=1, page_size=20, **filters):
+def get_invoice_list(page=1, page_size=20, **filters):
     rows, total = get_invoices(page=page, page_size=page_size, **filters)
-    return [map_gcp_invoice_to_response(row) for row in rows], total
+    return [map_invoice_to_response(row) for row in rows], total
 
 
-def get_recent_gcp_invoices(limit=5, **filters):
+def get_latest_invoices(limit=5, **filters):
     rows = filter_invoices(**filters)
     rows.sort(key=lambda row: date_value(row.get("INVOICE_UPLOAD_DATE")) or date.min, reverse=True)
-    return [map_gcp_invoice_to_response(row) for row in rows[:limit]]
+    return [map_invoice_to_response(row) for row in rows[:limit]]

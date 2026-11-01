@@ -21,7 +21,7 @@ const CARDS = [
   { id: 'rejected', icon: X, tone: 'shade-miro' },
 ];
 
-export default function SupplierHomePage() {
+export default function SupplierInvoicesPage() {
   const dispatch = useDispatch();
   const supplierInvoices = useSupplierInvoices();
   const [searchParams, setSearchParams] = useSearchParams();

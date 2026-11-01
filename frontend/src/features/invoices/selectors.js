@@ -1,7 +1,7 @@
 import { createSelector } from '@reduxjs/toolkit';
 import { runtime } from '../../data/runtime';
 import { CHANNEL_LABEL } from '../../data/constants';
-import { getFiscalYear } from '../../utils/businessLogic';
+import { getFiscalYear } from '../../utils/fiscalYear';
 import { resolveScope, selectScope } from '../ui/scope';
 import { isSupplierVisibleInvoice } from '../../utils/invoiceVisibility';
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { supplierForVendorCode, panFor } from '../utils/businessLogic';
+import { supplierForVendorCode, panFor } from '../features/suppliers/supplierIdentity';
 import { useScope } from '../features/ui/scope';
 import { setScopeFilter } from '../features/ui/uiSlice';
 import ComboField from '../components/common/ComboField.jsx';
@@ -10,11 +10,11 @@ import { totalsByCurrency } from '../utils/amounts';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import InvoiceFilterBar, { invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
 import { selectHasTicketAccess } from '../features/auth/authSlice';
-import { useGetTicketsQuery } from '../features/tickets/ticketsApi';
-import { api } from '../api/client';
+import { fetchTicketPage, useGetTicketsQuery } from '../api/ticketsApi';
 import StatCard from '../components/common/StatCard.jsx';
 import { Banknote, CheckCircle, FileText, MessageSquare } from '../components/common/icons.jsx';
 import { formatMoney } from '../features/invoices/dashboardMetrics';
+import { initialsOf } from '../utils/initials';
 
 export default function VendorCodePage() {
   const { code: routeCode } = useParams();
@@ -89,14 +89,8 @@ export default function VendorCodePage() {
     let cancelled = false;
     if (!ticketPage || ticketPage.total <= ticketPage.items.length) return;
     const pageSize = ticketPage.page_size || 100;
-    const params = new URLSearchParams({ page_size: String(pageSize) });
-    if (code) params.set('vendor_code', code);
     const pages = Math.ceil(ticketPage.total / pageSize);
-    Promise.all(Array.from({ length: pages - 1 }, (_, index) => {
-      const next = new URLSearchParams(params);
-      next.set('page', String(index + 2));
-      return api.get(`/v1/tickets/list-tickets?${next}`);
-    })).then((results) => {
+    Promise.all(Array.from({ length: pages - 1 }, (_, index) => fetchTicketPage({ page_size: pageSize, vendor_code: code, page: index + 2 }))).then((results) => {
       if (!cancelled) setExtraTickets({ source: ticketPage, items: results.flatMap((page) => page.items) });
     }).catch(() => {
       if (!cancelled) setExtraTickets({ source: ticketPage, error: true });
@@ -134,7 +128,7 @@ export default function VendorCodePage() {
   // the tile shows lakh / crore; the exact figure stays on hover
   const amountShort = Object.entries(byCurrency).map(([currency, value]) => formatMoney(value, currency)).join(' + ') || '-';
   const paidCount = inRange.filter((i) => i.status === 'Paid').length;
-  const initials = code || pan ? supplier.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() : 'ALL';
+  const initials = code || pan ? initialsOf(supplier) : 'ALL';
   return (
     <div className="dash sv-page">
       {/* supplier profile: who the figures below are for */}

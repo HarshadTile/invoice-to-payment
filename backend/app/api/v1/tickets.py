@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.v1.auth import get_ticket_user
+from app.api.deps import get_ticket_user
 from app.core.audit import write_audit
 from app.core.database import get_db
 from app.repositories import ticket_repository

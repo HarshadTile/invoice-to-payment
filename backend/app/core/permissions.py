@@ -7,7 +7,7 @@ check it here: the frontend is a convenience, not the enforcement point.
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.v1.auth import get_current_user_token
+from app.api.deps import get_current_user_token
 from app.core.database import get_db
 from app.models.settings import AppSettings
 from app.models.user import User
@@ -19,15 +19,28 @@ from app.models.user import User
 #   manageRoles   change what each role may do (this matrix)
 #   viewAuditLog  read the audit log
 #   manageSuppliers  create suppliers, issue their setup links, change their vendor codes and status
-CAPABILITIES = ("importExport", "createTrace", "manageConfig", "manageUsers", "manageRoles", "viewAuditLog", "manageSuppliers")
+#   viewSupplierVisibility  open Supplier Visibility (and a vendor code's full page)
+#   viewReports   open Vendor Status Reports
+#   viewLogs      open Logs / History
+CAPABILITIES = (
+    "importExport", "createTrace", "manageConfig", "manageUsers", "manageRoles", "viewAuditLog", "manageSuppliers",
+    "viewSupplierVisibility", "viewReports", "viewLogs",
+)
+
+def _caps(*allowed: str) -> dict:
+    return {cap: cap in allowed for cap in CAPABILITIES}
+
 
 DEFAULT_ROLE_MATRIX = {
-    "Admin": {"importExport": True, "createTrace": True, "manageConfig": True, "manageUsers": True, "manageRoles": True, "viewAuditLog": True, "manageSuppliers": True},
-    "Invoice Team": {"importExport": True, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False, "manageSuppliers": True},
-    "Approver": {"importExport": False, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False, "manageSuppliers": False},
-    "Accounts": {"importExport": False, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False, "manageSuppliers": False},
-    "Viewer": {"importExport": False, "createTrace": True, "manageConfig": False, "manageUsers": False, "manageRoles": False, "viewAuditLog": False, "manageSuppliers": False},
+    "Admin": _caps(*CAPABILITIES),
+    "Invoice Team L1": _caps("createTrace", "importExport"),
+    "Invoice Team L2": _caps("createTrace", "importExport", "manageSuppliers", "viewReports", "viewLogs"),
+    "Invoice Team L3": _caps("createTrace", "importExport", "manageSuppliers", "viewAuditLog",
+                             "viewSupplierVisibility", "viewReports", "viewLogs"),
 }
+# Roles are not fixed: Settings > Roles & Permissions can create, rename and delete them (Admin
+# excepted). The saved matrix is the source of truth for which roles exist.
+ADMIN_ROLE = "Admin"
 
 # Capabilities the Admin role must always keep, so a bad edit can never lock every admin
 # out of fixing it.

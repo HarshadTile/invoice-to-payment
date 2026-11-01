@@ -1,5 +1,5 @@
 import { useSelector } from 'react-redux';
-import { getFiscalYear } from '../../utils/businessLogic';
+import { getFiscalYear } from '../../utils/fiscalYear';
 
 /** The top-bar scope every screen shares: fiscal year, channel and vendor code.
  *  fy is the chosen year, 'all' for every year, or the current fiscal year until one is chosen. */
