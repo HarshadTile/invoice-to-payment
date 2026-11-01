@@ -71,8 +71,10 @@ describe('dashboard metrics', () => {
     expect(formatMoney(40020000000)).toBe('₹4,002 Cr');
     expect(formatMoney(250000)).toBe('₹2.50 L');
     expect(formatMoney(1234.5, '₹', { compact: false })).toBe('₹1,234.50');
-    expect(formatShare(1, 400)).toBe('<1%');
-    expect(formatShare(399, 400)).toBe('>99%');
+    expect(formatShare(351, 44279)).toBe('0.8%');
+    expect(formatShare(1, 4000)).toBe('under 0.1%');
+    expect(formatShare(399, 400)).toBe('99.8%');
+    expect(formatShare(39999, 40000)).toBe('99.9%');
     expect(formatShare(0, 0)).toBe('0%');
   });
 });

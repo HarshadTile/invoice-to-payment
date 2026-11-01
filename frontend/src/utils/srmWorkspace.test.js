@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { matchesSrmWorkspace, srmColumns, srmHistoryRows, srmCell } from './srmWorkspace';
-import { findInvoice } from './businessLogic';
+import { findInvoice } from '../features/invoices/invoice';
 
 const invoice = {
   no: 'INV/1', vcode: 'V1', vendor: 'Acme', pan: 'ABCDE1234F', po: 'PO1', poItem: 10,

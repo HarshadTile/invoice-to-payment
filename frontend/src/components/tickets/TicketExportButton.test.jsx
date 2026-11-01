@@ -3,10 +3,10 @@ import '@testing-library/jest-dom';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import { downloadCSV } from '../../utils/businessLogic';
+import { downloadCSV } from '../../utils/csv';
 import TicketExportButton from './TicketExportButton';
 
-vi.mock('../../utils/businessLogic', () => ({ downloadCSV: vi.fn() }));
+vi.mock('../../utils/csv', async (importOriginal) => ({ ...(await importOriginal()), downloadCSV: vi.fn() }));
 
 const ticket = {
   ticket_no: 'QRY-1', subject: '=HYPERLINK("example")', invoice_no: 'INV-1',
@@ -25,7 +25,7 @@ describe('ticket exports', () => {
     setup('internal');
     fireEvent.click(screen.getByRole('button', { name: 'Export CSV (1)' }));
     const [filename, columns, rows] = downloadCSV.mock.lastCall;
-    expect(filename).toBe('Inquiry_Desk');
+    expect(filename).toMatch(/^Inquiry_Desk_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}$/);
     expect(columns).toContain('Vendor Code');
     expect(rows).toHaveLength(1);
     expect(rows[0]).toContain('VENDOR-1');
@@ -38,7 +38,7 @@ describe('ticket exports', () => {
     setup('supplier');
     fireEvent.click(screen.getByRole('button', { name: 'Export CSV (1)' }));
     const [filename, columns, rows] = downloadCSV.mock.lastCall;
-    expect(filename).toBe('My_Queries');
+    expect(filename).toMatch(/^My_Queries_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}$/);
     expect(columns).not.toContain('Vendor Code');
     expect(rows[0]).not.toContain('VENDOR-1');
     expect(rows[0]).toHaveLength(columns.length);

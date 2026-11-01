@@ -30,7 +30,7 @@ describe('SupplierSetupPage', () => {
     mockAuth.checkSetupLink.mockRejectedValue(new Error('This link is invalid or has expired. Ask the team for a new one.'));
     renderPage();
     expect(await screen.findByText(/invalid or has expired/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^pan/i)).toBeNull();
+    expect(screen.queryByLabelText(/^email/i)).toBeNull();
   });
 
   it('says so when the link has no token', () => {
@@ -45,7 +45,7 @@ describe('SupplierSetupPage', () => {
     renderPage();
     expect(await screen.findByText(/acme tools/i)).toBeInTheDocument();
 
-    await userEvent.type(screen.getByLabelText(/^pan/i), 'aaapa1111a');
+    await userEvent.type(screen.getByLabelText(/^email/i), 'Acme@Example.com');
     await userEvent.type(screen.getByLabelText(/^new password/i), 'short');
     await userEvent.type(screen.getByLabelText(/^confirm/i), 'short');
     await userEvent.click(screen.getByRole('button', { name: /set password/i }));
@@ -58,8 +58,8 @@ describe('SupplierSetupPage', () => {
     await userEvent.type(screen.getByLabelText(/^confirm/i), 'Chosen-pass1');
     await userEvent.click(screen.getByRole('button', { name: /set password/i }));
 
-    await waitFor(() => expect(mockAuth.completeSupplierSetup).toHaveBeenCalledWith({ token: 'abc', pan: 'AAAPA1111A', password: 'Chosen-pass1' }));
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/login?mode=pan&pan=AAAPA1111A&setup=complete&account=supplier', { replace: true }));
+    await waitFor(() => expect(mockAuth.completeSupplierSetup).toHaveBeenCalledWith({ token: 'abc', email: 'acme@example.com', password: 'Chosen-pass1' }));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/login?email=acme%40example.com&setup=complete&account=supplier', { replace: true }));
     expect(mockThunks.loginThunk).not.toHaveBeenCalled();
   });
 });

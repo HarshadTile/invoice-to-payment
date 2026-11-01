@@ -36,15 +36,21 @@ describe('suppliersApi', () => {
   it('has the public supplier setup calls', () => {
     authApi.checkSetupLink('tok en');
     expect(mockApi.get).toHaveBeenCalledWith('/v1/auth/supplier/check-setup-link?token=tok%20en');
-    authApi.completeSupplierSetup({ token: 't', pan: 'P', password: 'pw' });
-    expect(mockApi.post).toHaveBeenCalledWith('/v1/auth/supplier/complete-supplier-setup', { token: 't', pan: 'P', password: 'pw' });
+    authApi.completeSupplierSetup({ token: 't', email: 'a@b.co', password: 'pw' });
+    expect(mockApi.post).toHaveBeenCalledWith('/v1/auth/supplier/complete-supplier-setup', { token: 't', email: 'a@b.co', password: 'pw' });
+    authApi.supplierForgotPassword('a@b.co');
+    expect(mockApi.post).toHaveBeenCalledWith('/v1/auth/supplier/forgot-password', { email: 'a@b.co' });
+    authApi.submitSupplierRequest({ name: 'N', email: 'a@b.co', vendorCodes: ['V1'] });
+    expect(mockApi.post).toHaveBeenCalledWith('/v1/supplier-requests/submit-request', { name: 'N', email: 'a@b.co', vendorCodes: ['V1'] });
   });
 });
 
 describe('role matrix', () => {
-  it('lets Admin and Invoice Team manage suppliers by default', () => {
+  it('lets Admin and Invoice Team L2 / L3 manage suppliers by default', () => {
+    expect(Object.keys(ROLE_MATRIX)).toEqual(['Admin', 'Invoice Team L1', 'Invoice Team L2', 'Invoice Team L3']);
     expect(ROLE_MATRIX.Admin.manageSuppliers).toBe(true);
-    expect(ROLE_MATRIX['Invoice Team'].manageSuppliers).toBe(true);
-    expect(ROLE_MATRIX.Viewer.manageSuppliers).toBe(false);
+    expect(ROLE_MATRIX['Invoice Team L1'].manageSuppliers).toBe(false);
+    expect(ROLE_MATRIX['Invoice Team L2'].manageSuppliers).toBe(true);
+    expect(ROLE_MATRIX['Invoice Team L3'].manageSuppliers).toBe(true);
   });
 });

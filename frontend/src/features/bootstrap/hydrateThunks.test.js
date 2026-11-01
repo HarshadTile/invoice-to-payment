@@ -7,7 +7,7 @@ const mockApi = vi.hoisted(() => ({
 vi.mock('../../api/client', () => ({ api: mockApi }));
 
 import authReducer from '../auth/authSlice';
-import { ticketsApi } from '../tickets/ticketsApi';
+import { ticketsApi } from '../../api/ticketsApi';
 import tablesReducer from '../tables/tablesSlice';
 import settingsReducer from '../settings/settingsSlice';
 import uiReducer from '../ui/uiSlice';
@@ -74,13 +74,13 @@ describe('loginThunk', () => {
 });
 
 describe('supplier sign-in', () => {
-  it('PAN + password posts to the password endpoint and keeps the allowed vendor codes', async () => {
+  it('email + password posts to the password endpoint and keeps the allowed vendor codes', async () => {
     const SUPPLIER_AUTH = { authType: 'supplier', pan: 'AAAPA1111A', company: 'Acme', vcodes: ['V1', 'V2'], vcode: 'V1' };
     mockApi.post.mockResolvedValue({ token: 't', auth: SUPPLIER_AUTH });
     mockApi.get.mockResolvedValue(BOOTSTRAP);
     const store = makeStore();
-    await store.dispatch(loginThunk({ mode: 'supplierPassword', pan: 'AAAPA1111A', password: 'pw' }));
-    expect(mockApi.post).toHaveBeenCalledWith('/v1/auth/supplier/login-with-password', { pan: 'AAAPA1111A', password: 'pw' });
+    await store.dispatch(loginThunk({ mode: 'supplierPassword', email: 'acme@example.com', password: 'pw' }));
+    expect(mockApi.post).toHaveBeenCalledWith('/v1/auth/supplier/login-with-password', { email: 'acme@example.com', password: 'pw' });
     expect(store.getState().auth.supplierVendorCodes).toEqual(['V1', 'V2']);
     expect(store.getState().auth.supplierPAN).toBe('AAAPA1111A');
   });

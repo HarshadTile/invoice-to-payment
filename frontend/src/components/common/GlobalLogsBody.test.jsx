@@ -17,7 +17,7 @@ const inv = (no, status, extra = {}) => ({
 describe('Logs type filter', () => {
   it('shows only rows of the chosen type, even when the source repeats an invoice line', async () => {
     const list = [inv('116', 'Payment Due'), inv('116', 'Payment Due'), inv('68', 'Paid'), inv('68', 'Paid'), inv('70', 'Paid'), inv('72', 'Payment Due')];
-    const store = configureStore({ reducer: { ui: uiReducer } });
+    const store = configureStore({ reducer: { ui: uiReducer, auth: () => ({ authType: 'internal', role: 'Admin' }) } });
     render(<Provider store={store}><GlobalLogsBody invoiceList={list} /></Provider>);
     const typeOf = () => [...document.querySelectorAll('tbody tr')].map((tr) => tr.querySelectorAll('td')[4]?.textContent);
     await waitFor(() => expect(typeOf().length).toBeGreaterThan(0));
@@ -29,7 +29,7 @@ describe('Logs type filter', () => {
   });
 
   it('Clear is shown only while a filter is active and resets the filters; Export stays beside it', async () => {
-    const store = configureStore({ reducer: { ui: uiReducer } });
+    const store = configureStore({ reducer: { ui: uiReducer, auth: () => ({ authType: 'internal', role: 'Admin' }) } });
     render(<Provider store={store}><GlobalLogsBody invoiceList={[inv('68', 'Paid'), inv('72', 'Payment Due')]} /></Provider>);
     await waitFor(() => expect(document.querySelectorAll('tbody tr').length).toBeGreaterThan(0));
     const actions = () => document.querySelector('.log-actions');

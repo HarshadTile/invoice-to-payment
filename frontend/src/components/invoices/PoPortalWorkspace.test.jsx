@@ -6,11 +6,12 @@ import { MemoryRouter } from 'react-router-dom';
 import uiReducer from '../../features/ui/uiSlice';
 import PoPortalWorkspace from './PoPortalWorkspace.jsx';
 import { toWorkspaceInvoice } from '../../api/invoiceApi';
-import { findInvoice, downloadCSV } from '../../utils/businessLogic';
+import { findInvoice } from '../../features/invoices/invoice';
+import { downloadCSV } from '../../utils/csv';
 import { PO_TABLE_CONFIG, matchesPoPortalWorkspace, poPortalHistoryRows } from '../../utils/poPortalWorkspace';
 
 vi.mock('../../api/client', () => ({ api: { get: vi.fn(async () => []) } }));
-vi.mock('../../utils/businessLogic', async (original) => ({ ...await original(), downloadCSV: vi.fn() }));
+vi.mock('../../utils/csv', async (original) => ({ ...await original(), downloadCSV: vi.fn() }));
 
 const invoice = { no: 'INV/PO/1', sourceId: 'poPortal:one', po: '650001', poItem: 10, vendor: 'Vendor', vcode: 'V1',
   channel: 'poPortal', productType: 'S', status: 'Pending for Approval', amount: '-', utr: '-', invoiceUploaded: true,

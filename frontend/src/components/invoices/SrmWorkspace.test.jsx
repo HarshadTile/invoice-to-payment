@@ -6,12 +6,12 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import uiReducer from '../../features/ui/uiSlice';
 import ChannelPage from '../../pages/ChannelPage.jsx';
 import { setRuntimeData } from '../../data/runtime';
-import { downloadCSV } from '../../utils/businessLogic';
+import { downloadCSV } from '../../utils/csv';
 import { api } from '../../api/client';
 import { selectFilteredInvoices } from '../../features/invoices/selectors';
 
 vi.mock('../../api/client', () => ({ api: { get: vi.fn(async () => []) } }));
-vi.mock('../../utils/businessLogic', async (importOriginal) => ({ ...await importOriginal(), downloadCSV: vi.fn() }));
+vi.mock('../../utils/csv', async (importOriginal) => ({ ...await importOriginal(), downloadCSV: vi.fn() }));
 
 const a = { no: 'INV-A', vendor: 'Vendor A', vcode: 'V1', pan: 'ABCDE1234F', po: 'PO1', poItem: 10,
   channel: 'msetuSrm', productType: 'S', plant: 'H001', dvType: 'AUTO DV', status: 'Approved', statusFlag: 'A',

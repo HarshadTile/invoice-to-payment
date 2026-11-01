@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { toWorkspaceInvoice } from './invoiceApi';
 import { invoiceFiscalYear, matchesSrmFilters } from '../features/invoices/selectors';
 import { invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
-import { channelViewRows } from '../utils/businessLogic';
+import { channelViewRows } from '../features/invoices/channelViews';
 
 const source = {
   invoice_number: 'INV/1', invoice_date: '2025-12-31', invoice_upload_date: '2026-10-01',

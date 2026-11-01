@@ -53,7 +53,7 @@ function authFor(form) {
   if (form.mode === 'supplier' || form.mode === 'supplierPassword') {
     return {
       authType: 'supplier', channelScope: 'all', role: 'Viewer',
-      company: 'Tata Communications Ltd', pan: form.pan || 'ABCDE1234F',
+      company: 'Tata Communications Ltd', pan: 'ABCDE1234F', email: form.mode === 'supplierPassword' ? form.email : undefined,
       vcode: form.vcode || 'DIT00388AC', vcodes: [form.vcode || 'DIT00388AC'],
       supplierQuery: form.company, supplierPAN: 'ABCDE1234F',
       supplierLoginVcode: form.vcode || 'DIT00388AC', currentUser: DEFAULT_USER,
@@ -62,7 +62,7 @@ function authFor(form) {
   const channelScope = form.channelScope || 'all';
   return {
     authType: 'internal', id: 1, channelScope, ticketRole: channelScope === 'all' ? 'ADMIN' : (form.ticketRole || 'ASSIGNEE'),
-    role: channelScope === 'all' ? 'Admin' : 'Invoice Team',
+    role: channelScope === 'all' ? 'Admin' : 'Invoice Team L2',
     supplierQuery: null, supplierPAN: null, supplierLoginVcode: null,
     currentUser: internalUser(String(form.username || '').trim().toLowerCase()),
   };
@@ -75,7 +75,7 @@ export function installApiMock() {
   const notifications = [];
   let persistedUsers = [
     { id: 1, username: 'admin', name: 'Administrator', email: 'admin@company.com', role: 'Admin', status: 'Active', channelScope: 'all', ticketRole: 'ADMIN', channels: [] },
-    { id: 2, username: 'priya', name: 'Priya Deshmukh', email: 'p.deshmukh@company.com', role: 'Invoice Team', status: 'Active', channelScope: 'msetuSrm', ticketRole: 'ASSIGNEE', channels: ['msetuSrm'] },
+    { id: 2, username: 'priya', name: 'Priya Deshmukh', email: 'p.deshmukh@company.com', role: 'Invoice Team L2', status: 'Active', channelScope: 'msetuSrm', ticketRole: 'ASSIGNEE', channels: ['msetuSrm'] },
   ];
   const statusCode = (value) => String(value || 'OPEN').toUpperCase().replaceAll(' ', '_');
   const normalizeTicket = (ticket) => {
@@ -149,6 +149,8 @@ export function installApiMock() {
     if (path === '/v1/users/list-users') return persistedUsers;
     if (path.startsWith('/tables/')) return TABLE_SEED[path.slice('/tables/'.length)] || [];
     if (path === '/v1/tickets/internal-activity-log' || path === '/v1/tickets/supplier-activity-log') return [];
+    if (path === '/v1/supplier-requests/my-latest-request') return { request: null };
+    if (path === '/v1/settings/role-summary') return rolesResponse();
     if (path === '/v1/ticket-permissions') return { roles: ['Admin', 'Channel Lead', 'Assignee', 'Supplier'], rows: [{ action: 'View ticket', cells: [{ text: 'Always', ifAssigned: '' }, { text: 'Always', ifAssigned: '' }, { text: '', ifAssigned: 'Always' }, { text: 'Always', ifAssigned: '' }] }] };
     if (path === '/settings') return bootstrap().settings;
     if (path === '/v1/notifications/unread-notification-count') return { unread: notifications.filter((n) => !n.read_at).length };
@@ -198,14 +200,35 @@ export function installApiMock() {
     return {};
   });
 
+  const accessRequests = [];
   const CREDS = { admin: 'admin123', 'admin@company.com': 'admin123', ravi: 'ravi123', 'r.kulkarni@company.com': 'ravi123', priya: 'priya123' };
 
   const post = vi.fn(async (path, body) => {
     if (path === '/v1/auth/supplier/login-with-password') {
-      if (body.pan !== 'ABCDE1234F' || body.password !== 'supplier123') {
-        throw Object.assign(new Error('PAN or password is incorrect, or the account is inactive.'), { status: 401 });
+      if (body.email !== 'supplier@example.com' || body.password !== 'supplier123') {
+        throw Object.assign(new Error('Email or password is incorrect, or the account is inactive.'), { status: 401 });
       }
       return { token: 'test-supplier-token', auth: authFor({ ...body, mode: 'supplierPassword' }) };
+    }
+    if (path === '/v1/settings/roles') {
+      const name = String(body.name || '').trim().replace(/\s+/g, ' ');
+      if (name.length < 2) throw roleError('A role name is 2 to 40 characters.');
+      if (Object.keys(roleMatrix).some((r) => r.toLowerCase() === name.toLowerCase())) throw roleError(`A role named ${name} already exists.`);
+      const base = body.copyFrom ? roleMatrix[body.copyFrom] : {};
+      roleMatrix = { ...roleMatrix, [name]: Object.fromEntries(Object.keys(roleMatrix.Admin).map((c) => [c, !!base[c]])) };
+      return rolesResponse();
+    }
+    if (path === '/v1/supplier-requests/submit-request') {
+      accessRequests.push({ kind: 'NEW_ACCOUNT', ...body });
+      return { msg: 'Request submitted.' };
+    }
+    if (path === '/v1/supplier-requests/request-access-change') {
+      const request = {
+        id: accessRequests.length + 1, kind: 'CHANGE_ACCESS', status: 'Pending', createdAt: '2026-10-31T09:00:00',
+        addCodes: body.addCodes, removeCodes: body.removeCodes, note: body.note, vendorCodes: [],
+      };
+      accessRequests.push(request);
+      return request;
     }
     if (path === '/v1/auth/login' || path === '/v1/auth/supplier/login') {
       const form = body || {};
@@ -246,12 +269,10 @@ export function installApiMock() {
         ...body,
       };
       persistedUsers = [...persistedUsers, created];
-      return { ...created, setupLink: `http://localhost:5173/reset-password?token=test-invite-${created.id}`, expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), linkType: 'invite' };
+      return { ...created, emailSent: true };
     }
     if (/^\/v1\/users\/\d+\/send-access-link$/.test(path)) {
-      const user = persistedUsers.find((u) => u.id === Number(path.split('/')[3]));
-      const invite = user?.status === 'Invited';
-      return { setupLink: 'http://localhost:5173/reset-password?token=test-replacement', expiresAt: new Date(Date.now() + (invite ? 7 * 86400000 : 1800000)).toISOString(), linkType: invite ? 'invite' : 'reset' };
+      return { msg: 'Account email delivery attempted.', emailSent: true };
     }
     if (path === '/v1/tickets/create-ticket') {
       seq += 1;
@@ -313,8 +334,40 @@ export function installApiMock() {
     }
     return {};
   });
-  const put = vi.fn(async (_path, body) => (body && body.rows ? body.rows : {}));
+  // Roles (Settings > Roles & Permissions): the matrix plus a user count per role.
+  let roleMatrix = JSON.parse(JSON.stringify(ROLE_MATRIX));
+  const rolesResponse = () => ({
+    roleMatrix: JSON.parse(JSON.stringify(roleMatrix)),
+    counts: Object.fromEntries(Object.keys(roleMatrix).map((r) => [r, persistedUsers.filter((u) => u.role === r).length])),
+  });
+  const roleError = (message) => Object.assign(new Error(message), { status: 400 });
+  const roleName = (path) => decodeURIComponent(path.split('/')[4].split('?')[0]);
+
+  const put = vi.fn(async (path, body) => {
+    if (path.startsWith('/v1/settings/roles/')) {
+      const old = roleName(path);
+      const next = String(body.newName || '').trim().replace(/\s+/g, ' ');
+      if (old === 'Admin') throw roleError("The Admin role can't be renamed or deleted.");
+      if (Object.keys(roleMatrix).some((r) => r.toLowerCase() === next.toLowerCase() && r !== old)) throw roleError(`A role named ${next} already exists.`);
+      roleMatrix = Object.fromEntries(Object.entries(roleMatrix).map(([r, caps]) => [r === old ? next : r, caps]));
+      persistedUsers = persistedUsers.map((u) => (u.role === old ? { ...u, role: next } : u));
+      return rolesResponse();
+    }
+    if (path === '/v1/settings' && body?.roleMatrix) roleMatrix = JSON.parse(JSON.stringify(body.roleMatrix));
+    return body && body.rows ? body.rows : {};
+  });
   const remove = vi.fn(async (path) => {
+    if (path.startsWith('/v1/settings/roles/')) {
+      const role = roleName(path);
+      const moveTo = new URLSearchParams(path.split('?')[1] || '').get('moveTo');
+      if (role === 'Admin') throw roleError("The Admin role can't be renamed or deleted.");
+      if (persistedUsers.some((u) => u.role === role)) {
+        if (!moveTo) throw roleError('Pick the role to move them to.');
+        persistedUsers = persistedUsers.map((u) => (u.role === role ? { ...u, role: moveTo } : u));
+      }
+      delete roleMatrix[role];
+      return rolesResponse();
+    }
     const id = Number(path.split('/')[3]);
     persistedUsers = persistedUsers.filter((item) => item.id !== id);
     return { msg: 'User removed.' };
