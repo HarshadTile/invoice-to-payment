@@ -19,14 +19,15 @@ The application uses these routes for its screens and actions. Some backend rout
 |---|---|---|---|
 | POST | `/api/v1/auth/login` | Sign in an internal team member. | `InternalLoginRequest` JSON |
 | POST | `/api/v1/auth/supplier/login` | Sign in a supplier using the supplier login flow. | `SupplierLoginRequest` JSON |
-| POST | `/api/v1/auth/supplier/login-with-password` | Sign in a supplier with PAN and password. | `SupplierPasswordLoginRequest` JSON |
+| POST | `/api/v1/auth/supplier/login-with-password` | Sign in a supplier with email and password (the email is unique per account; a PAN may have several accounts or be blank). | `{email, password}` JSON |
+| POST | `/api/v1/auth/supplier/forgot-password` | Email a reset link to an active supplier account. The reply is the same whether or not the email exists. Rate limited. | `{email}` JSON |
 | POST | `/api/v1/auth/logout` | End the current session. | Bearer access token |
 | GET | `/api/v1/auth/me` | Load the signed-in account and session details. | Bearer access token |
 | POST | `/api/v1/auth/forgot-password` | Request a password reset link. | `ForgotPasswordRequest` JSON |
 | POST | `/api/v1/auth/password-link-info` | Check link details, such as its type or expiry, before using it. | `PasswordLinkInfoRequest` JSON |
 | POST | `/api/v1/auth/reset-password` | Complete an account setup or password reset using its one-time token. | `ResetPasswordRequest` JSON |
 | GET | `/api/v1/auth/supplier/check-setup-link?token={token}` | Check a supplier setup link before showing the setup form. | `token` query parameter |
-| POST | `/api/v1/auth/supplier/complete-supplier-setup` | Set the supplier’s password and complete account activation. | `SupplierSetupRequest` JSON |
+| POST | `/api/v1/auth/supplier/complete-supplier-setup` | Set the supplier’s password from a setup or reset link; the email must match the account. | `{token, email, password}` JSON |
 
 ## Invoices and workspace
 
@@ -143,13 +144,31 @@ These management routes require an authorized internal account. Supplier-facing 
 |---|---|---|---|
 | GET | `/api/v1/suppliers/list-suppliers` | Load the supplier directory and account statuses. | `status`, `search`, `channel` |
 | POST | `/api/v1/suppliers/add-supplier` | Create a supplier account and assign its initial vendor codes. | `SupplierCreate` JSON |
-| GET | `/api/v1/suppliers/search-vendors?q={query}` | Search the vendor directory while adding or updating supplier access. | `q` query parameter |
+| GET | `/api/v1/suppliers/search-vendors?q={query}` | Search the vendor directory while adding or updating supplier access. `accounts` says how many accounts the PAN already has; vendors without a PAN are listed per vendor code. | `q` query parameter |
 | POST | `/api/v1/suppliers/{supplier_id}/activate-supplier` | Activate a supplier account. | None |
 | POST | `/api/v1/suppliers/{supplier_id}/deactivate-supplier` | Deactivate a supplier account. | None |
 | DELETE | `/api/v1/suppliers/{supplier_id}/delete-supplier` | Delete a supplier account. | None |
 | POST | `/api/v1/suppliers/{supplier_id}/generate-setup-link` | Generate a one-time account setup link to share with the supplier. | None |
 | POST | `/api/v1/suppliers/{supplier_id}/reset-supplier-password` | Generate a supplier password reset link. | None |
 | PUT | `/api/v1/suppliers/{supplier_id}/update-supplier-vendor-codes` | Change the vendor codes the supplier can access. | `VendorCodesUpdate` JSON |
+
+### Supplier access requests
+
+Suppliers ask for an account from the sign-in page, and existing suppliers ask to add or remove vendor
+codes from their profile. Supplier managers (roles with `manageSuppliers`) get a notification
+(`SUPPLIER_ACCESS_REQUEST` / `SUPPLIER_ACCESS_CHANGE`, with `request_id`) and review the request.
+A PAN may have several accounts and a vendor code may be on more than one account; each account's
+email must be unique.
+
+| Method | Endpoint | Purpose / when to call | Query / request body |
+|---|---|---|---|
+| POST | `/api/v1/supplier-requests/submit-request` | Public. Ask for a supplier account. Same reply whatever the data says; rate limited per IP. | `{name, email, pan?, vendorCodes, note?}` |
+| POST | `/api/v1/supplier-requests/request-access-change` | Signed-in supplier asks to add / remove vendor codes. The note is required; one pending request at a time. | `{addCodes, removeCodes, note}` |
+| GET | `/api/v1/supplier-requests/my-latest-request` | The signed-in supplier's latest change request. | None |
+| GET | `/api/v1/supplier-requests/list-requests` | Requests visible to this supplier manager, with `pendingCount`. | `status` |
+| GET | `/api/v1/supplier-requests/{request_id}/request-details` | The request plus a match report against the invoice data and existing accounts for the PAN / codes. | None |
+| POST | `/api/v1/supplier-requests/{request_id}/approve-request` | Create the account and email the setup link, or apply the vendor code change and email the supplier. | `{vendorCodes, email?, pan?, channel?}` |
+| POST | `/api/v1/supplier-requests/{request_id}/reject-request` | Reject and email the reason to the supplier. | `{reason: mismatch \| incomplete \| not_in_system \| other, message?}` |
 
 ## Tickets and queries
 

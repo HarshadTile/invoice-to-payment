@@ -107,7 +107,7 @@ to actually call this backend instead of a different, unrelated server.
 For isolated password-link, user-management, and permission tests, run:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest --noconftest -p link_tests.support link_tests tests/test_password_reset.py tests/test_users_api.py tests/test_audit_log.py tests/test_permissions.py tests/test_timestamps.py -q -p no:cacheprovider
+.\.venv\Scripts\python.exe -m pytest --noconftest -p isolated_tests.support isolated_tests tests/api/test_password_reset.py tests/api/test_users.py tests/api/test_audit_log.py tests/api/test_permissions.py tests/schemas/test_common.py -q -p no:cacheprovider
 ```
 
 This creates and removes a unique temporary SQLite database without using the
@@ -115,7 +115,7 @@ application database. MySQL-specific concurrency checks are skipped in this run.
 The legacy default `pytest` entry point instead drops and recreates the fixed
 MySQL database `mahindra_i2p_test`; it ignores a SQLite `DATABASE_URL` override.
 Only use that full-suite entry point when this fixed database is disposable.
-See [manual user setup links](docs/manual-user-setup-links.md) for the feature
+See [account setup links](docs/account-setup-links.md) for the feature
 workflow and LAN testing steps.
 
 ## Database migrations (Alembic)
@@ -171,7 +171,7 @@ delivered through SMTP. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWOR
 changing them. If SMTP is not configured or is temporarily unavailable, user
 management reports that delivery failed; configure SMTP before relying on account
 emails. Setup/reset links are kept out of the admin UI and API responses. See
-[manual user setup links](docs/manual-user-setup-links.md) for account setup details.
+[account setup links](docs/account-setup-links.md) for account setup details.
 
 Supplier invitations and resets use the same SMTP settings. New suppliers need a
 contact email address; existing suppliers can have one added from the Suppliers

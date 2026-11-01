@@ -6,7 +6,7 @@ This is an analysis only. No application code, environment configuration, source
 
 ## Findings
 
-The application still reads Excel. `backend/app/repositories/gcp_invoice.py` loads `backend/data/gcp_invoice_data.xlsx`, sheet `in`, through openpyxl and caches the records indefinitely in process memory. Its name does not indicate a working GCP connection. The backend requirements do not currently include a GCP datasource client.
+The application still reads Excel. `backend/app/repositories/srm_invoice.py` loads `backend/data/gcp_invoice_data.xlsx`, sheet `in`, through openpyxl and caches the records indefinitely in process memory. Its name does not indicate a working GCP connection. The backend requirements do not currently include a GCP datasource client.
 
 The existing file contains 2,702 rows and 49 columns. It already supplies supplier, PO, SRM approval, MIRO, due-date, clearing and UTR data. It does not have `DOC_UPLOAD_DT`, `ASN_SC_NO`, `WERKS`, a source channel column, or the PO Portal process fields.
 
@@ -88,8 +88,8 @@ SRM raw flags listed in the references are A, P, I, L, D, X, Y and N. N means pu
 
 | Area | Required work |
 | --- | --- |
-| `backend/app/repositories/gcp_invoice.py` | Replace Excel loading with the confirmed GCP datasource; source-side projection, filtering, stable pagination, sorting, and aggregates; explicit freshness behavior. |
-| `backend/app/services/invoice.py` | Separate source adapters for SRM and PO Portal into a shared response; map aliases and types; keep dates, amounts and workflow states distinct. Current direct `row[...]` access assumes the complete old Excel schema. |
+| `backend/app/repositories/srm_invoice.py` | Replace Excel loading with the confirmed GCP datasource; source-side projection, filtering, stable pagination, sorting, and aggregates; explicit freshness behavior. |
+| `backend/app/services/invoice_service.py` | Separate source adapters for SRM and PO Portal into a shared response; map aliases and types; keep dates, amounts and workflow states distinct. Current direct `row[...]` access assumes the complete old Excel schema. |
 | `backend/app/schemas/invoice.py` | Add channel, stable identity, upload facts, plant/division and the agreed PO-specific detail. Reuse existing supplier/PO/SAP response fields. |
 | `backend/app/api/v1/invoice.py` | Channel-aware list/detail/summary/recent; actual global recent sorting before limit; source-level scoping and supplier redaction for newly exposed workflow data. |
 | `backend/app/api/v1/auth.py` | Supplier login currently searches the full cached invoice list. Preserve PO-only supplier lookup and avoid a full cloud invoice scan for each login. |

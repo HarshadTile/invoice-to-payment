@@ -48,16 +48,15 @@ invoice register itself, which it reads directly from an Excel file:
 
 | Data | Source |
 |---|---|
-| Invoices | `backend/data/gcp_invoice_data.xlsx` (read on request, not cached in a DB) |
+| Invoices | `backend/data/tbl_dw_inv_paymt_SRM.xlsx` (Msetu / SRM) and `backend/data/tbl_dw_inv_paymt_PO_PORTAL.csv` (PO Portal), read on request, not stored in a DB |
 | Login accounts, roles, portal access | `users` table |
 | Tickets, editable Settings grids, audit log, sync log | SQL tables, written on every change |
 
 The React app loads everything once after login (`GET /v1/workspace` plus a
 few FastAPI invoice endpoints) and writes changes straight back, so they
-survive a restart. The full endpoint list is in [docs/API.md](docs/API.md) —
-note it may describe an earlier prototype's endpoint shapes in places; the
-backend's own code and `/docs` (Swagger UI at `http://127.0.0.1:8000/docs`)
-are the source of truth.
+survive a restart. The full endpoint list is in
+[../docs/api-reference.md](../docs/api-reference.md); the backend's own code and
+`/docs` (Swagger UI at `http://127.0.0.1:8000/docs`) are the source of truth.
 
 ### Access control (enforced by the API, not just the UI)
 
@@ -120,13 +119,18 @@ new array, and all business rules live in plain, tested functions under
 
 ## Testing
 
-`src/__tests__/app.test.jsx` exercises the application end-to-end with
-React Testing Library: both login flows, every navigation destination for
-every role, every modal, ticket creation and replies, the Kanban board,
-identity switching, permission toggles, user CRUD, invoice stage moves, and
-route guards. The server suite (`npm run test:server`) covers login/logout,
-session expiry, per-role and per-supplier access control, persistence and
-concurrent ticket creation.
+Run `npm test` (Vitest + React Testing Library). Tests are organised as:
+
+- **Unit and component tests** live next to the file they test, named after it:
+  `invoiceQuery.js` → `invoiceQuery.test.js`. A second file for one aspect of
+  the same module adds the aspect: `InvoiceTable.supplier.test.jsx`.
+- **Full-app tests** in `src/__tests__/app/`, one file per area (`login`,
+  `navigation`, `invoices`, `inquiryDesk`, `settings`, `reports`, `supplier`).
+  They sign in against the in-memory API mock (`src/test/apiMock.js`) and
+  use the shared setup in `src/test/renderApp.jsx`.
+- Shared fixtures are in `src/test/fixtures/`.
+
+Backend tests live in `../backend/tests` (see the backend README).
 
 ## Notes on scope
 
