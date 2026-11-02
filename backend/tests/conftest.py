@@ -4,6 +4,8 @@ os.environ["DATABASE_URL"] = "mysql+pymysql://root:root@localhost:3306/mahindra_
 os.environ["DISABLE_TICKET_JOBS"] = "true"
 # Never use a developer's local SMTP credentials from automated tests.
 os.environ["SMTP_HOST"] = ""
+# Tests read the fixture files, never the live BigQuery API.
+os.environ["INVOICE_SOURCE"] = "file"
 
 import pytest
 from alembic import command

@@ -20,11 +20,12 @@ export function invoiceYMD(inv, dateField = 'invoice') {
  * The status + date-range filter used across the app's invoice lists (My Invoices, Search Invoice(s),
  * Processing Channels, a vendor code's invoice log). Statuses in `statusCountBase` (defaults to
  * `invoices`) are counted per option so a user can see what a choice will return before picking it.
+ * A list paged on the server passes `statusCounts` ({ status: count }) instead of the invoices.
  * `compact` renders the same controls as one row of chips, to sit inside another card.
  */
 export default function InvoiceFilterBar({
   status, dateFrom, dateTo, onStatusChange, onDateFrom, onDateTo, onAllDates, onClear,
-  statusCountBase, resultCount, rangeLabel, extra, compact,
+  statusCountBase, statusCounts, resultCount, rangeLabel, extra, compact,
 }) {
   const scope = useScope();
   const dateLabel = invoiceDateTypeLabel(scope.dateField).replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -37,15 +38,22 @@ export default function InvoiceFilterBar({
   const statusOptions = useMemo(() => {
     const counts = new Map();
     let total = 0;
-    for (const invoice of statusCountBase) {
-      if (isSupplier && !isSupplierVisibleInvoice(invoice)) continue;
-      total += 1;
-      counts.set(invoice.status, (counts.get(invoice.status) || 0) + 1);
+    if (statusCounts) {
+      for (const [status, count] of Object.entries(statusCounts)) {
+        counts.set(status, count);
+        total += count;
+      }
+    } else {
+      for (const invoice of statusCountBase) {
+        if (isSupplier && !isSupplierVisibleInvoice(invoice)) continue;
+        total += 1;
+        counts.set(invoice.status, (counts.get(invoice.status) || 0) + 1);
+      }
     }
     return [{ value: '', label: 'All Statuses', count: total },
       ...ALL_STATUSES.filter((s) => !isSupplier || !['Entry Deleted', 'Deleted'].includes(s))
         .map((s) => ({ value: s, label: s, count: counts.get(s) || 0 }))];
-  }, [statusCountBase, isSupplier]);
+  }, [statusCountBase, statusCounts, isSupplier]);
 
   if (compact) {
     const dated = Boolean(dateFrom || dateTo);

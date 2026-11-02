@@ -85,6 +85,19 @@ describe('Internal admin - Navigation, top bar and account menu', () => {
     window.localStorage.removeItem('i2p.sidebarCollapsed');
   });
 
+  it('the Pending Approval card opens exactly as many invoices as it counts', async () => {
+    const { store, user } = await loginAdmin();
+    store.dispatch(setScopeFilter({ key: 'fy', value: 'all' }));
+    const card = await waitFor(() => {
+      const found = [...document.querySelectorAll('button.stat-card')].find((b) => b.querySelector('.lbl')?.textContent === 'Pending Approval');
+      expect(found.querySelector('.val').textContent).not.toBe('0');
+      return found;
+    });
+    const counted = card.querySelector('.val').textContent;
+    await user.click(card);
+    await waitFor(() => expect(document.querySelector('.srm-count-pill')).toHaveTextContent(`${counted} invoice`));
+  });
+
   it('a dashboard KPI opens Search Invoice(s) with a way back to Invoice Tracking', async () => {
     const { user } = await loginAdmin();
     await screen.findByRole('heading', { name: 'Invoice Tracking' });
@@ -121,12 +134,13 @@ describe('Internal admin - Navigation, top bar and account menu', () => {
     const { store, user } = await loginAdmin();
     await user.click(screen.getByTitle('Filter by vendor'));
     const search = screen.getByRole('textbox', { name: 'Search vendor name or code' });
+    // the list is searched by the invoice service, so each answer arrives a moment later
     fireEvent.change(search, { target: { value: 'tata' } });
-    expect(screen.getByRole('option', { name: /DIT00388AC/ })).toBeTruthy();
+    expect(await screen.findByRole('option', { name: /DIT00388AC/ })).toBeTruthy();
     fireEvent.change(search, { target: { value: 'NO-SUCH-VENDOR' } });
-    expect(screen.getByText('No vendors match.')).toBeTruthy();
+    expect(await screen.findByText('No vendors match.')).toBeTruthy();
     fireEvent.change(search, { target: { value: ' dit00388ac ' } });
-    await user.click(screen.getByRole('option', { name: /DIT00388AC/ }));
+    await user.click(await screen.findByRole('option', { name: /DIT00388AC/ }));
     expect(store.getState().ui.scope.vcode).toBe('DIT00388AC');
   });
 

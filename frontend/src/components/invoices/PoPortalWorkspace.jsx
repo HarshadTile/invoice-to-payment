@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { setChannelViewTab, setPageFilters } from '../../features/ui/uiSlice';
 import { useScope } from '../../features/ui/scope';
 import { PO_TABLE_CONFIG, PO_VIEWS, matchesPoPortalWorkspace, poPortalHistoryRows } from '../../utils/poPortalWorkspace';
-import { facetOptions } from '../../utils/srmWorkspace';
+import { facetOptionsFromCounts } from '../../utils/srmWorkspace';
 import InvoiceFilterBar from './InvoiceFilterBar.jsx';
 import SrmDataTable from './SrmDataTable.jsx';
 import Dropdown from '../common/Dropdown.jsx';
@@ -11,11 +11,13 @@ import GlobalLogsBody from '../common/GlobalLogsBody.jsx';
 import { FileText, History, Search, Sliders } from '../common/icons.jsx';
 import { filterInvoiceQuery, INVOICE_SEARCH_PLACEHOLDER } from '../../utils/invoiceQuery';
 import useWorkspaceSearch from './useWorkspaceSearch';
+import useChannelRegister from './useChannelRegister';
 
 // Same shape as SRM: master search + status/date, and three PO-specific quick filters.
 // Approval statuses, MIRO and payment state are found through the master search instead.
 const EMPTY = { q: '', status: '', date_from: '', date_to: '', source_approval_stage: '', po_type: '', approver: '' };
 const VIEW_ICON = { 'Invoice Log': FileText, History };
+const NO_INVOICES = [];
 
 export default function PoPortalWorkspace({ invoices, canExport }) {
   const dispatch = useDispatch();
@@ -28,20 +30,32 @@ export default function PoPortalWorkspace({ invoices, canExport }) {
   // The tab lights up immediately; the (large) table for it renders right after.
   const shownView = useDeferredValue(view);
   const commitQuery = useCallback((q) => dispatch(setPageFilters({ key: 'poPortalWorkspace', filters: { ...filters, q } })), [dispatch, filters]);
-  const search = useWorkspaceSearch(filters.q, commitQuery, invoices);
+  // The register is searched on the server; only History (still in the browser) needs the local index.
+  const historyShown = shownView === 'History';
+  const search = useWorkspaceSearch(filters.q, commitQuery, historyShown ? invoices : NO_INVOICES);
   const update = (changes) => {
     if ('q' in changes) search.setQuery(changes.q);
     dispatch(setPageFilters({ key: 'poPortalWorkspace', filters: { ...filters, ...changes } }));
   };
-  // Search first through the list's cached index, then the cheap field filters.
-  const searched = useMemo(() => filterInvoiceQuery(invoices, search.deferredQuery), [invoices, search.deferredQuery]);
-  const beforeStatus = useMemo(() => searched.filter((i) => matchesPoPortalWorkspace(i, { ...filters, q: '' }, scope.dateField, true)), [searched, filters, scope.dateField]);
-  const filtered = useMemo(() => beforeStatus.filter((i) => !filters.status || i.status === filters.status), [beforeStatus, filters.status]);
+  // Invoice Register: filtered, counted and paged on the server.
+  const serverFilters = useMemo(() => ({
+    q: search.deferredQuery.trim() ? search.deferredQuery : undefined,
+    po_stage: filters.source_approval_stage || undefined, po_type: filters.po_type || undefined,
+    approver: filters.approver || undefined, statuses: filters.status ? [filters.status] : undefined,
+    date_from: filters.date_from || undefined, date_to: filters.date_to || undefined,
+  }), [search.deferredQuery, filters]);
+  const register = useChannelRegister({ invoices, channel: 'poPortal', namespace: PO_TABLE_CONFIG.namespace, view: PO_VIEWS[0].key,
+    filters: serverFilters, facetFields: ['source_approval_stage', 'po_type', 'po_approver'], enabled: !historyShown });
   const facets = useMemo(() => ({
-    stage: facetOptions(invoices, (i) => i.poPortal?.source_approval_stage, 'All stages'),
-    poType: facetOptions(invoices, (i) => i.poPortal?.po_type, 'All PO types'),
-    approver: facetOptions(invoices, (i) => [i.poPortal?.hod1, i.poPortal?.hod2, i.poPortal?.accounts_user], 'All approvers'),
-  }), [invoices]);
+    stage: facetOptionsFromCounts(register.facets.source_approval_stage, 'All stages'),
+    poType: facetOptionsFromCounts(register.facets.po_type, 'All PO types'),
+    approver: facetOptionsFromCounts(register.facets.po_approver, 'All approvers'),
+  }), [register.facets]);
+  // History: the dated milestones of every matching invoice, still built in the browser.
+  const historyBase = useMemo(() => (!historyShown ? NO_INVOICES
+    : filterInvoiceQuery(invoices, search.deferredQuery).filter((i) => matchesPoPortalWorkspace(i, { ...filters, q: '' }, scope.dateField, true))),
+  [historyShown, invoices, search.deferredQuery, filters, scope.dateField]);
+  const historyList = useMemo(() => historyBase.filter((i) => !filters.status || i.status === filters.status), [historyBase, filters.status]);
 
   return <>
     <div className="srm-toolbar">
@@ -72,13 +86,22 @@ export default function PoPortalWorkspace({ invoices, canExport }) {
       <InvoiceFilterBar compact status={filters.status} dateFrom={filters.date_from} dateTo={filters.date_to}
         onStatusChange={(status) => update({ status })} onDateFrom={(date_from) => update({ date_from })}
         onDateTo={(date_to) => update({ date_to })} onAllDates={() => update({ date_from: '', date_to: '' })}
-        onClear={() => update(EMPTY)} statusCountBase={beforeStatus} resultCount={filtered.length}
+        onClear={() => update(EMPTY)}
+        statusCountBase={historyShown ? historyBase : register.statusCountBase}
+        statusCounts={historyShown ? undefined : register.statusCounts}
+        resultCount={historyShown ? historyList.length : register.total}
         rangeLabel={!filters.date_from && !filters.date_to ? 'all dates' : `${filters.date_from || 'earliest'} to ${filters.date_to || 'latest'}`} />
     </div>
     <div className={`srm-view${shownView !== view ? ' is-switching' : ''}`} aria-busy={shownView !== view}>
       {shownView !== view && <p role="status" className="srm-view-loading">Loading {PO_VIEWS.find((entry) => entry.key === view).label.toLowerCase()}…</p>}
-      {shownView === 'History' ? <GlobalLogsBody invoiceList={filtered} getInvoiceRows={poPortalHistoryRows} strictInvoiceScope />
-        : <SrmDataTable invoices={filtered} view={shownView} canExport={canExport} config={PO_TABLE_CONFIG} />}
+      {historyShown
+        ? <GlobalLogsBody invoiceList={historyList} getInvoiceRows={poPortalHistoryRows} strictInvoiceScope
+          serverQuery={{ kind: 'po', filters: register.query }} />
+        : <>
+          {register.error && <p role="alert" className="cell-muted">Invoices could not be loaded: {register.error.message || 'try again'}.{' '}
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => register.refetch()}>Retry</button></p>}
+          <SrmDataTable invoices={register.invoices} view={shownView} canExport={canExport} config={PO_TABLE_CONFIG} server={register.server} />
+        </>}
     </div>
   </>;
 }

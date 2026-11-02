@@ -4,6 +4,8 @@ import { selectPerm } from '../../features/auth/authSlice';
 import { CHANNEL_LABEL } from '../../data/constants';
 import { openModal } from '../../features/ui/uiSlice';
 import { workspaceApi } from '../../api/workspaceApi';
+import { USE_FASTAPI_INVOICES } from '../../api/invoiceApi';
+import { downloadInvoiceEvents, useGetInvoiceEventsQuery } from '../../api/invoicesQueryApi';
 import { timestampedExportName } from '../../utils/csv';
 import {
   formatDay, formatDayTime, invoiceLogRows, logRowFilter, logRowsToCsv, staffQueryLogRows,
@@ -113,10 +115,17 @@ const NO_FILTERS = { search: '', type: 'all', from: '', to: '' };
  * from the real data only: invoice milestones and payments (with the real dates on the
  * invoice record) and query activity (from GET /v1/tickets/internal-activity-log, limited to the
  * tickets this person may see), each with who did it.
+ *
+ * On the live API the list is built, filtered and paged on the server (GET /v1/invoices/events),
+ * from `serverQuery` = { kind: 'global' | 'srm' | 'po', filters }. Otherwise (tests, the offline
+ * prototype) it is built here from `invoiceList`.
  */
-export default function GlobalLogsBody({ invoiceList, getInvoiceRows = invoiceLogRows, strictInvoiceScope = false }) {
+export default function GlobalLogsBody(props) {
+  return USE_FASTAPI_INVOICES && props.serverQuery ? <ServerLogs serverQuery={props.serverQuery} /> : <LocalLogs {...props} />;
+}
+
+function LocalLogs({ invoiceList, getInvoiceRows = invoiceLogRows, strictInvoiceScope = false }) {
   const canExport = !!useSelector(selectPerm).importExport;
-  const dispatch = useDispatch();
 
   const [entries, setEntries] = useState([]);
   const [queryError, setQueryError] = useState(false);
@@ -158,10 +167,64 @@ export default function GlobalLogsBody({ invoiceList, getInvoiceRows = invoiceLo
   }
 
   return (
-    <div className="card">
+    <LogView
+      filters={filters} setFilter={setFilter} filtersActive={filtersActive} onClear={() => { setFilters(NO_FILTERS); setPage(1); }}
+      onExport={canExport ? exportCsv : undefined} total={rows.length} queryError={queryError}
+      pageRows={pageRows} page={currentPage} onPage={setPage} dateDir={dateDir} onToggleDate={toggleDate}
+    />
+  );
+}
+
+/** The log built and paged on the server: one page of rows at a time, filters and order sent along. */
+function ServerLogs({ serverQuery }) {
+  const canExport = !!useSelector(selectPerm).importExport;
+  const [filters, setFilters] = useState(NO_FILTERS);
+  const [page, setPage] = useState(1);
+  const [dateDir, setDateDir] = useState('desc');
+  const setFilter = (key) => (e) => { setFilters((prev) => ({ ...prev, [key]: e.target.value })); setPage(1); };
+  const filtersActive = Object.keys(NO_FILTERS).some((key) => filters[key] !== NO_FILTERS[key]);
+  const deferredFilters = useDeferredValue(filters);
+  const params = useMemo(() => ({
+    ...serverQuery.filters, kind: serverQuery.kind, log_q: deferredFilters.search.trim() || undefined,
+    log_type: deferredFilters.type, log_from: deferredFilters.from || undefined, log_to: deferredFilters.to || undefined,
+    order: dateDir,
+  }), [serverQuery, deferredFilters, dateDir]);
+  // A different invoice selection starts the log on its first page.
+  const selectionKey = JSON.stringify(serverQuery);
+  const [shownSelection, setShownSelection] = useState(selectionKey);
+  if (shownSelection !== selectionKey) { setShownSelection(selectionKey); setPage(1); }
+  const result = useGetInvoiceEventsQuery({ ...params, page, page_size: PAGE_SIZE });
+  const total = result.data?.total ?? 0;
+  const pageRows = result.data?.items || [];
+
+  const exportCsv = () => downloadInvoiceEvents(params, timestampedExportName('Logs'));
+  return (
+    <>
+      {result.isError && (
+        <p role="alert" className="cell-muted">The log could not be loaded: {result.error?.message || 'try again'}.{' '}
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => result.refetch()}>Retry</button></p>
+      )}
+      <LogView
+        filters={filters} setFilter={setFilter} filtersActive={filtersActive} onClear={() => { setFilters(NO_FILTERS); setPage(1); }}
+        onExport={canExport ? exportCsv : undefined} total={total} queryError={!!result.data?.queryError} busy={result.isFetching}
+        pageRows={pageRows} page={Math.min(page, Math.max(1, Math.ceil(total / PAGE_SIZE)))} onPage={setPage}
+        dateDir={dateDir} onToggleDate={() => { setDateDir((dir) => (dir === 'desc' ? 'asc' : 'desc')); setPage(1); }}
+        emptyText={result.isLoading ? 'Loading activity…' : undefined}
+      />
+    </>
+  );
+}
+
+/** Filter bar, table and pager, shared by both versions. `pageRows` is the page to show. */
+function LogView({ filters, setFilter, filtersActive, onClear, onExport, total, queryError, pageRows, page, onPage,
+  dateDir, onToggleDate, busy = false, emptyText }) {
+  const dispatch = useDispatch();
+  const currentPage = page;
+  return (
+    <div className="card" aria-busy={busy}>
       <LogFilterBar
         filters={filters} onChange={setFilter} filtersActive={filtersActive}
-        onClear={() => { setFilters(NO_FILTERS); setPage(1); }} onExport={canExport ? exportCsv : undefined} exportCount={rows.length}
+        onClear={onClear} onExport={onExport} exportCount={total}
       />
       {queryError && (
         <p style={{ color: 'var(--text-muted)', fontSize: '0.78125rem', margin: '0 0 0.625rem' }}>Query activity couldn't be loaded right now. Invoice and payment activity is shown below.</p>
@@ -169,12 +232,12 @@ export default function GlobalLogsBody({ invoiceList, getInvoiceRows = invoiceLo
       <div className="table-scroll">
         <table className="log-table">
           <thead>
-            <tr><SortDateTh dir={dateDir} onToggle={toggleDate} /><th>Invoice No</th><th>Vendor Code</th><th>PO No</th><th>Type</th><th>Event</th><th>Performed By</th><th>Details</th></tr>
+            <tr><SortDateTh dir={dateDir} onToggle={onToggleDate} /><th>Invoice No</th><th>Vendor Code</th><th>PO No</th><th>Type</th><th>Event</th><th>Performed By</th><th>Details</th></tr>
           </thead>
           <tbody>
             {pageRows.length === 0 && (
               <tr><td colSpan={8} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem' }}>
-                {filtersActive ? 'No log entries match your filters.' : 'No activity yet.'}
+                {emptyText || (filtersActive ? 'No log entries match your filters.' : 'No activity yet.')}
               </td></tr>
             )}
             {/* Source data can repeat an invoice line, so the position keeps keys unique. */}
@@ -201,7 +264,7 @@ export default function GlobalLogsBody({ invoiceList, getInvoiceRows = invoiceLo
           </tbody>
         </table>
       </div>
-      <PagerFoot total={rows.length} page={currentPage} pageSize={PAGE_SIZE} onPage={setPage} />
+      <PagerFoot total={total} page={currentPage} pageSize={PAGE_SIZE} onPage={onPage} />
     </div>
   );
 }

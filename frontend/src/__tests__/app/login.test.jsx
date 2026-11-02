@@ -72,7 +72,7 @@ describe('Login flows', () => {
     await user.type(screen.getByLabelText('Password'), 'admin123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByRole('heading', { name: 'Invoice Tracking' })).toBeInTheDocument();
-    expect(screen.getAllByText(/^INV-/).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/^INV-/)).length).toBeGreaterThan(0); // the dashboard loads its rows
   });
 
   it('logs in as a Channel scope and hides HQ-only nav items', async () => {

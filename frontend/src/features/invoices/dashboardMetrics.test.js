@@ -7,7 +7,7 @@ const inv = (over) => ({ no: 'X', channel: 'msetuSrm', status: 'Paid', productTy
 describe('dashboard metrics', () => {
   it('puts every invoice in exactly one status, stage, product and channel bucket', () => {
     const list = [
-      inv({ status: 'Paid' }), inv({ status: 'Pending for Approval', productType: 'M' }), inv({ status: 'Pending Approval' }),
+      inv({ status: 'Paid' }), inv({ status: 'Pending for Approval', productType: 'M' }), inv({ status: 'Pending for Approval' }),
       inv({ status: 'Miro Booked', channel: 'poPortal', productType: undefined, invoiceType: undefined }),
       inv({ status: 'Rejected' }), inv({ status: 'Something New' }),
     ];
@@ -24,6 +24,14 @@ describe('dashboard metrics', () => {
     expect(m.groups.find((g) => g.key === 'approved').count).toBe(0);
     expect(m.groups.find((g) => g.key === 'miro').count).toBe(1);
     expect(m.product.map((p) => p.count)).toEqual([4, 1, 1]);
+  });
+
+  it('the Pending Approval tile counts exactly the status its click-through searches for', () => {
+    // A leftover prototype spelling is not a second pending status: it is listed on its own, so the
+    // tile never shows more invoices than Search returns for "Pending for Approval".
+    const m = dashboardMetrics([inv({ status: 'Pending for Approval' }), inv({ status: 'Pending Approval' })], []);
+    expect(m.kpi.pendingApproval.count).toBe(1);
+    expect(m.statuses.map((s) => s.key)).toEqual(['Pending for Approval', 'Pending Approval']);
   });
 
   it('sums values in the main currency only and reports the others separately', () => {

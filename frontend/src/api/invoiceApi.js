@@ -105,6 +105,22 @@ function queryString(filters = {}) {
   return query ? `?${query}` : '';
 }
 
+// fetch() rejects with a TypeError when the connection drops; 5xx (incl. 503 while the server is
+// still loading its data) is worth another try. 4xx means the request itself is wrong: no retry.
+const isTransient = (error) => error instanceof TypeError || error?.status >= 500;
+const RETRY_DELAYS_MS = [1000, 3000];
+
+async function withRetry(load) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await load();
+    } catch (error) {
+      if (attempt >= RETRY_DELAYS_MS.length || !isTransient(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
+
 export const invoiceApi = {
   list: (filters = {}) => request(`/list-invoices${queryString(filters)}`),
   get: (invoiceNumber, poItem, identity = {}) => request(`/invoice-details/${encodeURIComponent(invoiceNumber)}${queryString({ po_item: poItem, ...identity })}`),
@@ -113,7 +129,7 @@ export const invoiceApi = {
   async listAll(filters = {}) {
     filters = { channel: 'all', ...filters };
     const pageSize = 1000;
-    const first = await this.list({ ...filters, page: 1, page_size: pageSize });
+    const first = await withRetry(() => this.list({ ...filters, page: 1, page_size: pageSize }));
     const pages = new Array(first.total_pages);
     pages[0] = first.items.map(toWorkspaceInvoice);
     let nextPage = 2;
@@ -122,7 +138,7 @@ export const invoiceApi = {
       while (!failed && nextPage <= first.total_pages) {
         const page = nextPage++;
         try {
-          const result = await this.list({ ...filters, page, page_size: pageSize });
+          const result = await withRetry(() => this.list({ ...filters, page, page_size: pageSize }));
           pages[page - 1] = result.items.map(toWorkspaceInvoice);
         } catch (error) {
           failed = true;

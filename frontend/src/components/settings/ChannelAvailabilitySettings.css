@@ -1,14 +1,16 @@
-.portal-availability{margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);}
-.portal-availability h3{margin:0 0 8px;font-size:15px;}
-.portal-availability>p{font-size:13px;color:var(--text-muted);line-height:1.5;}
-.portal-availability-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:18px;}
-.portal-availability-item{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px;border:1px solid var(--border);border-radius:10px;background:#fafafa;}
-.portal-availability-item strong{display:block;font-size:13px;}
-.portal-availability-item small{display:block;margin-top:6px;color:var(--text-muted);font-size:12px;}
-.portal-availability-switch{width:42px;height:24px;flex-shrink:0;border:0;border-radius:20px;background:#b9bdc7;padding:3px;cursor:pointer;}
-.portal-availability-switch span{display:block;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s;}
+.portal-availability{margin-bottom:1.5rem;padding-bottom:1.5rem;border-bottom:0.0625rem solid var(--border);}
+.portal-availability h3{margin:0 0 0.5rem;font-size:0.9375rem;}
+.portal-availability>p{font-size:0.8125rem;color:var(--text-muted);line-height:1.5;}
+.portal-availability-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.875rem;margin-top:1.125rem;}
+.portal-availability-item{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.125rem;border:0.0625rem solid var(--border);border-radius:0.625rem;background:#fafafa;}
+.portal-availability-item strong{display:block;font-size:0.8125rem;}
+.portal-availability-item small{display:block;margin-top:0.375rem;color:var(--text-muted);font-size:0.75rem;}
+.portal-availability-switch{width:2.625rem;height:1.5rem;flex-shrink:0;border:0;border-radius:1.25rem;background:#b9bdc7;padding:0.1875rem;cursor:pointer;}
+.portal-availability-switch span{display:block;width:1.125rem;height:1.125rem;border-radius:50%;background:#fff;transition:transform .15s;}
 .portal-availability-switch[aria-checked="true"]{background:var(--brand);}
-.portal-availability-switch[aria-checked="true"] span{transform:translateX(18px);}
-.portal-availability-switch:focus-visible{outline:2px solid var(--brand);outline-offset:3px;}
+.portal-availability-switch[aria-checked="true"] span{transform:translateX(1.125rem);}
+.portal-availability-switch:focus-visible{outline:0.125rem solid var(--brand);outline-offset:0.1875rem;}
 .portal-availability-switch:disabled{opacity:.6;cursor:wait;}
-@media(max-width:760px){.portal-availability-grid{grid-template-columns:1fr;}}
+@media(max-width:64em){.portal-availability-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:48em){.portal-availability-grid{grid-template-columns:1fr;}}
+@media(max-width:23.4375em){.portal-availability-item{padding:0.875rem;}}

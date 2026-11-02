@@ -6,6 +6,7 @@ import uiReducer from '../features/ui/uiSlice';
 
 import { ticketsApi } from '../api/ticketsApi';
 import { notificationsApi } from '../api/notificationsApi';
+import { invoicesQueryApi } from '../api/invoicesQueryApi';
 
 export const store = configureStore({
   reducer: {
@@ -15,7 +16,8 @@ export const store = configureStore({
     ui: uiReducer,
     [ticketsApi.reducerPath]: ticketsApi.reducer,
     [notificationsApi.reducerPath]: notificationsApi.reducer,
+    [invoicesQueryApi.reducerPath]: invoicesQueryApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware().concat(ticketsApi.middleware, notificationsApi.middleware),
+    getDefaultMiddleware().concat(ticketsApi.middleware, notificationsApi.middleware, invoicesQueryApi.middleware),
 });

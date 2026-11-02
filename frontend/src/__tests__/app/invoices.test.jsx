@@ -38,7 +38,7 @@ describe('Internal admin - Invoice tracking, search and invoice details', () => 
 
   it('opens the invoice stage popup from the Recent Invoices list', async () => {
     const { user } = await loginAdmin();
-    await user.click(screen.getAllByTitle('Open current stage')[0]);
+    await user.click((await screen.findAllByTitle('Open current stage'))[0]); // the dashboard loads its rows
     expect(await screen.findByText(/Open in /)).toBeInTheDocument();
     await user.click(screen.getAllByText('✕')[0]);
     expect(screen.queryByText(/Open in /)).not.toBeInTheDocument();
@@ -78,7 +78,7 @@ describe('Internal admin - Invoice tracking, search and invoice details', () => 
 
   it('previews a vendor code and opens its full view', async () => {
     const { user } = await loginAdmin();
-    await user.click(screen.getAllByText('DIT00388AC')[0]);
+    await user.click((await screen.findAllByText('DIT00388AC'))[0]);
     expect(await screen.findByText('Purchase Orders')).toBeInTheDocument();
     await user.click(screen.getAllByText('Open Full View →')[0]);
     expect(await screen.findByLabelText('Vendor Code')).toHaveValue('DIT00388AC');

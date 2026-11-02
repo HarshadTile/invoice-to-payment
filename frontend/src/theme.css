@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
 
+/* Breakpoints. Media queries cannot read custom properties, so this is the reference scale
+   (16px root): 320 = 20em, 375 = 23.4375em, 768 = 48em, 1024 = 64em, 1366 = 85.375em,
+   1920 = 120em. New rules use these; older component-specific steps (e.g. the sidebar
+   drawer at 53.75em) are deliberate and stay. Every page is checked at all six widths. */
 :root{
   /* Mahindra brand — "Mahindra Red" per mahindra.com */
   --brand: #C4122E;
@@ -158,7 +162,7 @@ h1,h2,h3{margin:0;color:var(--text);font-family:var(--font-display);}
 .chip.gray{background:var(--gray-bg);color:var(--text-muted);}
 
 /* ---------- Tables ---------- */
-.table-scroll{overflow:auto;border:0.0625rem solid var(--border);border-radius:var(--radius);max-height:38.75rem;}
+.table-scroll{overflow:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;border:0.0625rem solid var(--border);border-radius:var(--radius);max-height:38.75rem;}
 table{width:100%;border-collapse:collapse;font-size:0.8125rem;}
 thead th{
   position:sticky;top:0;z-index:2;text-align:left;
@@ -192,6 +196,16 @@ thead th.col-actions{background:var(--table-head);z-index:3;}
   .invoice-list-table th,.invoice-list-table td{padding-inline:0.6rem;}
   .invoice-list-table th.invoice-status-date,.invoice-list-table td.invoice-status-date{width:8rem;min-width:8rem;max-width:8rem;}
   .invoice-list-table th.col-actions,.invoice-list-table td.col-actions{width:4.25rem;min-width:4.25rem;max-width:4.25rem;padding-inline:0.25rem;}
+}
+/* Vendor is the last pinned column. Its offset comes from InvoiceTable as --pin-left; it is
+   pinned in CSS (not inline) so phones can let it scroll and keep room for the data. */
+.col-pin-vendor{position:sticky;left:var(--pin-left,0);z-index:1;background:inherit;box-shadow:inset -0.0625rem 0 0 var(--border-soft);}
+th.col-pin-vendor{z-index:3;background:var(--table-head);}
+@media (max-width:30em){
+  .invoice-list-table th,.invoice-list-table td{padding-inline:0.5rem;}
+  .invoice-list-table th.invoice-status-date,.invoice-list-table td.invoice-status-date{width:7rem;min-width:7rem;max-width:7rem;}
+  .invoice-list-table th.col-actions,.invoice-list-table td.col-actions{width:3.75rem;min-width:3.75rem;max-width:3.75rem;}
+  .col-pin-vendor{left:auto;box-shadow:none;} /* scrolls sideways; header still sticks to the top */
 }
 .link-hero{color:var(--brand);font-weight:600;text-decoration:none;cursor:pointer;background:none;border:none;padding:0;font-size:inherit;font-family:inherit;}
 .link-hero:hover{color:var(--brand-dark);text-decoration:underline;text-underline-offset:0.125rem;}
@@ -402,7 +416,12 @@ input[type="date"].search-box::-webkit-calendar-picker-indicator:hover{opacity:.
 .ticket-route-note{margin:0.125rem 0 0;font-size:0.78125rem;color:var(--text-muted);}
 .validation-row{display:flex;justify-content:space-between;align-items:center;padding:0.6875rem 0.8125rem;border:0.0625rem solid var(--border);border-radius:0.5625rem;margin-bottom:0.5rem;font-size:0.8125rem;gap:0.75rem;background:#FAFBFC;}
 .modal-overlay{position:fixed;inset:0;background:rgba(20,20,24,.48);display:flex;align-items:center;justify-content:center;z-index:100;padding:1rem;}
-.modal{background:#fff;border-radius:var(--radius-lg);width:35rem;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;padding:0;box-shadow:0 1.875rem 4.375rem rgba(20,4,10,.28);animation:modal-in .18s ease both;}
+/* phones: the dialog becomes a bottom sheet so its buttons stay within thumb reach */
+@media (max-width:30em){
+  .modal-overlay{padding:0.5rem 0.5rem 0;align-items:flex-end;}
+  .modal-overlay .modal{max-width:100%;max-height:92dvh;border-radius:1rem 1rem 0 0;}
+}
+.modal{background:#fff;border-radius:var(--radius-lg);width:35rem;max-width:calc(100vw - 2rem);max-height:min(88vh,88dvh);display:flex;flex-direction:column;overflow:hidden;padding:0;box-shadow:0 1.875rem 4.375rem rgba(20,4,10,.28);animation:modal-in .18s ease both;}
 @keyframes modal-in{from{opacity:0;transform:translateY(0.625rem) scale(.99);}to{opacity:1;transform:none;}}
 .modal-head{flex:0 0 auto;background:#fff;padding:1.125rem 1.375rem;border-bottom:0.0625rem solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;}
 .modal-head h3{margin:0;font-family:var(--font-display);font-size:1rem;font-weight:700;letter-spacing:-.005em;color:var(--ink);}
@@ -708,7 +727,7 @@ input[type="date"].search-box::-webkit-calendar-picker-indicator:hover{opacity:.
 .srm-columns{position:relative;}
 .srm-columns summary{cursor:pointer;list-style:none;}
 .srm-columns summary::-webkit-details-marker{display:none;}
-.srm-columns-panel{position:absolute;right:0;top:calc(100% + 0.375rem);z-index:25;width:19rem;max-width:calc(100vw - 2rem);max-height:27rem;overflow:auto;padding:1rem;background:#fff;border:1px solid var(--border);border-radius:0.625rem;box-shadow:var(--shadow-md);}
+.srm-columns-panel{position:absolute;right:0;top:calc(100% + 0.375rem);z-index:25;width:19rem;max-width:calc(100vw - 2rem);max-height:27rem;overflow:auto;padding:1rem;background:#fff;border:0.0625rem solid var(--border);border-radius:0.625rem;box-shadow:var(--shadow-md);}
 .srm-columns-panel>label:first-child{display:flex;flex-direction:column;gap:0.375rem;font-size:0.8125rem;font-weight:600;}
 .srm-columns-panel select{width:100%;}
 .srm-column-option{display:flex;align-items:center;gap:0.5rem;padding:0.375rem 0;font-size:0.8125rem;}
@@ -717,8 +736,12 @@ input[type="date"].search-box::-webkit-calendar-picker-indicator:hover{opacity:.
 .srm-data-table tbody tr:hover td{background:#F6F4F1;}
 .srm-data-table .srm-pin-vendor{font-weight:500;color:var(--text);}
 .srm-data-table .srm-pin-invoice{position:sticky;left:0;min-width:10rem;max-width:10rem;width:10rem;background:#fff;z-index:2;}
-.srm-data-table .srm-pin-vendor{position:sticky;left:10rem;min-width:14rem;max-width:14rem;width:14rem;background:#fff;z-index:2;box-shadow:1px 0 0 var(--border);}
+.srm-data-table .srm-pin-vendor{position:sticky;left:10rem;min-width:14rem;max-width:14rem;width:14rem;background:#fff;z-index:2;box-shadow:0.0625rem 0 0 var(--border);}
 .srm-data-table thead .srm-pin-invoice,.srm-data-table thead .srm-pin-vendor{background:var(--table-head);z-index:5;}
+@media (max-width:30em){
+  .srm-data-table .srm-pin-invoice{min-width:8rem;max-width:8rem;width:8rem;}
+  .srm-data-table .srm-pin-vendor{left:auto;box-shadow:none;}
+}
 .dd-search-row{position:sticky;top:-0.25rem;z-index:1;padding:0.5rem;background:#fff;border-bottom:0.0625rem solid var(--border-soft);list-style:none;}
 .dd-search-input{display:block;width:100%;min-width:0;max-width:100%;height:2.125rem;padding:0 0.625rem;font-size:0.78125rem;}
 .dd-opt.selected{background:var(--brand-tint);color:var(--brand-dark);font-weight:700;}
@@ -1173,8 +1196,9 @@ tbody tr{transition:background .12s ease;}
 
 /* chart cards: header with Chart / Table switch */
 .chart-card{padding:1rem 1.125rem;gap:0.25rem;}
-.chart-card-head{display:flex;justify-content:space-between;align-items:center;gap:0.75rem;margin-bottom:0.5rem;}
-.chart-card-head h3{margin:0;}
+/* wraps so the actions drop under the title instead of spilling into the next card */
+.chart-card-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:0.5rem 0.75rem;margin-bottom:0.5rem;}
+.chart-card-head h3{margin:0;flex:1 1 12rem;min-width:0;}
 .chart-view-switch{display:inline-flex;gap:0.125rem;padding:0.1875rem;border-radius:0.5625rem;background:#F3F2EE;}
 .chart-view-switch button{padding:0.25rem 0.625rem;border:0;border-radius:0.4375rem;background:transparent;font:inherit;font-size:0.71875rem;font-weight:650;color:var(--text-muted);cursor:pointer;}
 .chart-view-switch button.active{background:#fff;color:var(--ink);box-shadow:0 0.0625rem 0.1875rem rgba(23,24,26,.1);}
@@ -1192,7 +1216,7 @@ tbody tr{transition:background .12s ease;}
 /* stacked columns: <=24px, 4px rounded top, 2px surface gaps, hairline grid */
 .col-chart{display:flex;flex-direction:column;gap:0.5rem;}
 .col-chart .chart-tip{position:static;min-height:1.75rem;}
-.col-plot{position:relative;height:13rem;padding:0 0 1.5rem 2.25rem;}
+.col-plot{position:relative;height:clamp(9rem,30vw,13rem);padding:0 0 1.5rem 2.25rem;}
 .col-grid{position:absolute;inset:0 0 1.5rem 2.25rem;}
 .col-grid span{position:absolute;left:0;right:0;height:0;border-top:0.0625rem solid #ECEAE3;}
 .col-grid span:first-child{border-top-color:#C3C2B7;}
@@ -1201,8 +1225,8 @@ tbody tr{transition:background .12s ease;}
 .col-slot{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:0;border:0;background:transparent;cursor:default;}
 .col-slot:hover,.col-slot.hi{background:rgba(23,24,26,.035);border-radius:0.375rem 0.375rem 0 0;}
 .col-slot:focus-visible{outline:0.125rem solid var(--brand);outline-offset:-0.125rem;}
-.col-stack{position:relative;display:flex;flex-direction:column-reverse;gap:2px;width:min(1.5rem,62%);}
-.col-seg{display:block;flex-basis:0;min-height:1px;}
+.col-stack{position:relative;display:flex;flex-direction:column-reverse;gap:0.125rem;width:min(1.5rem,62%);}
+.col-seg{display:block;flex-basis:0;min-height:0.0625rem;}
 .col-stack .col-seg:last-child{border-radius:0.25rem 0.25rem 0 0;}
 .col-cap{position:absolute;bottom:calc(100% + 0.25rem);left:50%;transform:translateX(-50%);font-size:0.6875rem;font-weight:700;color:var(--ink);white-space:nowrap;}
 .col-x{position:absolute;top:calc(100% + 0.375rem);left:50%;transform:translateX(-50%);font-size:0.65625rem;color:#898781;white-space:nowrap;}
@@ -1210,11 +1234,8 @@ tbody tr{transition:background .12s ease;}
 
 
 
-/* dashboard order: KPIs first (5 across), then two charts, then the monthly trend */
-.dash .kpi-grid{grid-template-columns:repeat(5,minmax(0,1fr));}
-@media (max-width:80em){.dash .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
-@media (max-width:48em){.dash .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-@media (max-width:30em){.dash .kpi-grid{grid-template-columns:1fr;}}
+/* dashboard order: KPIs first (5 across), then two charts, then the monthly trend.
+   The KPI column steps live with the other .dash .kpi-grid rules further down. */
 .dash-charts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0.875rem;}
 @media (max-width:64em){.dash-charts{grid-template-columns:1fr;}}
 .dash > .chart-note{margin:-0.375rem 0 0;}
@@ -1230,8 +1251,6 @@ tbody tr{transition:background .12s ease;}
 .rbar-fill{display:block;height:100%;border-radius:0 0.25rem 0.25rem 0;transition:width .3s ease;}
 .rbar-val{display:flex;justify-content:flex-end;align-items:baseline;gap:0.375rem;font-weight:700;font-size:0.8125rem;color:var(--ink);font-variant-numeric:tabular-nums;}
 .rbar-val small{min-width:2.25rem;text-align:right;font-weight:500;font-size:0.6875rem;color:var(--text-muted);}
-/* compact charts so two sit side by side */
-.dash .col-plot{height:10.5rem;}
 
 
 /* service vs material: two tiles */
@@ -1263,8 +1282,8 @@ tbody tr{transition:background .12s ease;}
 
 /* channel rings: count in the middle, gradient arc */
 .ring-row{flex:1;display:flex;justify-content:space-evenly;align-items:center;gap:1.5rem;flex-wrap:wrap;padding:0.25rem 0 0.5rem;}
-.ring-gauge{display:flex;flex-direction:column;align-items:center;gap:0.25rem;min-width:9.5rem;text-align:center;}
-.ring-fig{position:relative;width:8.5rem;height:8.5rem;margin-bottom:0.375rem;}
+.ring-gauge{display:flex;flex-direction:column;align-items:center;gap:0.25rem;min-width:min(9.5rem,100%);text-align:center;}
+.ring-fig{position:relative;width:clamp(6rem,24vw,8.5rem);aspect-ratio:1;margin-bottom:0.375rem;}
 .ring-svg{width:100%;height:100%;filter:drop-shadow(0 0.375rem 0.75rem rgba(196,18,46,.12));}
 .ring-arc{transition:stroke-dasharray .5s ease;}
 .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
@@ -1279,7 +1298,7 @@ tbody tr{transition:background .12s ease;}
 .rbar-track{background:#FBEDF0;}
 .rbar-fill{box-shadow:0 0.125rem 0.375rem -0.0625rem rgba(211,16,47,.35);}
 .rbar-row.hi .rbar-fill{filter:saturate(1.15) brightness(1.03);}
-.col-seg{box-shadow:inset 0 1px 0 rgba(255,255,255,.35);}
+.col-seg{box-shadow:inset 0 0.0625rem 0 rgba(255,255,255,.35);}
 .col-stack{filter:drop-shadow(0 0.25rem 0.375rem rgba(211,16,47,.18));}
 .col-slot.hi .col-stack{filter:drop-shadow(0 0.375rem 0.5rem rgba(211,16,47,.3)) saturate(1.1);}
 .mix-bar{background:#FBEDF0;}
@@ -1319,7 +1338,12 @@ tbody tr{transition:background .12s ease;}
 
 /* channel rings: flat arc, smaller, neutral share chip */
 .dash .ring-row{padding:0.25rem 0;}
-.dash .ring-fig{width:7rem;height:7rem;margin-bottom:0.25rem;}
+@media (max-width:23.4375em){
+  .ring-row{gap:1rem;}
+  .col-plot{padding-left:1.75rem;}
+  .col-grid{left:1.75rem;}
+}
+.dash .ring-fig{width:clamp(5.5rem,22vw,7rem);margin-bottom:0.25rem;}
 .dash .ring-svg{filter:none;}
 .dash .ring-center b{font-size:1.125rem;font-weight:700;}
 .dash .ring-share{background:#F5F6F7;border:0.0625rem solid var(--dash-border);color:#3C3D40;font-weight:600;}
@@ -1334,7 +1358,7 @@ tbody tr{transition:background .12s ease;}
 .dash .mix-bar{height:0.1875rem;background:#EEEFF1;}
 
 /* columns and ranked bars: flat fills, no glow, tighter */
-.dash .col-plot{height:10rem;}
+.dash .col-plot{height:clamp(8.5rem,26vw,10rem);}
 .dash .col-stack,.dash .col-slot.hi .col-stack{filter:none;}
 .dash .col-seg{box-shadow:none;}
 .dash .col-slot:hover,.dash .col-slot.hi{background:#F5F6F7;}
@@ -1358,7 +1382,9 @@ tbody tr{transition:background .12s ease;}
 .chart-clear:hover{color:var(--brand-dark);}
 
 /* chart header controls: optional chip(s) before the Chart / Table switch */
-.chart-card-actions{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;}
+.chart-card-actions{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;min-width:0;max-width:100%;margin-left:auto;}
+.chart-card-actions .dd-chip,.chart-card-actions .dd-chip .dd{min-width:0;max-width:100%;}
+.chart-card-actions .dd-chip .dd-btn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .chart-card-actions .dd-chip .dd-menu{left:auto;right:0;}
 
 /* Service / Material cards open Search: same quiet hover as the KPI tiles */

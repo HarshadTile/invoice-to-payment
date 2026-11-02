@@ -1,6 +1,8 @@
 import { useDispatch } from 'react-redux';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
-import { currentStageName, handlerFor, findInvoice } from '../../features/invoices/invoice';
+import { currentStageName, handlerFor } from '../../features/invoices/invoice';
+import { useInvoice } from '../../features/invoices/useInvoice';
+import InvoiceLoading from './InvoiceLoading.jsx';
 import ModalShell from './ModalShell.jsx';
 import Badge from '../common/Badge.jsx';
 import { closeModal, ensureNavExpanded } from '../../features/ui/uiSlice';
@@ -9,8 +11,9 @@ import { useNavigate } from 'react-router-dom';
 export default function InvoiceStageModal({ ctx }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const inv = findInvoice(ctx.no, ctx.poItem);
-  if (!inv) return null;
+  const lookup = useInvoice(ctx);
+  const inv = lookup.inv;
+  if (!inv) return <InvoiceLoading lookup={lookup} title={ctx.no} width={420} />;
   const h = handlerFor(inv);
 
   return (

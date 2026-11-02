@@ -13,14 +13,16 @@ import { invoiceProductType } from './invoice';
 import { invoiceFilterDate } from '../../utils/invoiceDates';
 
 /** Workflow order for the status chart; anything else is listed after these. */
-export const STATUS_FLOW = ['Initial', 'Push to PO Portal', 'Invoice Uploaded', 'Pending for Approval', 'Pending Approval',
+export const STATUS_FLOW = ['Initial', 'Push to PO Portal', 'Invoice Uploaded', 'Pending for Approval',
   'Action Required', 'Level Approved', 'Approved', 'Miro Booked', 'Payment Due', 'Paid'];
 export const EXCEPTION_STATUSES = ['Rejected', 'Entry Deleted', 'Deleted'];
-const PENDING = ['Pending Approval', 'Pending for Approval'];
+// The one pending status the invoice sources produce (SRM flag P, PO Portal awaiting HOD2). The tile
+// counts exactly what its click-through filters on, so the two always agree.
+const PENDING = ['Pending for Approval'];
 
 /** The pipeline groups behind the overview bar, in flow order. Statuses not listed land in "Other". */
 export const STAGE_GROUPS = [
-  { key: 'awaiting', label: 'Awaiting approval', statuses: ['Initial', 'Push to PO Portal', 'Invoice Uploaded', 'Pending for Approval', 'Pending Approval', 'Action Required', 'Level Approved'] },
+  { key: 'awaiting', label: 'Awaiting approval', statuses: ['Initial', 'Push to PO Portal', 'Invoice Uploaded', 'Pending for Approval', 'Action Required', 'Level Approved'] },
   { key: 'approved', label: 'Approved', statuses: ['Approved'] },
   { key: 'miro', label: 'Miro Booked', statuses: ['Miro Booked'] },
   { key: 'paid', label: 'Paid', statuses: ['Paid'] },

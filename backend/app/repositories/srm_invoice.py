@@ -5,12 +5,28 @@ from pathlib import Path
 from threading import Lock
 
 from openpyxl import load_workbook
+from app.core.bigquery_api import fetch_columns, use_api
+from app.repositories import api_snapshot
 from app.repositories.workbook_cache import read_workbook_snapshot
 
 EXCEL_FILE = Path(__file__).resolve().parents[2] / "data" / "tbl_dw_inv_paymt_SRM.xlsx"
 SHEET_NAME = "in"
+BIGQUERY_TABLE = "tbl_dw_inv_paymt_SRM"
+# The workbook's 40 headers; the BigQuery table has the same columns. Every one is read somewhere
+# (status, filters, the invoice response), so the API query selects them all by name.
+SRM_COLUMNS = (
+    "VENDOR_INVOICE_NO", "INVOICE_DATE", "INVOICE_UPLOAD_DATE", "Invoice_Uploaded", "PRODUCT_TYPE",
+    "PLANT", "DV_TYPE", "FISCAL_YEAR", "FILTER_FISCAL_YEAR", "STATUS_FLAG", "STATUS_FLAG_APPROVED",
+    "PURCHASING_DOCUMENT", "ITEM", "SUPPLIER", "SUPPLIER_NAME", "PAN_NO",
+    "APPROVED_BY", "PENDING_WITH", "APPROVER1", "APPROVER2", "APPROVER3", "APPROVER4", "APPROVER5",
+    "APPROVER6", "APPROVER7", "DOC_SENT_ACCOUNT_DATE", "FINAL_APPRPVAL_DATE", "Approver_Remarks", "REJ_REASON",
+    "MIRO_BOOKED", "MIRO_DOCUMENT_DATE", "POSTING_DATE", "CURRENCY", "PAYABLE_AMOUNT", "NET_DUE_DATE",
+    "Payment_Due_Date", "ACCOUNT_TYPE", "CLEARING_DATE", "UTR_NUMBER", "UTR_CLEARING_DATE_PAID",
+)
 _cached_invoices = None
 _load_lock = Lock()
+SNAPSHOT_NAME = "srm"
+loaded_from_snapshot = False  # the cache holds the last snapshot; invoice_refresh fetches fresh data
 
 STATUS_LABELS = {
     "D": "Rejected", "Y": "Rejected", "X": "Entry Deleted",
@@ -65,6 +81,12 @@ def date_value(value):
     return None
 
 
+def _item_number(value):
+    """A PO item as a number ("00010", 10 and "10" are the same item); other text stays as text."""
+    text = text_value(value)
+    return int(text) if text and text.isdigit() else (text or "").lower()
+
+
 def invoice_status(row):
     """Payment evidence wins, then MIRO booking, then the SRM approval flag."""
     if row.get('__channel') == 'poPortal':
@@ -81,16 +103,43 @@ def invoice_status(row):
 
 
 def _load_excel_data():
-    global _cached_invoices
+    """SRM rows from BigQuery (INVOICE_SOURCE=api) or the workbook, loaded once per process. With the
+    API, the last on-disk snapshot is used when there is one, so a restart serves data at once."""
+    global _cached_invoices, loaded_from_snapshot
     if _cached_invoices is not None:
         return _cached_invoices
     with _load_lock:
         if _cached_invoices is None:
-            records = read_workbook_snapshot(EXCEL_FILE, SHEET_NAME, _read_excel_rows)
-            for row in records:
-                row["OVERALL_STATUS"] = invoice_status(row)
+            if use_api():
+                records = api_snapshot.load(SNAPSHOT_NAME)
+                loaded_from_snapshot = records is not None
+                if records is None:
+                    records = _records_from_api()
+            else:
+                records = _with_status(read_workbook_snapshot(EXCEL_FILE, SHEET_NAME, _read_excel_rows))
             _cached_invoices = records
     return _cached_invoices
+
+
+def _with_status(records):
+    for row in records:
+        row["OVERALL_STATUS"] = invoice_status(row)
+    return records
+
+
+def _records_from_api():
+    return _with_status(fetch_columns(BIGQUERY_TABLE, SRM_COLUMNS))
+
+
+def refresh_from_api(prepare=lambda rows: None):
+    """Fetches fresh rows and swaps them in at once; `prepare` (e.g. indexing) runs before the swap,
+    so no request ever waits on it. Requests already running finish on the old rows."""
+    global _cached_invoices, loaded_from_snapshot
+    records = _records_from_api()
+    prepare(records)
+    with _load_lock:
+        _cached_invoices, loaded_from_snapshot = records, False
+    return records
 
 
 def _read_excel_rows():
@@ -157,11 +206,14 @@ def filter_invoices(
         if payment_status and (invoice_status(row) == "Paid") != (payment_status == "paid"):
             continue
         exact = ((invoice_number, "VENDOR_INVOICE_NO"), (po_number, "PURCHASING_DOCUMENT"),
-                 (po_item, "ITEM"), (product_type, "PRODUCT_TYPE"), (plant, "PLANT"),
+                 (product_type, "PRODUCT_TYPE"), (plant, "PLANT"),
                  (filter_fiscal_year, "FILTER_FISCAL_YEAR"), (dv_type, "DV_TYPE"))
         if any(value is not None and str(value).strip() != "" and
                (text_value(row.get(column)) or "").lower() != str(value).strip().lower()
                for value, column in exact):
+            continue
+        # PO item is a number: BigQuery sends "00010" where the workbook had 10, and screens show 10.
+        if po_item is not None and str(po_item).strip() != "" and _item_number(row.get("ITEM")) != _item_number(po_item):
             continue
         if status:
             target = {"pending approval": "pending for approval", "deleted": "entry deleted"}.get(

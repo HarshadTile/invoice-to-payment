@@ -531,9 +531,9 @@
   .lgn-card { animation: none; }
   .lgn-spinner { animation-duration: 1.4s; }
 }
-.lgn-setup-identity { padding: 14px 16px; margin: 16px 0; background: #f8f8fa; border: 1px solid #e3e3e8; border-radius: 10px; display: grid; gap: 5px; }
-.lgn-setup-identity span, .lgn-setup-identity small { color: #637086; font-size: 12px; }
-.lgn-setup-identity strong { overflow-wrap: anywhere; font-size: 15px; }
+.lgn-setup-identity { padding: 0.875rem 1rem; margin: 1rem 0; background: #f8f8fa; border: 0.0625rem solid #e3e3e8; border-radius: 0.625rem; display: grid; gap: 0.3125rem; }
+.lgn-setup-identity span, .lgn-setup-identity small { color: #637086; font-size: 0.75rem; }
+.lgn-setup-identity strong { overflow-wrap: anywhere; font-size: 0.9375rem; }
 
 /* Supplier: "Request an account" under the sign-in button */
 .lgn-register { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.375rem; padding-top: 0.75rem; border-top: 0.0625rem solid #ECEDEF; font-size: 0.78125rem; color: #5B6170; }

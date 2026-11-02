@@ -6,7 +6,8 @@ import { matchesInvoiceQuery } from './invoiceQuery';
 const text = (value) => value == null || String(value).trim() === '' || value === '-' ? '-' : String(value).trim();
 const contains = (value, query) => text(value) !== '-' && text(value).toLowerCase().includes(query.trim().toLowerCase());
 const column = (key, label, read, type = 'text') => ({ key, label, read, type });
-const date = (key, label, read) => column(key, label, read, 'date');
+// `sort` names the server's sort field for the column (SORT_FIELDS in backend invoice_index.py).
+const date = (key, label, read, sort) => ({ ...column(key, label, read, 'date'), sort });
 
 export const SRM_COLUMNS = [
   column('invoice', 'Invoice No', (i) => i.no), column('vendor', 'Vendor', (i) => i.vendor),
@@ -14,7 +15,7 @@ export const SRM_COLUMNS = [
   column('po', 'PO No', (i) => i.po), column('item', 'PO Item', (i) => i.poItem),
   column('product', 'Product Type', invoiceProductType), column('plant', 'Plant Code', (i) => i.plant),
   column('division', 'Division', (i) => i.dvType), column('fy', 'Filter Fiscal Year', (i) => i.filterFiscalYear),
-  date('invoiceDate', 'Invoice Date', (i) => i.rawDate), date('uploadDate', 'Upload Date', (i) => i.rawUploadDate),
+  date('invoiceDate', 'Invoice Date', (i) => i.rawDate, 'invoice'), date('uploadDate', 'Upload Date', (i) => i.rawUploadDate, 'upload'),
   column('uploaded', 'Invoice Uploaded', (i) => i.invoiceUploaded == null ? null : i.invoiceUploaded ? 'Yes' : 'No'),
   column('amount', 'Payable Amount', (i) => i.amount), column('currency', 'Currency', (i) => i.sap?.currency),
   column('status', 'Status', (i) => i.status), column('statusFlag', 'Status Flag', (i) => i.statusFlag),
@@ -22,16 +23,16 @@ export const SRM_COLUMNS = [
   column('pending', 'Pending With', (i) => i.workflow?.pending_with),
   column('approvedBy', 'Approved By', (i) => i.workflow?.approved_by),
   ...Array.from({ length: 7 }, (_, index) => column(`approver${index + 1}`, `Approver ${index + 1}`, (i) => i.workflow?.approvers?.[`approver_${index + 1}`])),
-  date('approvalDate', 'Approval Date', (i) => i.workflow?.final_approval_date),
-  date('accountsDate', 'Sent to Accounts Date', (i) => i.workflow?.document_sent_to_accounts_date),
+  date('approvalDate', 'Approval Date', (i) => i.workflow?.final_approval_date, 'approval'),
+  date('accountsDate', 'Sent to Accounts Date', (i) => i.workflow?.document_sent_to_accounts_date, 'accounts'),
   column('remarks', 'Approver Remarks', (i) => i.workflow?.approver_remarks),
   column('rejection', 'Rejection Reason', (i) => i.rejectionReason || i.workflow?.rejection_reason || i.shortPayReason),
   column('miroStatus', 'MIRO Status', (i) => i.sap?.miro_status),
-  date('miroDate', 'MIRO Document Date', (i) => i.sap?.document_date),
-  date('postingDate', 'Posting Date', (i) => i.sap?.posting_date),
-  date('dueDate', 'Payment Due Date', (i) => i.sap?.net_due_date),
-  date('paymentDate', 'Clearing Date', (i) => i.sap?.clearing_date),
-  column('utr', 'UTR No', (i) => i.utr), date('utrDate', 'UTR Clearing Date', (i) => i.sap?.utr_clearing_date_paid),
+  date('miroDate', 'MIRO Document Date', (i) => i.sap?.document_date, 'miro_document'),
+  date('postingDate', 'Posting Date', (i) => i.sap?.posting_date, 'posting'),
+  date('dueDate', 'Payment Due Date', (i) => i.sap?.net_due_date, 'due'),
+  date('paymentDate', 'Clearing Date', (i) => i.sap?.clearing_date, 'payment'),
+  column('utr', 'UTR No', (i) => i.utr), date('utrDate', 'UTR Clearing Date', (i) => i.sap?.utr_clearing_date_paid, 'utr_clearing'),
   column('accountType', 'Account Type', (i) => i.sap?.account_type),
 ];
 
@@ -69,6 +70,12 @@ export function facetOptions(invoices, read, allLabel, label = (value) => value)
   }
   return [{ value: '', label: allLabel }, ...[...counts].sort(([x], [y]) => String(x).localeCompare(String(y)))
     .map(([value, count]) => ({ value, label: label(value), count }))];
+}
+
+/** facetOptions from counts the server has already made ({ value: count }). */
+export function facetOptionsFromCounts(counts = {}, allLabel, label = (value) => value) {
+  return [{ value: '', label: allLabel }, ...Object.entries(counts).filter(([value]) => value)
+    .sort(([x], [y]) => x.localeCompare(y)).map(([value, count]) => ({ value, label: label(value), count }))];
 }
 
 export function srmPaid(invoice) {

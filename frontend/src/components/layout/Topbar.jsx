@@ -1,10 +1,11 @@
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, useDeferredValue } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation } from 'react-router-dom';
 import { CHANNEL_LABEL } from '../../data/constants';
 import { pageTitle } from '../../utils/pageTitle';
 import { getFiscalYear } from '../../utils/fiscalYear';
-import { invoiceFiscalYear, selectScopedInvoices } from '../../features/invoices/selectors';
+import { useGetInvoiceFacetsQuery, useGetInvoiceVendorsQuery } from '../../api/invoicesQueryApi';
+import { useInvoiceAccessParams } from '../../features/invoices/useInvoiceScopeParams';
 import { setScopeFilter, toggleSidebar, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
 import { useScope } from '../../features/ui/scope';
 import { HelpCircle, ChevronDown, Menu, Calendar, Layers, Building } from '../common/icons.jsx';
@@ -13,6 +14,7 @@ import NotificationBell from './NotificationBell.jsx';
 import useEnabledChannels from '../../features/settings/useEnabledChannels';
 
 const CRUMB_PARENTS = ['Processing Channels', 'Supplier Visibility', 'Settings'];
+const VENDOR_LIMIT = 200;
 
 /** "Processing Channels / Msetu / SRM" → muted section, then the page name in bold. */
 function crumbParts(crumb) {
@@ -27,21 +29,13 @@ function TopbarVendorDropdown({ scope, onUpdate }) {
   const [typeQ, setTypeQ] = useState('');
   const wrapRef           = useRef(null);
   const currentVcode      = scope.vcode;
-  const invoices = useSelector(selectScopedInvoices);
-
-  const vendors = useMemo(() => {
-    const seen = new Map();
-    invoices.forEach((inv) => {
-      if (!seen.has(inv.vcode)) seen.set(inv.vcode, inv.vendor);
-    });
-    return [...seen.entries()]
-      .map(([vcode, vendor]) => ({ vendor, vcode }))
-      .sort((a, b) => a.vendor.localeCompare(b.vendor));
-  }, [invoices]);
-
-  const query = typeQ.trim().toLowerCase();
-  const filtered = query ? vendors.filter((vendor) => vendor.vcode.toLowerCase().includes(query)
-    || vendor.vendor.toLowerCase().includes(query)) : vendors;
+  // The server lists vendor codes the login may see: the busiest ones, or those matching the typed text.
+  const query = useDeferredValue(typeQ.trim());
+  const vendorList = useGetInvoiceVendorsQuery({ ...useInvoiceAccessParams(), vendor_q: query || undefined, limit: VENDOR_LIMIT },
+    { skip: !open });
+  const filtered = useMemo(() => (vendorList.data || [])
+    .map((v) => ({ vendor: v.name || v.code, vcode: v.code }))
+    .sort((a, b) => a.vendor.localeCompare(b.vendor)), [vendorList.data]);
 
   function pick(vcode) { onUpdate('vcode', vcode); setOpen(false); setTypeQ(''); }
 
@@ -84,7 +78,9 @@ function TopbarVendorDropdown({ scope, onUpdate }) {
             <button type="button" role="option" aria-selected={!currentVcode} onClick={() => pick('')} className={`scope-opt${!currentVcode ? ' selected' : ''}`}>
               Vendor Code
             </button>
-            {filtered.length === 0 && <p className="scope-empty">No vendors match.</p>}
+            {vendorList.isFetching && !vendorList.data && <p className="scope-empty" role="status">Loading vendors…</p>}
+            {vendorList.data && filtered.length === 0 && <p className="scope-empty">No vendors match.</p>}
+            {filtered.length === VENDOR_LIMIT && <p className="scope-empty">Showing {VENDOR_LIMIT} vendors; type to find others.</p>}
             {filtered.map((v) => (
               <button key={v.vcode} type="button" role="option" aria-selected={currentVcode === v.vcode} onClick={() => pick(v.vcode)}
                 className={`scope-opt scope-opt-vendor${currentVcode === v.vcode ? ' selected' : ''}`}>
@@ -232,15 +228,15 @@ function TopbarFiscalYearDropdown({ scope, onUpdate, defaultFY }) {
   const wrapRef = useRef(null);
   const currentFY = scope.fy || defaultFY;
   const isAll = currentFY === 'all';
-  const invoices = useSelector(selectScopedInvoices);
+  const yearCounts = useGetInvoiceFacetsQuery({ ...useInvoiceAccessParams(), fields: ['fy'] }).data?.fy;
   // Only fiscal years that actually have records, plus the current one (the default) and
   // whichever is selected right now, so the list never offers a year with nothing in it.
   const fyOptions = useMemo(() => {
     const years = new Set([defaultFY]);
     if (currentFY !== 'all') years.add(currentFY);
-    invoices.forEach((inv) => { const fy = invoiceFiscalYear(inv); if (fy) years.add(fy); });
+    Object.keys(yearCounts || {}).forEach((fy) => { if (fy) years.add(fy); });
     return Array.from(years).sort((a, b) => b.localeCompare(a));
-  }, [invoices, defaultFY, currentFY]);
+  }, [yearCounts, defaultFY, currentFY]);
   // "All Years" and the clear (x) only mean something when there is more than one year.
   const multiYear = fyOptions.length > 1;
   function pick(fy) { onUpdate('fy', fy); setOpen(false); }

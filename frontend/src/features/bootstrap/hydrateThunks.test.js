@@ -13,7 +13,7 @@ import settingsReducer from '../settings/settingsSlice';
 import uiReducer from '../ui/uiSlice';
 import { selectScopedInvoices } from '../invoices/selectors';
 import { runtime, setRuntimeData } from '../../data/runtime';
-import { loginThunk } from './hydrateThunks';
+import { loginThunk, restoreSession } from './hydrateThunks';
 
 const makeStore = () => configureStore({
   reducer: { auth: authReducer, tables: tablesReducer, settings: settingsReducer, ui: uiReducer, [ticketsApi.reducerPath]: ticketsApi.reducer },
@@ -95,5 +95,34 @@ describe('supplier sign-in', () => {
     expect(mockApi.post).toHaveBeenCalledWith('/v1/auth/supplier/login', form);
     expect(store.getState().auth.supplierVendorCodes).toEqual(['V9']);
     expect(store.getState().auth.supplierLoginVcode).toBe('V9');
+  });
+});
+
+describe('restoreSession', () => {
+  const failing = (status) => Object.assign(new Error(`HTTP ${status}`), { status });
+
+  it('ends the session only when the server rejects the token', async () => {
+    mockApi.hasToken.mockReturnValue(true);
+    mockApi.get.mockRejectedValue(failing(401));
+    expect(await makeStore().dispatch(restoreSession())).toBe(false);
+    expect(mockApi.clearToken).toHaveBeenCalled();
+  });
+
+  it('keeps the token through a network blip or a busy server, so a refresh can recover', async () => {
+    mockApi.hasToken.mockReturnValue(true);
+    for (const error of [failing(503), new TypeError('Failed to fetch')]) {
+      mockApi.get.mockRejectedValue(error);
+      expect(await makeStore().dispatch(restoreSession())).toBe(false);
+    }
+    expect(mockApi.clearToken).not.toHaveBeenCalled();
+  });
+
+  it('keeps the session when the data load fails after the token was accepted', async () => {
+    mockApi.hasToken.mockReturnValue(true);
+    mockApi.get.mockImplementation((path) => (path === '/v1/auth/me' ? Promise.resolve({ auth: AUTH }) : Promise.reject(new Error('boom'))));
+    const store = makeStore();
+    await expect(store.dispatch(restoreSession())).rejects.toThrow('boom');
+    expect(mockApi.clearToken).not.toHaveBeenCalled(); // a failed load must not sign the user out
+    expect(store.getState().auth.loggedIn).toBe(true);
   });
 });

@@ -1,7 +1,8 @@
-import { useDispatch, useSelector } from 'react-redux';
-import { selectScopedInvoices } from '../../features/invoices/selectors';
+import { useDispatch } from 'react-redux';
+import { useInvoice, useOtherInvoicesOnPo } from '../../features/invoices/useInvoice';
+import InvoiceLoading from './InvoiceLoading.jsx';
 import { CHANNEL_LABEL } from '../../data/constants';
-import { combinedStatusFor, currentStageName, findInvoice, invoiceProductType } from '../../features/invoices/invoice';
+import { combinedStatusFor, currentStageName, invoiceProductType } from '../../features/invoices/invoice';
 import PoPortalDetails from '../invoices/PoPortalDetails.jsx';
 import { formatInvoiceDate } from '../../utils/invoiceDates';
 import { closeModal } from '../../features/ui/uiSlice';
@@ -14,13 +15,13 @@ import Badge from '../common/Badge.jsx';
 export default function SupplierInvoiceDetailModal({ ctx }) {
   const dispatch = useDispatch();
   const { pathname } = useLocation();
-  const invoices = useSelector(selectScopedInvoices);
-  const inv = findInvoice(ctx.no, ctx.poItem, invoices, ctx);
-  if (!inv) return null;
+  const lookup = useInvoice(ctx);
+  const inv = lookup.inv;
+  const siblingInvoices = useOtherInvoicesOnPo(inv);
+  if (!inv) return <InvoiceLoading lookup={lookup} title={ctx.no} width={480} />;
   const cs = combinedStatusFor(inv);
   // Same invoice number can legitimately repeat as separate PO line items — exclude
   // this exact row (by no + poItem), not every row sharing just the invoice number.
-  const siblingInvoices = invoices.filter((i) => i.po === inv.po && !(i.no === inv.no && i.poItem === inv.poItem));
 
   return (
     <ModalShell

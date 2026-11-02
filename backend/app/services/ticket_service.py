@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.models.ticket import Ticket, TicketComment
 from app.models.ticket_activity import TicketActivity, TicketIdempotency, TicketRead
-from app.models.user import User, UserChannelAccess
+from app.models.user import User, UserChannelAccess, ticket_admin_clause
+from app.services.auth_service import ticket_role_of
 from app.repositories import ticket_repository
 from app.services import notification_service, sla_service
 from app.services import attachment_service
@@ -494,14 +495,14 @@ def assignable_users(db: Session, user: dict, channel: str):
         .outerjoin(UserChannelAccess, UserChannelAccess.user_id == User.id)
         .filter(
             User.status == "Active",
-            User.ticket_role.in_(("ASSIGNEE", "CHANNEL_LEAD", "ADMIN")),
-            (User.ticket_role == "ADMIN") | (UserChannelAccess.channel == channel),
+            User.ticket_role.in_(("ASSIGNEE", "CHANNEL_LEAD", "ADMIN")) | ticket_admin_clause(),
+            ticket_admin_clause() | (UserChannelAccess.channel == channel),
         )
         .distinct()
         .order_by(User.name)
         .all()
     )
-    return [{"id": item.id, "name": item.name, "role": item.ticket_role or item.role} for item in users]
+    return [{"id": item.id, "name": item.name, "role": ticket_role_of(item)} for item in users]
 
 
 async def upload_attachment(

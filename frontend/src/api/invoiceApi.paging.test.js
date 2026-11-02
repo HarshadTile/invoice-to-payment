@@ -32,6 +32,29 @@ describe('invoice page loading', () => {
     expect(list.mock.calls.length).toBeLessThanOrEqual(5);
   });
 
+  it('retries a page whose connection dropped instead of failing the whole load', async () => {
+    vi.useFakeTimers();
+    try {
+      let dropped = false;
+      vi.spyOn(invoiceApi, 'list').mockImplementation(({ page }) => {
+        if (page === 2 && !dropped) { dropped = true; return Promise.reject(new TypeError('Failed to fetch')); }
+        return Promise.resolve(pageResult(page, 3));
+      });
+      const loading = invoiceApi.listAll();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect((await loading).map((i) => i.no)).toEqual(['INV-1', 'INV-2', 'INV-3']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not retry a rejected token', async () => {
+    const list = vi.spyOn(invoiceApi, 'list').mockImplementation(({ page }) => page === 1
+      ? Promise.resolve(pageResult(page, 2)) : Promise.reject(Object.assign(new Error('Unauthorized'), { status: 401 })));
+    await expect(invoiceApi.listAll()).rejects.toThrow('Unauthorized');
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
   it('handles a supplier with no invoices without requesting further pages', async () => {
     const list = vi.spyOn(invoiceApi, 'list').mockResolvedValue({ total_pages: 0, items: [] });
     expect(await invoiceApi.listAll()).toEqual([]);

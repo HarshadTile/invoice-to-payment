@@ -1,59 +1,55 @@
 import { useMemo, useState } from 'react';
-import { useSelector } from 'react-redux';
-import { selectFilteredInvoices } from '../features/invoices/selectors';
-import { formatMoney, formatShare, parseAmount } from '../features/invoices/dashboardMetrics';
-import { totalsByCurrency } from '../utils/amounts';
+import { formatMoney, formatShare } from '../features/invoices/dashboardMetrics';
+import { useGetInvoiceDashboardQuery, useGetVendorReportQuery } from '../api/invoicesQueryApi';
+import { useInvoiceScopeParams } from '../features/invoices/useInvoiceScopeParams';
+import useServerInvoiceTable from '../features/invoices/useServerInvoiceTable';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
 import StatCard from '../components/common/StatCard.jsx';
 import { Banknote, Building, CheckCircle, Users, X } from '../components/common/icons.jsx';
 
+const PAID = ['Paid'];
+
 export default function VendorStatusReportsPage() {
-  const scoped = useSelector(selectFilteredInvoices); // the top-bar scope applies here too
-  const completed = useMemo(() => scoped.filter((i) => i.status === 'Paid'), [scoped]);
+  // Counted on the server for the top-bar scope: completed (paid) invoices, per supplier.
+  const scopeParams = useInvoiceScopeParams();
+  const report = useGetVendorReportQuery(scopeParams);
+  const paidTotals = useGetInvoiceDashboardQuery({ ...scopeParams, statuses: PAID });
 
   // Which list the cards switch between, and the supplier picked from the suppliers list (if any)
   const [view, setView] = useState('invoices'); // 'invoices' | 'suppliers'
   const [supplier, setSupplier] = useState('');
 
   // Per supplier: completed invoices and their value in the main currency (most invoices' currency).
-  const { suppliers, currency } = useMemo(() => {
-    const byCurrency = new Map();
-    completed.forEach((i) => { const a = parseAmount(i.amount); if (a) byCurrency.set(a.currency, (byCurrency.get(a.currency) || 0) + 1); });
-    const main = [...byCurrency].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '₹';
-    const rows = new Map();
-    completed.forEach((i) => {
-      const row = rows.get(i.vendor) || { name: i.vendor, count: 0, value: 0, valued: 0 };
-      row.count += 1;
-      const a = parseAmount(i.amount);
-      if (a && a.currency === main) { row.value += a.value; row.valued += 1; }
-      rows.set(i.vendor, row);
-    });
-    return {
-      currency: main,
-      suppliers: [...rows.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
-    };
-  }, [completed]);
+  const suppliers = report.data?.suppliers || [];
+  const currency = report.data?.currency || '₹';
+  const completedCount = report.data?.completed ?? 0;
 
   // A supplier that dropped out of the top-bar scope no longer filters anything
   const activeSupplier = suppliers.some((s) => s.name === supplier) ? supplier : '';
-  const shown = useMemo(() => (activeSupplier ? completed.filter((i) => i.vendor === activeSupplier) : completed), [completed, activeSupplier]);
+  const listFilters = useMemo(() => ({ ...scopeParams, statuses: PAID, vendor_name: activeSupplier || undefined }),
+    [scopeParams, activeSupplier]);
+  const shown = useServerInvoiceTable({ tableKey: 'completedInvoices', filters: listFilters });
 
   const showInvoices = () => { setView('invoices'); setSupplier(''); };
   const pickSupplier = (name) => { setSupplier(name); setView('invoices'); };
 
-  const totals = totalsByCurrency(completed);
+  const totals = paidTotals.data?.totalsByCurrency || {};
   const paidShort = Object.entries(totals).map(([cur, value]) => formatMoney(value, cur)).join(' + ') || '-';
   const paidExact = Object.entries(totals).map(([cur, value]) => formatMoney(value, cur, { compact: false })).join(' + ') || '-';
-  const valued = completed.filter((i) => parseAmount(i.amount)).length;
+  const valued = paidTotals.data?.amountCount ?? 0;
   const top = suppliers[0];
   const topMax = top?.count || 1;
 
   return (
-    <div className="dash reports-page">
+    <div className="dash reports-page" aria-busy={report.isFetching}>
+      {report.isError && (
+        <p role="alert" className="chart-note">The report could not be loaded: {report.error?.message || 'try again'}.{' '}
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => report.refetch()}>Retry</button></p>
+      )}
       <div className="kpi-grid reports-kpis">
         <StatCard
           tone="shade-paid" icon={<CheckCircle size={16} />}
-          label="Completed Invoices" value={completed.length.toLocaleString('en-IN')} sub="Payment confirmed, UTR available"
+          label="Completed Invoices" value={completedCount.toLocaleString('en-IN')} sub="Payment confirmed, UTR available"
           onClick={showInvoices} active={view === 'invoices' && !activeSupplier}
         />
         <StatCard
@@ -64,12 +60,12 @@ export default function VendorStatusReportsPage() {
         <StatCard
           tone="shade-miro" icon={<Banknote size={16} />}
           label="Paid Value" value={<span title={paidExact}>{paidShort}</span>}
-          sub={valued < completed.length ? `Amount on record for ${valued.toLocaleString('en-IN')} of ${completed.length.toLocaleString('en-IN')}` : 'Total of completed invoices'}
+          sub={valued < completedCount ? `Amount on record for ${valued.toLocaleString('en-IN')} of ${completedCount.toLocaleString('en-IN')}` : 'Total of completed invoices'}
         />
         <StatCard
           tone="shade-total" icon={<Building size={16} />}
           label="Top Supplier" value={<span className="reports-top" title={top?.name}>{top ? top.name : '-'}</span>}
-          sub={top ? `${top.count.toLocaleString('en-IN')} completed · ${formatShare(top.count, completed.length)} of all` : 'No completed invoices'}
+          sub={top ? `${top.count.toLocaleString('en-IN')} completed · ${formatShare(top.count, completedCount)} of all` : 'No completed invoices'}
           onClick={top ? () => pickSupplier(top.name) : undefined} active={!!top && activeSupplier === top.name}
         />
       </div>
@@ -97,7 +93,7 @@ export default function VendorStatusReportsPage() {
                     <td className="reports-share">
                       <div className="reports-share-cell">
                         <span className="reports-bar" aria-hidden="true"><span style={{ width: `${(s.count / topMax) * 100}%` }} /></span>
-                        <small>{formatShare(s.count, completed.length)}</small>
+                        <small>{formatShare(s.count, completedCount)}</small>
                       </div>
                     </td>
                     <td className="num" title={s.valued ? formatMoney(s.value, currency, { compact: false }) : undefined}>
@@ -113,7 +109,7 @@ export default function VendorStatusReportsPage() {
         <div className="card reports-card">
           <h3>
             Completed Invoices : payment confirmed, UTR available
-            <span className="reports-count">{shown.length.toLocaleString('en-IN')} invoice{shown.length === 1 ? '' : 's'}</span>
+            <span className="reports-count">{shown.total.toLocaleString('en-IN')} invoice{shown.total === 1 ? '' : 's'}</span>
           </h3>
           {activeSupplier && (
             <div className="reports-filter">
@@ -123,7 +119,8 @@ export default function VendorStatusReportsPage() {
               </span>
             </div>
           )}
-          <InvoiceTable invoices={shown} tableKey="completedInvoices" mode="simple" bulk exportName="Vendor_Status_Report" />
+          <InvoiceTable invoices={shown.invoices} server={shown.server} busy={shown.isFetching}
+            tableKey="completedInvoices" mode="simple" bulk exportName="Vendor_Status_Report" />
         </div>
       )}
     </div>

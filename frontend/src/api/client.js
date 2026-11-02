@@ -45,7 +45,7 @@ async function req(method, path, body, options = {}) {
   }
 
   if (res.status === 204) return null;
-  return res.json();
+  return options.as === 'blob' ? res.blob() : res.json();
 }
 
 function writeToken(value, persist) {
@@ -57,6 +57,8 @@ function writeToken(value, persist) {
 
 export const api = {
   get: (path, options) => req('GET', path, undefined, options),
+  /** A file download (e.g. a CSV export) with the same auth and error handling. */
+  getBlob: (path, options) => req('GET', path, undefined, { ...options, as: 'blob' }),
   post: (path, body, options) => req('POST', path, body, options),
   patch: (path, body, options) => req('PATCH', path, body, options),
   put: (path, body, options) => req('PUT', path, body, options),

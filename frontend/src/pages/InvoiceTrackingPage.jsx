@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { invoiceApi, toWorkspaceInvoice, USE_FASTAPI_INVOICES } from '../api/invoiceApi';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { CHANNELS, CHANNEL_LABEL } from '../data/constants';
+import { CHANNEL_LABEL } from '../data/constants';
 import { useScope } from '../features/ui/scope';
-import { selectFilteredInvoices } from '../features/invoices/selectors';
-import { selectIsChannelLocked, selectPerm } from '../features/auth/authSlice';
+import { selectPerm } from '../features/auth/authSlice';
+import { useGetInvoiceDashboardQuery, useGetRecentInvoicesQuery } from '../api/invoicesQueryApi';
+import { useInvoiceScopeParams } from '../features/invoices/useInvoiceScopeParams';
 import { dashboardMetrics, formatCount, formatMoney, formatShare, share } from '../features/invoices/dashboardMetrics';
 import { setPageFilters } from '../features/ui/uiSlice';
 import { calendarMonthOf, invoiceDateTypeLabel, monthDateRange } from '../utils/invoiceDates';
@@ -19,6 +18,8 @@ import RecentInvoices from '../components/invoices/RecentInvoices.jsx';
 import { Banknote, CheckCircle, Clock, FileText, Layers, Package, Settings } from '../components/common/icons.jsx';
 
 const RECENT_LIMIT = 5;
+// Shown until the first answer arrives: every figure zero, nothing to click.
+const NO_METRICS = dashboardMetrics([]);
 
 /* Mahindra red-and-white, checked with the dataviz palette validator on the white card:
    product = red / rose (the monthly columns stack the two). Channel rings each show one share,
@@ -43,20 +44,14 @@ function flowShade(index, count) {
   return `rgb(${mix(0)}, ${mix(1)}, ${mix(2)})`;
 }
 
-function recentFrom(invoices) {
-  return [...invoices]
-    .sort((a, b) => new Date(b.rawUploadDate || b.rawDate || b.date) - new Date(a.rawUploadDate || a.rawDate || a.date))
-    .slice(0, RECENT_LIMIT);
-}
-
 export default function InvoiceTrackingPage() {
-  // already narrowed to the top-bar scope (fiscal year / channel / vendor)
-  const filteredInvoices = useSelector(selectFilteredInvoices);
   const topScope = useScope();
-  const isChannelLocked = useSelector(selectIsChannelLocked);
+  // Every figure is totalled on the server for the top-bar scope (fiscal year / channel / vendor).
+  const scopeParams = useInvoiceScopeParams();
+  const dashboard = useGetInvoiceDashboardQuery(scopeParams);
+  const recent = useGetRecentInvoicesQuery({ ...scopeParams, limit: RECENT_LIMIT });
   // Without "Search invoices" the dashboard is view-only: nothing opens Search.
   const canSearch = !!useSelector(selectPerm).createTrace;
-  const { channelScope } = useSelector((s) => s.auth);
   const navigate = useNavigate();
 
   const dispatch = useDispatch();
@@ -87,33 +82,17 @@ export default function InvoiceTrackingPage() {
     navigate(`/app/search?${next.toString()}`);
   };
 
-  // Every figure comes from the same list the rest of the app shows, so they always agree.
-  const channelOrder = useMemo(() => (isChannelLocked ? CHANNELS.filter((c) => c.key === channelScope) : CHANNELS).map((c) => c.key), [isChannelLocked, channelScope]);
   // The monthly chart groups by the date type chosen in the filters (shared with Search).
   const dateField = topScope.dateField || 'invoice';
   const dateTypeLabel = invoiceDateTypeLabel(dateField).toLowerCase();
-  const m = useMemo(() => dashboardMetrics(filteredInvoices, channelOrder, dateField), [filteredInvoices, channelOrder, dateField]);
+  const m = dashboard.data || NO_METRICS;
   const total = m.total.count;
   const money = (value) => formatMoney(value, m.currency);
   const exact = (value) => formatMoney(value, m.currency, { compact: false });
   /** A bucket's value, or a plain note when none of its invoices has an amount on record. */
   const valueOf = (bucket) => (bucket.valued ? money(bucket.value) : 'No amount on record');
 
-  // Latest invoices still come from the server when nothing is filtered.
-  const [recent, setRecent] = useState(null);
-  const dataVersion = useSelector((s) => s.ui.dataVersion);
-  const fetchKey = `${channelScope}:${dataVersion}`;
-  useEffect(() => {
-    let alive = true;
-    // Without the live invoice API (unit tests) the list is taken from the loaded invoices.
-    if (!USE_FASTAPI_INVOICES) return undefined;
-    invoiceApi.recent({ limit: RECENT_LIMIT, channel: channelScope || 'all' })
-      .then((r) => { if (alive && Array.isArray(r)) setRecent({ key: fetchKey, data: r.map(toWorkspaceInvoice) }); })
-      .catch(() => { /* fall back to the loaded list */ });
-    return () => { alive = false; };
-  }, [fetchKey, channelScope]);
-  const isFiltering = topScope.channel || topScope.vcode || topScope.fy !== 'all';
-  const recentRows = (!isFiltering && recent?.key === fetchKey) ? recent.data : recentFrom(filteredInvoices);
+  const recentRows = recent.data || [];
 
   const paid = m.kpi.paid;
   const exceptions = m.groups.find((g) => g.key === 'exception')?.count || 0;
@@ -131,8 +110,19 @@ export default function InvoiceTrackingPage() {
     />
   );
 
+  if (dashboard.isError && !dashboard.data) {
+    return (
+      <div className="card empty-state" role="alert">
+        <b>The dashboard could not be loaded</b>
+        <span>{dashboard.error?.message || 'Check the connection and try again.'}</span>
+        <button type="button" className="btn" onClick={() => dashboard.refetch()}>Retry</button>
+      </div>
+    );
+  }
+
   return (
-    <div className="dash">
+    <div className="dash" aria-busy={dashboard.isFetching}>
+      {dashboard.isLoading && <p role="status" className="chart-note">Loading the dashboard…</p>}
       {/* ── 1. Headline numbers ── */}
       <div className="kpi-grid">
         <StatCard

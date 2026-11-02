@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { openModal, setPageFilters, setTablePage } from '../../features/ui/uiSlice';
+import { openModal, pushToast, setPageFilters, setTablePage } from '../../features/ui/uiSlice';
 import { SRM_COLUMNS, srmColumns, srmCell } from '../../utils/srmWorkspace';
 import { downloadCSV, timestampedExportName } from '../../utils/csv';
 import { dateValue } from '../../utils/dateSort';
@@ -10,17 +10,22 @@ import SortDateTh from '../common/SortDateTh.jsx';
 import Badge from '../common/Badge.jsx';
 import { Columns, Download, Eye } from '../common/icons.jsx';
 
-const PAGE_SIZE = 20;
+export const PAGE_SIZE = 20;
 const STANDARD = { preset: 'standard' };
 
-export default function SrmDataTable({ invoices, view, canExport, config }) {
+/** The SRM / PO Portal register table. With `server`, the list is paged on the server: `invoices` is
+ *  the current page, and { total, onSort(sort), fetchAll() } give the count, the date sort ("field:dir")
+ *  and every matching invoice for the export. The table's page is ui.tablePage[pageKeyFor(...)]. */
+export const pageKeyFor = (namespace, view) => `${namespace}-data-${view}`;
+
+export default function SrmDataTable({ invoices, view, canExport, config, server }) {
   const dispatch = useDispatch();
   const namespace = config?.namespace || 'srm';
   const availableColumns = config?.columns || SRM_COLUMNS;
   const resolveColumns = config?.resolveColumns || srmColumns;
   const settingsKey = `${namespace}-columns-${view}`;
   const selection = useSelector((state) => state.ui.pageFilters[settingsKey]) || STANDARD;
-  const pageKey = `${namespace}-data-${view}`;
+  const pageKey = pageKeyFor(namespace, view);
   const page = useSelector((state) => state.ui.tablePage[pageKey] || 1);
   const columns = useMemo(() => resolveColumns(view, selection), [view, selection, resolveColumns]);
   const [sort, setSort] = useState({ key: null, dir: 'desc' });
@@ -38,15 +43,35 @@ export default function SrmDataTable({ invoices, view, canExport, config }) {
       document.removeEventListener('keydown', onKey);
     };
   }, [columnsOpen]);
+  // Paged on the server: tell it the sort (by the column's server field) whenever it changes.
+  const sortEntry = columns.find((column) => column.key === sort.key);
+  const serverSort = sortEntry?.sort ? `${sortEntry.sort}:${sort.dir}` : undefined;
+  const onServerSort = server?.onSort;
+  useEffect(() => { onServerSort?.(serverSort); }, [onServerSort, serverSort]);
   const sorted = useMemo(() => {
     const entry = columns.find((column) => column.key === sort.key);
-    if (!entry) return invoices;
+    if (server || !entry) return invoices;
     return invoices.map((invoice, index) => ({ invoice, index, ms: dateValue(entry.read(invoice)) }))
       .sort((a, b) => a.ms == null || b.ms == null ? (a.ms == null) - (b.ms == null) || a.index - b.index
         : (a.ms - b.ms) * (sort.dir === 'asc' ? 1 : -1) || a.index - b.index).map((item) => item.invoice);
-  }, [invoices, columns, sort]);
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(sorted.length / PAGE_SIZE)));
-  const visible = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  }, [invoices, columns, sort, server]);
+  const total = server ? server.total : sorted.length;
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(total / PAGE_SIZE)));
+  const visible = server ? sorted : sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const [exporting, setExporting] = useState(false);
+  const exportRows = async () => {
+    const name = timestampedExportName(`${config?.label || 'SRM'}_${view}`);
+    const toCsv = (list) => downloadCSV(name, columns.map((entry) => entry.label), list.map((invoice) => columns.map((entry) => srmCell(invoice, entry))));
+    if (!server) { toCsv(sorted); return; }
+    setExporting(true);
+    try {
+      toCsv(await server.fetchAll());
+    } catch (error) {
+      dispatch(pushToast(`Export failed: ${error?.message || 'try again'}`));
+    } finally {
+      setExporting(false);
+    }
+  };
   const save = (next) => dispatch(setPageFilters({ key: settingsKey, filters: next }));
   const toggleColumn = (key) => {
     const selected = columns.map((column) => column.key);
@@ -59,7 +84,7 @@ export default function SrmDataTable({ invoices, view, canExport, config }) {
 
   return <div className="card">
     <div className="toolbar">
-      <span className="srm-table-title">Invoices<span className="srm-count-pill">{sorted.length.toLocaleString()} matching</span></span>
+      <span className="srm-table-title">Invoices<span className="srm-count-pill">{total.toLocaleString()} matching</span></span>
       <div className="toolbar-right">
         <details className="srm-columns" ref={columnsRef} open={columnsOpen}>
           {/* the button drives the panel itself (Enter / Space included), so outside clicks can close it */}
@@ -81,9 +106,8 @@ export default function SrmDataTable({ invoices, view, canExport, config }) {
             </label>)}
           </div>
         </details>
-        {canExport && <button type="button" className="btn btn-sm" onClick={() => downloadCSV(
-          timestampedExportName(`${config?.label || 'SRM'}_${view}`), columns.map((entry) => entry.label), sorted.map((invoice) => columns.map((entry) => srmCell(invoice, entry))),
-        )}><Download />Export to Excel ({sorted.length})</button>}
+        {canExport && <button type="button" className="btn btn-sm" disabled={exporting} onClick={exportRows}>
+          <Download />{exporting ? 'Preparing export…' : `Export to Excel (${total.toLocaleString()})`}</button>}
       </div>
     </div>
     <div className="table-scroll">
@@ -110,7 +134,7 @@ export default function SrmDataTable({ invoices, view, canExport, config }) {
         </tbody>
       </table>
     </div>
-    <PagerFoot total={sorted.length} page={currentPage} pageSize={PAGE_SIZE}
+    <PagerFoot total={total} page={currentPage} pageSize={PAGE_SIZE}
       onPage={(next) => dispatch(setTablePage({ key: pageKey, page: next }))} />
   </div>;
 }

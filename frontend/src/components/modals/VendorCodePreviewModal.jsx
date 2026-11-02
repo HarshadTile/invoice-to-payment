@@ -1,7 +1,7 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { supplierForVendorCode, panFor, posForVendorCode } from '../../features/suppliers/supplierIdentity';
-import { runtime } from '../../data/runtime';
+import { useGetInvoiceFacetsQuery, useGetInvoiceVendorsQuery } from '../../api/invoicesQueryApi';
+import { useInvoiceAccessParams } from '../../features/invoices/useInvoiceScopeParams';
 import { closeModal } from '../../features/ui/uiSlice';
 import { selectHasTicketAccess, selectPerm } from '../../features/auth/authSlice';
 import { useGetTicketsQuery } from '../../api/ticketsApi';
@@ -14,9 +14,14 @@ export default function VendorCodePreviewModal({ ctx }) {
   // The full page is Supplier Visibility, which needs its own permission.
   const canOpenFull = useSelector((s) => s.auth.authType === 'supplier' || !!selectPerm(s).viewSupplierVisibility);
   const code = ctx.code;
-  const supplier = supplierForVendorCode(code);
-  const invoices = runtime.invoices.filter((i) => i.vcode === code);
-  const poCount = Object.keys(posForVendorCode(code)).length;
+  // Name, PAN and counts for this one code, across everything the login may see.
+  const access = useInvoiceAccessParams();
+  const vendorMatches = useGetInvoiceVendorsQuery({ ...access, vendor_q: code, limit: 20 });
+  const vendor = vendorMatches.data?.find((v) => v.code === code);
+  const poFacet = useGetInvoiceFacetsQuery({ ...access, vendor_code: code, fields: ['po'] });
+  const poCount = Object.keys(poFacet.data?.po || {}).filter((po) => po && po !== '-').length;
+  const loading = vendorMatches.isLoading || poFacet.isLoading;
+  const shown = (value) => (loading ? '…' : value);
   const hasTicketAccess = useSelector(selectHasTicketAccess);
   const { data: ticketPage } = useGetTicketsQuery({ vendor_code: code, page_size: 100 }, { skip: !hasTicketAccess });
   const openIssues = (ticketPage?.items || []).filter((t) => ['OPEN', 'IN_PROGRESS'].includes(t.status)).length;
@@ -43,11 +48,11 @@ export default function VendorCodePreviewModal({ ctx }) {
         </div>
       )}
     >
-      <div className="validation-row"><span>Supplier</span><span style={{ fontWeight: 700 }}>{supplier}</span></div>
-      <div className="validation-row"><span>PAN</span><span>{panFor(supplier)}</span></div>
+      <div className="validation-row"><span>Supplier</span><span style={{ fontWeight: 700 }}>{shown(vendor?.name || '-')}</span></div>
+      <div className="validation-row"><span>PAN</span><span>{shown(vendor?.pan || '-')}</span></div>
       <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em', display: 'block', margin: '0.875rem 0 0.5rem' }}>On This Vendor Code</label>
-      <div className="validation-row"><span>Total Invoices</span><span>{invoices.length}</span></div>
-      <div className="validation-row"><span>Purchase Orders</span><span>{poCount}</span></div>
+      <div className="validation-row"><span>Total Invoices</span><span>{shown(vendor?.count ?? 0)}</span></div>
+      <div className="validation-row"><span>Purchase Orders</span><span>{shown(poCount)}</span></div>
       <div className="validation-row"><span>Open Queries</span><span>{openIssues}</span></div>
     </ModalShell>
   );

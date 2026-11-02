@@ -66,9 +66,12 @@ describe('Internal admin - Supplier Visibility, Vendor Status Reports and Logs',
     expect(screen.getByLabelText('Supplier Name')).toHaveValue('Bharat Forge Ltd');
     expect(screen.getByLabelText('Vendor Code')).toHaveValue('BFL00456');
     expect(screen.getByRole('heading', { name: 'Invoice Status : Bharat Forge Ltd' })).toBeInTheDocument();
-    const rows = document.querySelectorAll('.table-scroll tbody tr');
-    expect(rows.length).toBeGreaterThan(0);
-    rows.forEach((row) => expect(row).toHaveTextContent('BFL00456'));
+    // the list for the new vendor loads from the invoice service
+    await waitFor(() => {
+      const rows = document.querySelectorAll('.table-scroll tbody tr');
+      expect(rows.length).toBeGreaterThan(0);
+      rows.forEach((row) => expect(row).toHaveTextContent('BFL00456'));
+    });
   });
 
   it('Supplier Visibility picks a PAN, lists its vendor codes, and the KPIs follow the choice', async () => {
@@ -146,19 +149,23 @@ describe('Internal admin - Supplier Visibility, Vendor Status Reports and Logs',
     const paid = within(kpis).getByRole('button', { name: /^Paid/ });
     await user.click(paid);
     expect(paid).toHaveAttribute('aria-pressed', 'true');
-    const paidRows = document.querySelectorAll('.data-table tbody tr');
-    expect(paidRows.length).toBeGreaterThan(0);
-    paidRows.forEach((row) => expect(row.querySelector('.chip')).toHaveTextContent(/^Paid$/));
-    const summary = screen.getByRole('status', { name: 'Filtered invoice amount' });
-    expect(summary).toHaveTextContent('across all pages');
+    // lists and totals load from the invoice service, so each check waits for its answer
+    const summary = () => screen.getByRole('status', { name: 'Filtered invoice amount' });
+    await waitFor(() => {
+      const paidRows = document.querySelectorAll('.data-table tbody tr');
+      expect(paidRows.length).toBeGreaterThan(0);
+      paidRows.forEach((row) => expect(row.querySelector('.chip')).toHaveTextContent(/^Paid$/));
+      expect(summary()).toHaveTextContent('across all pages');
+    });
     const search = screen.getByPlaceholderText(/^Search all fields/);
     await user.type(search, 'INV-MS-1001');
-    expect(summary).toHaveTextContent('1 matching invoice across all pages');
-    expect(summary).toHaveTextContent('₹1,24,500.00');
+    await waitFor(() => expect(summary()).toHaveTextContent('1 matching invoice across all pages'));
+    expect(summary()).toHaveTextContent('₹1,24,500.00');
     await user.clear(search);
     await user.click(within(kpis).getByRole('button', { name: /^Total Invoices/ }));
     expect(paid).toHaveAttribute('aria-pressed', 'false');
     const queries = await within(kpis).findByRole('button', { name: /^Open Queries/ });
+    await waitFor(() => expect(queries).not.toHaveTextContent('Loading queries'));
     await user.click(queries);
     expect(queries).toHaveAttribute('aria-pressed', 'true');
     const { items } = await mockApi.get('/v1/tickets/list-tickets?include_closed=true');
@@ -169,11 +176,11 @@ describe('Internal admin - Supplier Visibility, Vendor Status Reports and Logs',
     });
     await user.click(within(kpis).getByRole('button', { name: /^Total Invoices/ }));
     fireEvent.change(screen.getByLabelText('Invoice Date From'), { target: { value: '2099-01-01' } });
-    expect(within(kpis).getByRole('button', { name: /^Total Invoices/ })).toHaveTextContent('0');
+    await waitFor(() => expect(within(kpis).getByRole('button', { name: /^Total Invoices/ })).toHaveTextContent(/^Total Invoices0/));
     expect(within(kpis).getByRole('button', { name: /^Paid/ })).toHaveTextContent('0');
     expect(within(kpis).getByText('Total Invoice Amount').parentElement).toHaveTextContent('-');
-    expect(screen.getByText('No invoices match')).toBeInTheDocument();
-    expect(summary).toHaveTextContent('0 matching invoices');
-    expect(summary).toHaveTextContent('—');
+    await waitFor(() => expect(screen.getByText('No invoices match')).toBeInTheDocument());
+    await waitFor(() => expect(summary()).toHaveTextContent('0 matching invoices'));
+    expect(summary()).toHaveTextContent('—');
   });
 });

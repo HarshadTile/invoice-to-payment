@@ -37,6 +37,8 @@ def seed(username="admin", password=None, name="Administrator",
             name=name,
             email=email,
             role=role,
+            # An Admin works the Inquiry Desk as ticket Admin, as Admins added on the Users screen do.
+            ticket_role="ADMIN" if role == "Admin" else None,
             channel_scope="all",
         ))
         db.commit()

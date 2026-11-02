@@ -1,9 +1,10 @@
 ﻿import { useDispatch, useSelector } from 'react-redux';
 import { CHANNEL_LABEL, CHANNEL_ROUTING_RULE, STATUS_CHIP } from '../../data/constants';
-import { handlerFor, findInvoice } from '../../features/invoices/invoice';
+import { handlerFor } from '../../features/invoices/invoice';
+import { useInvoice } from '../../features/invoices/useInvoice';
+import InvoiceLoading from './InvoiceLoading.jsx';
 import PoPortalDetails from '../invoices/PoPortalDetails.jsx';
 import { closeModal } from '../../features/ui/uiSlice';
-import { selectScopedInvoices } from '../../features/invoices/selectors';
 import ModalShell from './ModalShell.jsx';
 import { useLocation } from 'react-router-dom';
 import { Breadcrumb } from '../layout/Breadcrumb.jsx';
@@ -37,11 +38,10 @@ function Detail({ label, children }) {
 export default function InvoiceDetailModal({ ctx }) {
   const dispatch = useDispatch();
   const { pathname } = useLocation();
-  useSelector((s) => s.ui.dataVersion); // re-render when invoice data refreshes
   const authType = useSelector((s) => s.auth.authType);
-  const invoices = useSelector(selectScopedInvoices);
-  const inv = findInvoice(ctx.no, ctx.poItem, invoices, ctx);
-  if (!inv) return null;
+  const lookup = useInvoice(ctx);
+  const inv = lookup.inv;
+  if (!inv) return <InvoiceLoading lookup={lookup} title={ctx.no} width={760} />;
 
   const h = handlerFor(inv);
   // Accounts only owns the invoice once it is booked in SAP

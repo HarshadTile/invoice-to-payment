@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CHANNEL_LABEL, STATUS_CHIP } from '../../data/constants';
 import { currentStageName, invoiceProductType } from '../../features/invoices/invoice';
 import { downloadCSV, timestampedExportName } from '../../utils/csv';
+import { INTERNAL_EXPORT_COLUMNS, SUPPLIER_EXPORT_COLUMNS, internalExportRow, poItemValue, rejectionReason, supplierExportRow } from '../../utils/invoiceExport';
 import { filterInvoiceQuery, INVOICE_SEARCH_PLACEHOLDER, INVOICE_SEARCH_LABEL } from '../../utils/invoiceQuery';
 import { setSearch, setTablePage, toggleSelectRow, setSelectAll, clearSelection, openModal, pushToast } from '../../features/ui/uiSlice';
 import Badge from '../common/Badge.jsx';
@@ -16,12 +17,9 @@ import { totalsByCurrency } from '../../utils/amounts';
 import { isSupplierVisibleInvoice } from '../../utils/invoiceVisibility';
 import { Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
 
-const PAGE_SIZE = 10;
+export const PAGE_SIZE = 10;
 const EMPTY_SELECTION = Object.freeze([]);
 const DATE_COLUMNS = { invoice: (inv) => inv.rawDate, upload: (inv) => inv.rawUploadDate, status: (inv) => inv.date, due: (inv) => inv.sap?.net_due_date };
-const poItemValue = (inv) => inv.poItem === '' || inv.poItem == null ? '-' : inv.poItem;
-const rejectionReason = (inv) => inv.status === 'Rejected'
-  ? (inv.rejectionReason || inv.workflow?.rejection_reason || inv.shortPayReason || 'Not provided') : '-';
 
 // Pinned columns are given an exact width: the next pinned column's `left` offset is the sum of
 // the widths before it, so a column that grew or shrank with its content left a gap or an
@@ -45,8 +43,11 @@ const stickyCell = (left, isHead = false) => ({
  * hideSearch: suppress the in-table search box (used by SearchInvoicePage which has its own)
  * filteredCount: pass current filtered count to label the Export button accurately
  * lead: optional heading shown on the left of the toolbar (the Export button stays on the right)
+ * server: the list is paged on the server. `invoices` is then the current page only, and
+ *   { total, sort: { key, dir }, onSort(key), onExport({ invoiceNumbers, filename }), amountSummary } replace
+ *   the in-browser count, date sort, export and amount total. Searching is the page's job (use hideSearch).
  */
-export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount, lead, showFilteredAmount = false, exportName, busy = false }) {
+export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk = false, hideSearch = false, filteredCount, lead, showFilteredAmount = false, exportName, busy = false, server }) {
   const dispatch  = useDispatch();
   const navigate  = useNavigate();
   const [searchParams] = useSearchParams();
@@ -59,19 +60,24 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const deferredSearch = useDeferredValue(search);
   const searchBusy = busy || deferredSearch !== search;
   const visibleInvoices = useMemo(() => isSupplierUser ? invoices.filter(isSupplierVisibleInvoice) : invoices, [invoices, isSupplierUser]);
-  const matched = useMemo(() => filterInvoiceQuery(visibleInvoices, deferredSearch), [visibleInvoices, deferredSearch]);
-  const { sorted: filtered, toggle: toggleDate, dirFor } = useDateColumnSort(matched, DATE_COLUMNS);
+  const matched = useMemo(() => (server ? visibleInvoices : filterInvoiceQuery(visibleInvoices, deferredSearch)), [server, visibleInvoices, deferredSearch]);
+  const clientSort = useDateColumnSort(matched, DATE_COLUMNS);
+  const filtered = server ? matched : clientSort.sorted;
+  const toggleDate = server ? server.onSort : clientSort.toggle;
+  const dirFor = server ? (key) => (server.sort?.key === key ? server.sort.dir : null) : clientSort.dirFor;
+  const matchCount = server ? server.total : filtered.length;
   const amountSummary = useMemo(() => {
     if (!showFilteredAmount) return null;
+    if (server) return server.amountSummary || null; // totalled by the server: { known, value }
     const totals = totalsByCurrency(filtered);
     const known = filtered.filter((invoice) => Object.keys(totalsByCurrency([invoice])).length > 0).length;
     const value = Object.entries(totals).map(([currency, amount]) => `${currency}${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`).join(' + ');
     return { known, value: value || (filtered.length ? 'Not available' : '—') };
-  }, [filtered, showFilteredAmount]);
+  }, [filtered, showFilteredAmount, server]);
 
-  const totalPages   = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages   = Math.max(1, Math.ceil(matchCount / PAGE_SIZE));
   const currentPage  = Math.min(page, totalPages);
-  const pageRows     = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageRows     = server ? filtered : filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const pageAllSelected = pageRows.length > 0 && pageRows.every((inv) => selected.includes(inv.no));
 
   const action = mode === 'simple' ? 'invoiceStage' : mode === 'supplierSafe' ? 'supplierInvoiceDetail' : 'invoiceDetail';
@@ -95,23 +101,29 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   // Suppliers see one vendor code, so vendor columns are noise.
   const supplierView = mode === 'supplierSafe' && isSupplierUser;
   const colCount = (bulk ? 1 : 0) + (supplierView ? 12 : 19);
-  const exportCount = isSupplierUser ? filtered.length : filteredCount ?? filtered.length;
+  const vendorLeft = (bulk ? CHECK_COL_W : 0) + INVOICE_COL_W;
+  const exportCount = server ? matchCount : isSupplierUser ? filtered.length : filteredCount ?? filtered.length;
   const exportLabel = `Export to Excel (${exportCount})`;
   const portalExportNames = { msetuSrm: 'Msetu_SRM', poPortal: 'PO_Portal', mfoxPortal: 'MFOX' };
   const channelKey = tableKey.match(/^channel-(msetuSrm|poPortal|mfoxPortal)(?:-|$)/)?.[1];
   const regularExportName = exportName || portalExportNames[channelKey] || 'Invoices';
 
-  const exportCols = supplierView
-    ? ['Invoice No', 'Channel', 'PO No', 'Product Type', 'Invoice Date', 'Payment Due Date', 'Amount', 'Status', 'Current Stage', 'UTR No', 'Status Date', 'Rejection Reason']
-    : ['Invoice No', 'Vendor', 'Vendor Code', 'Channel', 'PO No', 'PO Item', 'Product Type', 'Plant Code', 'Division', 'Invoice Date', 'Upload Date', 'Payment Due Date', 'Amount', 'Status', 'Pending With', 'UTR No', 'Status Date', 'Rejection Reason'];
-  const toExportRow = (inv) => {
-    if (supplierView) return [inv.no, CHANNEL_LABEL[inv.channel], inv.po, invoiceProductType(inv), invoiceDateLabel(inv), formatInvoiceDate(inv.sap?.net_due_date), inv.amount, inv.status, currentStageName(inv), inv.utr, inv.date, inv.status === 'Rejected' ? (inv.rejectionReason || inv.workflow?.rejection_reason || inv.shortPayReason || 'Not provided') : ''];
-    return [inv.no, inv.vendor, inv.vcode, CHANNEL_LABEL[inv.channel], inv.po, poItemValue(inv), invoiceProductType(inv), inv.plant || '-', inv.dvType || '-', invoiceDateLabel(inv), formatInvoiceDate(inv.rawUploadDate), formatInvoiceDate(inv.sap?.net_due_date), inv.amount, inv.status, inv.workflow?.pending_with || '-', inv.utr, inv.date, rejectionReason(inv)];
-  };
+  const exportCols = supplierView ? SUPPLIER_EXPORT_COLUMNS : INTERNAL_EXPORT_COLUMNS;
+  const toExportRow = supplierView ? supplierExportRow : internalExportRow;
   const exportInvoices = (list, isSelected = false) => {
     const filename = timestampedExportName(isSelected ? 'Selected_Invoices' : regularExportName);
     downloadCSV(filename, exportCols, list.map(toExportRow));
     dispatch(pushToast(`Exported ${list.length} invoice${list.length === 1 ? '' : 's'} to Excel.`));
+  };
+  // Paged on the server: the file is built there from every matching invoice, not only this page.
+  const exportFromServer = async (invoiceNumbers) => {
+    try {
+      await server.onExport({ invoiceNumbers, filename: invoiceNumbers ? 'Selected_Invoices' : regularExportName });
+      const count = invoiceNumbers ? invoiceNumbers.length : matchCount;
+      dispatch(pushToast(`Exported ${count} invoice${count === 1 ? '' : 's'} to Excel.`));
+    } catch (error) {
+      dispatch(pushToast(`Export failed: ${error?.message || 'try again'}`));
+    }
   };
 
   return (
@@ -153,7 +165,8 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               <button type="button" className="btn" disabled={searchBusy}
                 title={`Export ${selected.length} selected invoice(s) to Excel`}
                 onClick={() => {
-                  exportInvoices(visibleInvoices.filter((inv) => selected.includes(inv.no)), true);
+                  if (server) exportFromServer([...selected]);
+                  else exportInvoices(visibleInvoices.filter((inv) => selected.includes(inv.no)), true);
                   dispatch(clearSelection(tableKey));
                 }}>
                 <Download />Export Selected to Excel
@@ -162,7 +175,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
           ) : (
             <button type="button" className="btn" disabled={searchBusy}
               title={`Export the ${exportCount} currently filtered invoice(s) to Excel`}
-              onClick={() => exportInvoices(filtered)}>
+              onClick={() => (server ? exportFromServer() : exportInvoices(filtered))}>
               <Download />{exportLabel}
             </button>
           )}
@@ -187,7 +200,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
               {/* Sticky: Invoice No */}
               <th scope="col" style={{ ...fixedWidth(INVOICE_COL_W), ...stickyCell(bulk ? CHECK_COL_W : 0, true) }}>Invoice No</th>
               {/* Sticky: Vendor */}
-              {!supplierView && <th scope="col" style={{ ...stickyCell((bulk ? CHECK_COL_W : 0) + INVOICE_COL_W, true), minWidth: '8.75rem' }}>Vendor</th>}
+              {!supplierView && <th scope="col" className="col-pin-vendor" style={{ '--pin-left': `${vendorLeft}rem`, minWidth: '8.75rem' }}>Vendor</th>}
 
               {!supplierView && <th scope="col">Vendor Code</th>}
               <th scope="col">Channel</th>
@@ -241,7 +254,7 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
 
                   {/* Sticky: Vendor */}
                   {!supplierView && (
-                    <td style={{ ...stickyCell((bulk ? CHECK_COL_W : 0) + INVOICE_COL_W), whiteSpace: 'normal', minWidth: '8.75rem', maxWidth: '12.5rem' }}>
+                    <td className="col-pin-vendor" style={{ '--pin-left': `${vendorLeft}rem`, whiteSpace: 'normal', minWidth: '8.75rem', maxWidth: '12.5rem' }}>
                       {inv.vendor}
                     </td>
                   )}
@@ -305,15 +318,15 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
           <div>
             <div style={{ fontWeight: 600 }}>Filtered Invoice Amount</div>
             <div className="cell-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
-              {filtered.length.toLocaleString()} matching invoice{filtered.length === 1 ? '' : 's'} across all pages
-              {amountSummary.known < filtered.length && ` · Amount available for ${amountSummary.known} of ${filtered.length} invoices`}
+              {matchCount.toLocaleString()} matching invoice{matchCount === 1 ? '' : 's'} across all pages
+              {amountSummary.known < matchCount && ` · Amount available for ${amountSummary.known} of ${matchCount} invoices`}
             </div>
           </div>
           <strong style={{ fontSize: '1.1875rem', fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{amountSummary.value}</strong>
         </div>
       )}
       <PagerFoot
-        total={filtered.length}
+        total={matchCount}
         page={currentPage}
         pageSize={PAGE_SIZE}
         onPage={(p) => dispatch(setTablePage({ key: tableKey, page: p }))}

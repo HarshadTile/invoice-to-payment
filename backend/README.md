@@ -102,6 +102,32 @@ The frontend expects this on port 8000 and proxies `/api/v1` to it — see
 particular the `VITE_USE_FASTAPI_INVOICES=true` environment variable it needs
 to actually call this backend instead of a different, unrelated server.
 
+## Invoice data source
+
+`INVOICE_SOURCE` in `.env` picks where SRM and PO Portal invoices come from:
+
+- `file` (default): the workbook and CSV in `data/`, as described above.
+- `api`: the internal BigQuery query API (`app/core/bigquery_api.py`). Set `BIGQUERY_API_TOKEN`
+  as well; see `.env.example` for the optional tuning variables.
+
+In `api` mode the backend sends fixed `SELECT` queries to `POST /query/sql`, asking only for the
+columns the code reads (`SRM_COLUMNS` in `app/repositories/srm_invoice.py`,
+`PO_PORTAL_COLUMNS` in `app/repositories/po_portal_invoice.py`). Results come in parallel pages of
+10,000 rows, because a whole table in one response fails on the server. No key column is unique
+in these tables, so each page is ordered by every selected column to keep the order stable
+between requests. The first load from BigQuery (and building the search index) takes 1-2 minutes; it is
+then saved as a snapshot in `data/.invoice-cache/` (gitignored), so every later start serves the
+last data within about 20 seconds while fresh data is fetched in the background and swapped in.
+After that the data is refreshed every `INVOICE_REFRESH_MINUTES` (default 60). A snapshot written
+by older code is ignored automatically. If the API can't be reached or rejects
+the token, invoice endpoints return `503 SOURCE_UNAVAILABLE` and the reason is logged.
+
+HTTPS uses the operating system's certificate store (`truststore`), because the corporate network
+signs traffic with a root certificate that Python's own certificate list doesn't include.
+
+When the code starts reading a new source column, add it to the matching column list.
+`tests/core/test_bigquery_api.py` fails if a column the code reads is missing from the list.
+
 ## Tests
 
 For isolated password-link, user-management, and permission tests, run:

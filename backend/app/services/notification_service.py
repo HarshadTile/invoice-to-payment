@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.models.ticket_activity import Notification
-from app.models.user import User, UserChannelAccess
+from app.models.user import User, UserChannelAccess, ticket_admin_clause
 
 
 def add_for_user(db: Session, user_id: int, ticket_id: str, event_type: str, payload: dict | None = None):
@@ -25,7 +25,7 @@ def oversight_user_ids(db: Session, channel: str) -> set[int]:
         for (user_id,) in db.query(User.id)
         .filter(
             User.status == "Active",
-            User.ticket_role == "ADMIN",
+            ticket_admin_clause(),
         )
         .all()
     }

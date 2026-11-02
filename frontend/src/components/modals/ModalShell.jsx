@@ -7,7 +7,8 @@ export default function ModalShell({ title, width = 560, children, foot, onClose
   const close = onClose || (() => dispatch(closeModal()));
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className={`modal ${className}`.trim()} style={{ width, maxWidth: '92vw' }}>
+      {/* `width` (px) is the desktop size; the .modal CSS caps it to the viewport */}
+      <div className={`modal ${className}`.trim()} style={{ width: typeof width === 'number' ? `${width / 16}rem` : width }}>
         <div className="modal-head">
           <h3>{title}</h3>
           <button type="button" className="close-x" aria-label="Close" onClick={close}>✕</button>

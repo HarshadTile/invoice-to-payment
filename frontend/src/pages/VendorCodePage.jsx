@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { supplierForVendorCode, panFor } from '../features/suppliers/supplierIdentity';
 import { useScope } from '../features/ui/scope';
 import { setScopeFilter } from '../features/ui/uiSlice';
 import ComboField from '../components/common/ComboField.jsx';
-import { selectFilteredInvoicesAnyVendor } from '../features/invoices/selectors';
-import { totalsByCurrency } from '../utils/amounts';
+import {
+  useGetInvoiceDashboardQuery, useGetInvoiceFacetsQuery, useGetInvoicePageQuery, useGetInvoicePansQuery, useGetInvoiceVendorsQuery,
+} from '../api/invoicesQueryApi';
+import { useInvoiceScopeParams } from '../features/invoices/useInvoiceScopeParams';
+import useServerInvoiceTable from '../features/invoices/useServerInvoiceTable';
 import InvoiceTable from '../components/invoices/InvoiceTable.jsx';
-import InvoiceFilterBar, { invoiceYMD } from '../components/invoices/InvoiceFilterBar.jsx';
+import InvoiceFilterBar from '../components/invoices/InvoiceFilterBar.jsx';
 import { selectHasTicketAccess } from '../features/auth/authSlice';
 import { fetchTicketPage, useGetTicketsQuery } from '../api/ticketsApi';
 import StatCard from '../components/common/StatCard.jsx';
@@ -23,41 +25,30 @@ export default function VendorCodePage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const code = scope.vcode || routeCode || '';
-  const scoped = useSelector(selectFilteredInvoicesAnyVendor);
+  // The year / channel scope applies; the vendor is this page's own choice.
+  const scopeParams = useInvoiceScopeParams();
+  const base = useMemo(() => ({ ...scopeParams, vendor_code: undefined }), [scopeParams]);
 
-  // PAN is the supplier's legal identity: one PAN can carry several vendor codes. Build the
-  // PAN → names / vendor codes directory from the invoices in scope (year / channel).
-  const { byPan, byCode } = useMemo(() => {
-    const pans = new Map();
-    const vendorCodes = new Map();
-    for (const inv of scoped) {
-      const info = vendorCodes.get(inv.vcode) || { count: 0, name: inv.vendor, pan: '' };
-      info.count += 1;
-      if (!info.pan && inv.pan) info.pan = String(inv.pan).trim();
-      vendorCodes.set(inv.vcode, info);
-      const pan = String(inv.pan || '').trim();
-      if (!pan) continue;
-      const entry = pans.get(pan) || { names: new Map(), codes: new Set() };
-      entry.names.set(inv.vendor, (entry.names.get(inv.vendor) || 0) + 1);
-      entry.codes.add(inv.vcode);
-      pans.set(pan, entry);
-    }
-    return { byPan: pans, byCode: vendorCodes };
-  }, [scoped]);
-  const nameOfPan = (pan) => [...(byPan.get(pan)?.names || [])].sort((a, b) => b[1] - a[1])[0]?.[0] || pan;
+  // PAN is the supplier's legal identity: one PAN can carry several vendor codes. The PAN and vendor-code
+  // directories come from the server, for the invoices in scope (year / channel).
+  const panList = useGetInvoicePansQuery(base);
+  const vendorList = useGetInvoiceVendorsQuery({ ...base, limit: 5000 });
+  const byPan = useMemo(() => new Map((panList.data || []).map((entry) => [entry.pan, entry])), [panList.data]);
+  const byCode = useMemo(() => new Map((vendorList.data || []).map((v) => [v.code, v])), [vendorList.data]);
+  const nameOfPan = (pan) => byPan.get(pan)?.name || pan;
   // A chosen vendor code decides the PAN; otherwise the PAN picked here (kept in the URL).
   const pan = code ? (byCode.get(code)?.pan || '') : (searchParams.get('pan') || '');
-  const invoices = code ? scoped.filter((i) => i.vcode === code)
-    : pan ? scoped.filter((i) => String(i.pan || '').trim() === pan) : scoped;
-  const supplier = code ? supplierForVendorCode(code) : pan ? nameOfPan(pan) : 'All Suppliers';
-  const codes = [...new Set(invoices.map((i) => i.vcode))];
+  const loadingNames = panList.isLoading || vendorList.isLoading;
+  const supplier = code ? (byCode.get(code)?.name || (loadingNames ? '…' : '-')) : pan ? nameOfPan(pan) : 'All Suppliers';
+  const codes = code ? [code] : pan ? byPan.get(pan)?.codes || [] : [...byCode.keys()];
+  const selection = useMemo(() => ({ ...base, vendor_code: code || undefined, pan: !code && pan ? pan : undefined }), [base, code, pan]);
 
   const panOptions = useMemo(() => [
     { value: '', label: 'All PANs', sub: `${byPan.size.toLocaleString('en-IN')} suppliers` },
-    ...[...byPan].map(([value, entry]) => {
-      const names = [...entry.names].sort((a, b) => b[1] - a[1]).map(([name]) => name);
-      return { value, label: value, sub: `${names[0]} · ${entry.codes.size} vendor code${entry.codes.size === 1 ? '' : 's'}`, search: names.join(' ') };
-    }).sort((a, b) => a.sub.localeCompare(b.sub)),
+    ...[...byPan.values()].map((entry) => ({
+      value: entry.pan, label: entry.pan, search: entry.names.join(' '),
+      sub: `${entry.name} · ${entry.codes.length} vendor code${entry.codes.length === 1 ? '' : 's'}`,
+    })).sort((a, b) => a.sub.localeCompare(b.sub)),
   ], [byPan]);
   const vendorOptions = useMemo(() => {
     const list = pan ? [...(byPan.get(pan)?.codes || [])] : [...byCode.keys()];
@@ -109,25 +100,47 @@ export default function VendorCodePage() {
     Object.entries(changes).forEach(([k, v]) => { if (v === null) next.delete(k); else next.set(k, v); });
     setSearchParams(next, { replace: true });
   };
-  const inRange = invoices.filter((i) => {
-    const ymd = invoiceYMD(i, scope.dateField);
-    if ((dateFrom || dateTo) && !ymd) return false;
-    return (!dateFrom || ymd >= dateFrom) && (!dateTo || ymd <= dateTo);
-  });
-  const openTickets = ticketItems.filter((t) => ['OPEN', 'IN_PROGRESS'].includes(t.status)
-    && inRange.some((i) => i.vcode === t.vendor_code && i.no === t.invoice_no && i.channel === t.channel));
+  // The selection within the chosen invoice dates: the cards, status counts and list all start here.
+  const inRangeFilters = useMemo(() => ({ ...selection, date_from: dateFrom || undefined, date_to: dateTo || undefined }),
+    [selection, dateFrom, dateTo]);
+  const inRange = useGetInvoiceDashboardQuery(inRangeFilters);
+  const statusFacet = useGetInvoiceFacetsQuery({ ...inRangeFilters, fields: ['status'] });
+  const inRangeCount = inRange.data?.total.count ?? 0;
+
+  // Open queries: the unresolved tickets whose invoice is in this selection (same vendor, invoice, channel).
+  const openCandidates = ticketItems.filter((t) => ['OPEN', 'IN_PROGRESS'].includes(t.status));
+  const ticketInvoiceNos = [...new Set(openCandidates.map((t) => t.invoice_no))].sort();
+  const queried = useGetInvoicePageQuery({ ...inRangeFilters, invoice_numbers: ticketInvoiceNos, page: 1, page_size: 1000 },
+    { skip: !queryReady || !ticketInvoiceNos.length });
+  const queriedInvoices = queried.data?.items || [];
+  const openTickets = openCandidates.filter((t) => queriedInvoices.some((i) => i.vcode === t.vendor_code
+    && i.no === t.invoice_no && i.channel === t.channel));
   const hasOpenQuery = (invoice) => openTickets.some((t) => t.vendor_code === invoice.vcode
     && t.invoice_no === invoice.no && t.channel === invoice.channel);
+  const queriesReady = queryReady && (!ticketInvoiceNos.length || !!queried.data);
   const activeKpi = searchParams.get('kpi') === 'queries' ? 'queries' : status === 'Paid' ? 'paid' : 'total';
-  const shown = inRange.filter((i) => (!status || i.status === status)
-    && (activeKpi !== 'queries' || (queryReady && hasOpenQuery(i))));
+
+  // The list: paged on the server, except "Open Queries", which is the handful matched above.
+  const listFilters = useMemo(() => ({ ...inRangeFilters, statuses: status ? [status] : undefined }), [inRangeFilters, status]);
+  const tableKey = `vendorCodePage-${code || pan || 'all'}`;
+  const list = useServerInvoiceTable({ tableKey, filters: listFilters, skip: activeKpi === 'queries' });
+  const listTotals = useGetInvoiceDashboardQuery(list.query, { skip: activeKpi === 'queries' });
+  const queryRows = activeKpi === 'queries' ? queriedInvoices.filter((i) => (!status || i.status === status) && hasOpenQuery(i)) : [];
+  const shownCount = activeKpi === 'queries' ? queryRows.length : list.total;
+  const moneyText = (byCurrency) => Object.entries(byCurrency || {}).map(([currency, value]) =>
+    `${currency}${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`).join(' + ');
+  const server = useMemo(() => (!listTotals.data ? list.server : {
+    ...list.server,
+    amountSummary: { known: listTotals.data.amountCount, value: moneyText(listTotals.data.totalsByCurrency) || (list.total ? 'Not available' : '—') },
+  }), [list.server, list.total, listTotals.data]);
+
   const rangeLabel = !dateFrom && !dateTo ? 'all dates' : `${dateFrom || 'earliest'} to ${dateTo || 'latest'}`;
-  const byCurrency = totalsByCurrency(inRange);
-  const knownAmounts = inRange.filter((invoice) => Object.keys(totalsByCurrency([invoice])).length > 0).length;
-  const amount = Object.entries(byCurrency).map(([currency, value]) => `${currency}${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`).join(' + ') || '-';
+  const byCurrency = inRange.data?.totalsByCurrency || {};
+  const knownAmounts = inRange.data?.amountCount ?? 0;
+  const amount = moneyText(byCurrency) || '-';
   // the tile shows lakh / crore; the exact figure stays on hover
   const amountShort = Object.entries(byCurrency).map(([currency, value]) => formatMoney(value, currency)).join(' + ') || '-';
-  const paidCount = inRange.filter((i) => i.status === 'Paid').length;
+  const paidCount = inRange.data?.kpi.paid.count ?? 0;
   const initials = code || pan ? initialsOf(supplier) : 'ALL';
   return (
     <div className="dash sv-page">
@@ -141,7 +154,7 @@ export default function VendorCodePage() {
         {/* pick a PAN (search by PAN or supplier name), then one of its vendor codes, or all of them */}
         <ComboField
           className="sv-field sv-pick" label="PAN" value={pan}
-          display={pan || (code ? panFor(supplier) : 'All PANs')}
+          display={pan || (code ? '-' : 'All PANs')}
           options={panOptions} onSelect={selectPan} placeholder="Search PAN or supplier name"
         />
         <ComboField
@@ -152,17 +165,17 @@ export default function VendorCodePage() {
       </section>
 
       <div className="kpi-grid supplier-visibility-kpis">
-        <StatCard tone="shade-total" icon={<FileText size={16} />} label="Total Invoices" value={inRange.length.toLocaleString('en-IN')}
+        <StatCard tone="shade-total" icon={<FileText size={16} />} label="Total Invoices" value={inRangeCount.toLocaleString('en-IN')}
           sub="All statuses in this selection" active={activeKpi === 'total' && !status}
           onClick={() => update({ kpi: null, status: null })} />
         <StatCard tone="shade-paid" icon={<CheckCircle size={16} />} label="Paid" value={paidCount.toLocaleString('en-IN')} active={activeKpi === 'paid'}
-          sub="Payment cleared" meter={inRange.length ? paidCount / inRange.length : 0}
+          sub="Payment cleared" meter={inRangeCount ? paidCount / inRangeCount : 0}
           onClick={() => update({ kpi: null, status: activeKpi === 'paid' ? null : 'Paid' })} />
-        <StatCard tone="shade-pending" icon={<MessageSquare size={16} />} label="Open Queries" value={queryReady ? openTickets.length : '-'}
-          sub={!hasTicketAccess ? 'Query access unavailable' : !queryReady ? ticketError || extraTickets?.error ? 'Unable to load queries' : 'Loading queries…' : 'Unresolved queries linked to these invoices'}
-          active={activeKpi === 'queries'} onClick={queryReady ? () => update({ status: null, kpi: activeKpi === 'queries' ? null : 'queries' }) : undefined} />
+        <StatCard tone="shade-pending" icon={<MessageSquare size={16} />} label="Open Queries" value={queriesReady ? openTickets.length : '-'}
+          sub={!hasTicketAccess ? 'Query access unavailable' : !queriesReady ? ticketError || extraTickets?.error || queried.isError ? 'Unable to load queries' : 'Loading queries…' : 'Unresolved queries linked to these invoices'}
+          active={activeKpi === 'queries'} onClick={queriesReady ? () => update({ status: null, kpi: activeKpi === 'queries' ? null : 'queries' }) : undefined} />
         <StatCard tone="shade-miro" icon={<Banknote size={16} />} label="Total Invoice Amount" value={<span title={amount}>{amountShort}</span>}
-          sub={knownAmounts < inRange.length ? `Amount available for ${knownAmounts} of ${inRange.length} invoices` : 'Total of available invoice amounts'} />
+          sub={knownAmounts < inRangeCount ? `Amount available for ${knownAmounts} of ${inRangeCount} invoices` : 'Total of available invoice amounts'} />
       </div>
 
       <div className="sv-section-head">
@@ -175,10 +188,14 @@ export default function VendorCodePage() {
         onDateFrom={(v) => update({ date_from: v })} onDateTo={(v) => update({ date_to: v })}
         onAllDates={() => update({ date_from: '', date_to: '' })}
         onClear={() => update({ status: null, kpi: null, date_from: '', date_to: '' })}
-        statusCountBase={inRange} resultCount={shown.length} rangeLabel={rangeLabel}
+        statusCounts={statusFacet.data?.status || {}} resultCount={shownCount} rangeLabel={rangeLabel}
       />
       </div>
-      <div className="card sv-table-card"><InvoiceTable invoices={shown} tableKey={`vendorCodePage-${code || pan || 'all'}`} mode="supplierSafe" showFilteredAmount /></div>
+      <div className="card sv-table-card" aria-busy={inRange.isFetching || list.isFetching}>
+        {activeKpi === 'queries'
+          ? <InvoiceTable invoices={queryRows} tableKey={`${tableKey}-queries`} mode="supplierSafe" showFilteredAmount />
+          : <InvoiceTable invoices={list.invoices} server={server} busy={list.isFetching} tableKey={tableKey} mode="supplierSafe" showFilteredAmount />}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { SRM_COLUMNS, matchesSrmWorkspace, srmHistoryRows } from './srmWorkspace';
 
-const field = (key, label, source, type = 'text') => ({ key, label, type, read: (i) => i.poPortal?.[source] });
+const field = (key, label, source, type = 'text', sort) => ({ key, label, type, sort, read: (i) => i.poPortal?.[source] });
 const commonKeys = ['invoice', 'vendor', 'vcode', 'pan', 'po', 'item', 'product', 'fy', 'invoiceDate', 'uploadDate',
   'uploaded', 'amount', 'currency', 'status', 'pending', 'rejection', 'miroStatus', 'dueDate', 'paymentDate', 'utr', 'utrDate', 'accountType'];
 export const PO_COLUMNS = [
@@ -11,16 +11,16 @@ export const PO_COLUMNS = [
   field('hod2', 'HOD2', 'hod2'), field('hod2Status', 'HOD2 Status', 'hod2_status'),
   field('accounts', 'Accounts User', 'accounts_user'), field('accountsStatus', 'Accounts Status', 'accounts_status'),
   field('service', 'Service Code', 'service'), field('line', 'Service Line', 'line_number'),
-  field('entry', 'Service Entry Sheet', 'entry_sheet'), field('entryDate', 'Service Entry Date', 'entry_sheet_creation_date', 'date'),
+  field('entry', 'Service Entry Sheet', 'entry_sheet'), field('entryDate', 'Service Entry Date', 'entry_sheet_creation_date', 'date', 'po_entry'),
   field('request', 'PO Request No', 'po_request_number'), field('poType', 'PO Type', 'po_type'),
   field('activity', 'PO Activity', 'po_activity'), field('cost', 'Cost Center', 'cost_center'),
   field('comments', 'Comments', 'comments'), field('editStatus', 'Edit Status', 'edit_status'),
-  field('miroCreated', 'MIRO Created On', 'miro_created_on', 'date'),
-  field('miroDate', 'MIRO Booking Date', 'miro_posting_date', 'date'),
+  field('miroCreated', 'MIRO Created On', 'miro_created_on', 'date', 'po_miro_created'),
+  field('miroDate', 'MIRO Booking Date', 'miro_posting_date', 'date', 'po_miro_posting'),
   field('miroUser', 'MIRO Created By', 'miro_created_by'),
-  field('parking', 'Parking Date', 'parking_date', 'date'), field('parkingUser', 'Parking User', 'parking_user'),
-  field('posting', 'Posting Date', 'posting_date', 'date'), field('postingUser', 'Posting User', 'posting_user'),
-  field('rsegPosting', 'RSEG Posting Date', 'rseg_posting_date', 'date'),
+  field('parking', 'Parking Date', 'parking_date', 'date', 'po_parking'), field('parkingUser', 'Parking User', 'parking_user'),
+  field('posting', 'Posting Date', 'posting_date', 'date', 'po_posting'), field('postingUser', 'Posting User', 'posting_user'),
+  field('rsegPosting', 'RSEG Posting Date', 'rseg_posting_date', 'date', 'po_rseg_posting'),
   field('document', 'Document Number', 'document_number'), field('doc', 'Doc Number', 'doc_number'),
   field('claim', 'Claim Number', 'claim_number'),
 ];

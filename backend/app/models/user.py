@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, func, or_
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -53,3 +53,10 @@ class PasswordResetToken(Base):
     expires_at = Column(DateTime, nullable=False)
     used = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+def ticket_admin_clause():
+    """SQL for "acts as a ticket Admin": ticket role ADMIN, or application role Admin (whose ticket role
+    may be unset, e.g. the first account from seed_admin.py). The same rule as auth_service.ticket_role_of,
+    so whoever can work the Inquiry Desk as Admin is also notified about, and can be assigned, queries."""
+    return or_(func.upper(User.ticket_role) == "ADMIN", func.upper(User.role) == "ADMIN")
