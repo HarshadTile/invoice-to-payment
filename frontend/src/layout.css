@@ -346,7 +346,7 @@
 }
 @media (max-width:35em){
   .topbar-context-filters{display:none;}
-  .topbar-right .help-button{display:none;}
+  .topbar-right .help-dropdown{display:none;}
   .role-select{max-width:9.375rem;}
   .topbar-supplier-code{width:clamp(6rem,28vw,9.25rem);min-width:6rem;max-width:none;flex:0 1 auto;}
   /* a supplier's bar holds FY + vendor code + bell + avatar: keep it all on screen */
