@@ -107,7 +107,7 @@ export default function SupplierInvoicesPage() {
           <StatCard
             key={id} tone={tone} icon={<Icon size={16} />}
             label={SUPPLIER_KPIS[id].label} value={formatCount(kpiLists[id].length)}
-            foot={valueOf(kpiLists[id])}
+            foot={id === 'total' ? 'No amount on record' : valueOf(kpiLists[id])}
             onClick={() => selectKpi(id)} active={activeKpi === id && (id !== 'total' || !status)}
           />
         ))}
