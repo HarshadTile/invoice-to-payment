@@ -32,9 +32,9 @@ function LoginHelpDropdown({ accountType }) {
   const options = isSupplier
     ? [{ value: 'supplier', label: 'Supplier' }]
     : [
-        { value: 'all-channels', label: 'All Channels' },
-        { value: 'po-portal', label: 'HQ/PO Portal' },
-        { value: 'msetu-srm', label: 'Msetu/SRM' },
+        { value: 'all-channels', label: 'All Channels (HQ)' },
+        { value: 'msetu-srm', label: 'Msetu / SRM' },
+        { value: 'po-portal', label: 'PO Portal' },
       ];
 
   function openManual(manualType) {
