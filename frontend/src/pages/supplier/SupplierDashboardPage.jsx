@@ -60,7 +60,7 @@ export default function SupplierDashboardPage() {
       tone={tone} label={label} value={formatCount(m.kpi[id].count)} icon={icon} sub={sub}
       meter={id === 'total' ? undefined : share(m.kpi[id].count, total)}
       foot={id === 'total'
-        ? undefined
+        ? <span>No amount on record</span>
         : <><b>{formatShare(m.kpi[id].count, total)}</b> · <span title={exact(m.kpi[id].value)}>{valueOf(m.kpi[id])}</span></>}
       onClick={() => openList({ kpi: id })}
     />
