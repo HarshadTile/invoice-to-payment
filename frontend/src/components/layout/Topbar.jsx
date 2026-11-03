@@ -283,91 +283,6 @@ export function userManualUrl(authType, channelScope) {
   return `/user-manual/${file}`;
 }
 
-/** Get the URL for a specific manual by type */
-export function getUserManualUrl(authType, manualType) {
-  const manualMap = {
-    'all-channels': 'all-channels-hq.pdf',
-    'po-portal': 'po-portal.pdf',
-    'msetu-srm': 'msetu-srm.pdf',
-    'supplier': 'vendor-view.pdf',
-  };
-  const filename = manualMap[manualType] || 'all-channels-hq.pdf';
-  return `/user-manual/${filename}`;
-}
-
-/* ── Manual selection dropdown for topbar ────────────────────── */
-function TopbarManualDropdown({ authType }) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef(null);
-  const isSupplier = authType === 'supplier';
-
-  const options = isSupplier
-    ? [{ value: 'supplier', label: 'Supplier' }]
-    : [
-        { value: 'all-channels', label: 'All Channels' },
-        { value: 'po-portal', label: 'HQ/PO Portal' },
-        { value: 'msetu-srm', label: 'Msetu/SRM' },
-      ];
-
-  function openManual(manualType) {
-    const url = getUserManualUrl(authType, manualType);
-    window.open(url, '_blank', 'noreferrer');
-    setOpen(false);
-  }
-
-  // Close on click outside
-  useEffect(() => {
-    function handler(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  // Close on Escape key
-  useEffect(() => {
-    function handler(e) {
-      if (e.key === 'Escape' && open) setOpen(false);
-    }
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open]);
-
-  return (
-    <div ref={wrapRef} className="scope-dd help-dropdown">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="icon-btn help-button"
-        aria-label="Help: select and open user manual"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        title="User manual"
-      >
-        <HelpCircle size={18} />
-      </button>
-
-      {open && (
-        <div className="scope-menu" style={{ width: '12.5rem', right: '-0.375rem' }}>
-          <div className="scope-menu-list" role="listbox">
-            {options.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                role="option"
-                onClick={() => openManual(opt.value)}
-                className="scope-opt"
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Topbar() {
   const dispatch = useDispatch();
   const location = useLocation();
@@ -425,7 +340,10 @@ export default function Topbar() {
         )}
 
         <NotificationBell />
-        <TopbarManualDropdown authType={authType} />
+        <a className="icon-btn help-button" href={userManualUrl(authType, channelScope)} target="_blank" rel="noreferrer"
+          aria-label="Help: open the user manual" title="User manual">
+          <HelpCircle size={18} />
+        </a>
 
         <UserMenu />
       </div>
