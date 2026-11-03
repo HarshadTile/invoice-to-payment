@@ -613,3 +613,67 @@
 .lgn-request-card #req-note { height: 2.5rem; min-height: 2.5rem; }
 .lgn-request-card .lgn-submit { margin-top: 0.25rem; }
 .lgn-request-card .lgn-register { padding-top: 0.5rem; }
+
+/* Help dropdown on login page header */
+.lgn-help-dropdown {
+  position: relative;
+  display: inline-block;
+}
+.lgn-help-btn {
+  text-decoration: none;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.78125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.4375rem;
+  cursor: pointer;
+  transition: color .15s ease, background .15s ease;
+}
+.lgn-help-btn:hover { color: var(--brand); background: #F5F5F7; }
+.lgn-help-btn:focus-visible {
+  outline: 0.125rem solid var(--brand);
+  outline-offset: 0.0625rem;
+}
+.lgn-help-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 12.5rem;
+  background: #fff;
+  border: 0.0625rem solid #E6E7EB;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+.lgn-help-list {
+  display: flex;
+  flex-direction: column;
+}
+.lgn-help-opt {
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  padding: 0.625rem 0.875rem;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+  font-size: 0.875rem;
+}
+.lgn-help-opt:first-child {
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+.lgn-help-opt:last-child {
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+.lgn-help-opt:hover {
+  background: #F5F5F7;
+  color: var(--brand);
+}
+.lgn-help-opt:focus-visible {
+  outline: 0.125rem solid var(--brand);
+  outline-offset: -0.125rem;
+}
