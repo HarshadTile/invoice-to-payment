@@ -17,8 +17,6 @@ from app.models.supplier import Supplier, SupplierSetupToken
 from app.models.user import PasswordResetToken, User
 from app.services.supplier_service import (
     GENERIC_LOGIN_ERROR,
-    INACTIVE_SUPPLIER_LOGIN_ERROR,
-    LOCKED_LOGIN_ERROR,
     build_session,
     clear_failures,
     is_locked,
@@ -230,15 +228,12 @@ def login_supplier_password(db: Session, email: str, password: str) -> dict:
     email = normalize_email(email)
     actor = f"Supplier {email}"
     supplier = db.query(Supplier).filter(func.lower(Supplier.email) == email).first() if email else None
-    if supplier and supplier.status == "Inactive":
-        write_audit(db, actor, "Failed login", "supplier account is deactivated")
-        _fail(403, INACTIVE_SUPPLIER_LOGIN_ERROR)
     if not supplier or supplier.status != "Active" or not supplier.password_hash:
         write_audit(db, actor, "Failed login", "unknown email, not active, or no password set")
         _fail(401, GENERIC_LOGIN_ERROR)
     if is_locked(supplier):
         write_audit(db, actor, "Failed login", "account is locked after too many wrong attempts")
-        _fail(429, LOCKED_LOGIN_ERROR)
+        _fail(401, GENERIC_LOGIN_ERROR)
     if not verify_password(password, supplier.password_hash):
         register_failure(db, supplier)
         write_audit(db, actor, "Failed login", "wrong password")

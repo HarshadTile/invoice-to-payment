@@ -27,8 +27,6 @@ logger = logging.getLogger(__name__)
 MAX_FAILED_ATTEMPTS = 5
 LOCK_MINUTES = 15
 GENERIC_LOGIN_ERROR = "Email or password is incorrect, or the account is inactive."
-LOCKED_LOGIN_ERROR = "Too many wrong attempts. Try again in 15 minutes."
-INACTIVE_SUPPLIER_LOGIN_ERROR = "This supplier account has been deactivated. Contact your administrator."
 
 
 def vendor_codes_of(supplier: Supplier) -> list[str]:

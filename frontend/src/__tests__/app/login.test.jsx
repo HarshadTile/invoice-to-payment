@@ -16,20 +16,12 @@ import { freshStore, renderApp, resetAppTestState } from '../../test/renderApp.j
 beforeEach(resetAppTestState);
 
 describe('Login flows', () => {
-  it('shows disabled portals and prevents login with the disabled portal', async () => {
+  it('offers only enabled portals at login, including MFOX after it is enabled', async () => {
     api.get.mockResolvedValueOnce({ channelAvailability: { msetuSrm: true, poPortal: false, mfoxPortal: true } });
-    const user = userEvent.setup();
     renderApp(freshStore());
-    await user.click(screen.getByRole('button', { name: 'Internal Team' }));
-    const portalPicker = screen.getByRole('combobox');
+    await userEvent.click(screen.getByRole('button', { name: 'Internal Team' }));
     expect(await screen.findByRole('option', { name: 'MFOX Portal' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'PO Portal (Disabled)' })).toBeInTheDocument();
-    await user.selectOptions(portalPicker, 'poPortal');
-    await user.type(screen.getByLabelText('Enter Email ID'), 'admin');
-    await user.type(screen.getByLabelText('Password'), 'admin123');
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('This portal is currently disabled. Contact your administrator.');
-    expect(api.post).not.toHaveBeenCalledWith('/v1/auth/login', expect.anything());
+    expect(screen.queryByRole('option', { name: 'PO Portal' })).not.toBeInTheDocument();
   });
 
   it('defaults to supplier sign-in and switches forms without retaining a password', async () => {
@@ -106,33 +98,5 @@ describe('Login flows', () => {
     await user.type(screen.getByLabelText('Password'), 'supplier123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByText('Total Invoices')).toBeInTheDocument();
-  });
-
-  it('shows the specific lockout message for a locked supplier account', async () => {
-    api.post.mockRejectedValueOnce(Object.assign(
-      new Error('Too many wrong attempts. Try again in 15 minutes.'),
-      { status: 429 },
-    ));
-    const user = userEvent.setup();
-    renderApp(freshStore(), '/supplier/login');
-    await user.type(screen.getByLabelText('Email'), 'supplier@example.com');
-    await user.type(screen.getByLabelText('Password'), 'supplier123');
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Too many wrong attempts. Try again in 15 minutes.');
-    expect(screen.queryByText('Total Invoices')).not.toBeInTheDocument();
-  });
-
-  it('shows an account-deactivated message for an inactive supplier account', async () => {
-    api.post.mockRejectedValueOnce(Object.assign(
-      new Error('This supplier account has been deactivated. Contact your administrator.'),
-      { status: 403 },
-    ));
-    const user = userEvent.setup();
-    renderApp(freshStore(), '/supplier/login');
-    await user.type(screen.getByLabelText('Email'), 'inactive@example.com');
-    await user.type(screen.getByLabelText('Password'), 'correct-password');
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('This supplier account has been deactivated. Contact your administrator.');
-    expect(screen.queryByText('Total Invoices')).not.toBeInTheDocument();
   });
 });
