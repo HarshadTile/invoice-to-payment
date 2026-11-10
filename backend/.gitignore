@@ -12,3 +12,5 @@ backups/
 # Real invoice extracts: local only, never committed
 data/tbl_dw_inv_paymt_SRM.xlsx
 data/tbl_dw_inv_paymt_PO_PORTAL.csv
+data/tbl_dw_inv_paymt_PO_PORTAL.xlsx
+data/gcp_invoice_data.xlsx

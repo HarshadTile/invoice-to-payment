@@ -6,7 +6,7 @@ This is an analysis only. No application code, environment configuration, source
 
 ## Findings
 
-The application still reads Excel. `backend/app/repositories/srm_invoice.py` loads `backend/data/gcp_invoice_data.xlsx`, sheet `in`, through openpyxl and caches the records indefinitely in process memory. Its name does not indicate a working GCP connection. The backend requirements do not currently include a GCP datasource client.
+The application still reads Excel. `backend/app/repositories/srm_invoice.py` loaded `backend/data/gcp_invoice_data.xlsx` (since removed; SRM now reads `tbl_dw_inv_paymt_SRM.xlsx` or the BigQuery API), sheet `in`, through openpyxl and caches the records indefinitely in process memory. Its name does not indicate a working GCP connection. The backend requirements do not currently include a GCP datasource client.
 
 The existing file contains 2,702 rows and 49 columns. It already supplies supplier, PO, SRM approval, MIRO, due-date, clearing and UTR data. It does not have `DOC_UPLOAD_DT`, `ASN_SC_NO`, `WERKS`, a source channel column, or the PO Portal process fields.
 
@@ -132,6 +132,6 @@ These questions concern the source contract; no live GCP connection or SAP table
 
 - Functional specification: `C:/Users/tileh/Downloads/FS__8000276074-Invoice to payment dashboard (1).docx`, revision history, Scope, SRM, PO portal, Status Logic and plant bifurcation logic sections.
 - Requirements workbook: `C:/Users/tileh/Downloads/Invoice to payment dashboard_8000276074.xlsx`, SRM rows 3–24, 27–40, 44–51; PO portal rows 3–56 and 60–81. Forex is empty.
-- Existing datasource: `backend/data/gcp_invoice_data.xlsx`, sheet `in`; inspected read-only for headers, row count, status flags and repeated candidate keys.
+- Datasource at the time of review (file since removed): `backend/data/gcp_invoice_data.xlsx`, sheet `in`; inspected read-only for headers, row count, status flags and repeated candidate keys.
 
 Verification was static source review and read-only document/workbook extraction. No application tests, database migrations, cloud queries or application launches were run for this analysis.
