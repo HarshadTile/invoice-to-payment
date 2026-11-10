@@ -6,9 +6,15 @@ from fastapi.testclient import TestClient
 from app.core.database import SessionLocal
 from app.core.security import get_password_hash
 from app.main import app
+from app.models.settings import TableRow
 from app.models.supplier import Supplier, SupplierSetupToken
 from app.repositories.srm_invoice import get_all_cached_invoices
-from app.services.supplier_service import GENERIC_LOGIN_ERROR, issue_setup_link
+from app.services.supplier_service import (
+    GENERIC_LOGIN_ERROR,
+    INACTIVE_SUPPLIER_LOGIN_ERROR,
+    LOCKED_LOGIN_ERROR,
+    issue_setup_link,
+)
 from tests.helpers.suppliers import get_or_create_supplier, supplier_headers
 
 client = TestClient(app)
@@ -57,8 +63,8 @@ def test_login_success_returns_token_and_allowed_codes():
     assert me.status_code == 200 and me.json()["auth"]["vcodes"] == ["SAUTH-V1", "SAUTH-V2"]
 
 
-@pytest.mark.parametrize("case", ["wrong_password", "unknown_email", "inactive", "invited"])
-def test_every_login_failure_has_the_same_message(case):
+@pytest.mark.parametrize("case", ["wrong_password", "unknown_email", "invited"])
+def test_generic_supplier_login_failures_have_the_same_message(case):
     _supplier(status={"inactive": "Inactive", "invited": "Invited"}.get(case, "Active"),
               password=None if case == "invited" else "Passw0rd!")
     response = _login(email="nobody-sauth@example.com" if case == "unknown_email" else EMAIL,
@@ -67,14 +73,36 @@ def test_every_login_failure_has_the_same_message(case):
     assert _message(response) == GENERIC_LOGIN_ERROR
 
 
-def test_five_wrong_passwords_lock_the_account_then_it_unlocks():
+def test_deactivated_supplier_login_shows_account_deactivated_message():
+    _supplier(status="Inactive")
+    response = _login()
+    assert response.status_code == 403
+    assert _message(response) == INACTIVE_SUPPLIER_LOGIN_ERROR
+
+
+def test_five_wrong_passwords_lock_the_account_then_it_unlocks(monkeypatch):
+    monkeypatch.setattr("app.services.auth_service.supplier_channels", lambda _supplier: [])
     sid = _supplier()
+    db = SessionLocal()
+    audit_before = db.query(TableRow).filter(TableRow.table_key == "settings-audit").count()
+    db.close()
     for _ in range(5):
         assert _login(password="wrong-pass").status_code == 401
-    locked = _login()  # correct password, but locked: same message
-    assert locked.status_code == 401 and _message(locked) == GENERIC_LOGIN_ERROR
+    locked = _login()  # correct password is refused while the account is locked
+    assert locked.status_code == 429 and _message(locked) == LOCKED_LOGIN_ERROR
     db = SessionLocal()
-    db.get(Supplier, sid).locked_until = datetime.utcnow() - timedelta(minutes=1)
+    supplier = db.get(Supplier, sid)
+    assert supplier.locked_until is not None
+    assert timedelta(minutes=14) < supplier.locked_until - datetime.utcnow() <= timedelta(minutes=15, seconds=1)
+    failed_logins = [
+        row.cells_json for row in db.query(TableRow)
+        .filter(TableRow.table_key == "settings-audit")
+        .order_by(TableRow.row_index)
+        .offset(audit_before)
+        .all()
+    ]
+    assert any(row[1] == f"Supplier {EMAIL}" and row[2] == "Failed login" for row in failed_logins)
+    supplier.locked_until = datetime.utcnow() - timedelta(minutes=1)
     db.commit()
     db.close()
     assert _login().status_code == 200

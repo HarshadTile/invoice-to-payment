@@ -19,7 +19,11 @@ export default function WorkspaceSelector({ id = 'lgn-portal', value, onChange, 
       <div className="lgn-input">
         <BuildingIcon className="lgn-ic" />
         <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-          {OPTIONS.filter((o) => availability[o.value] !== false).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {availability[o.value] === false ? `${o.label} (Disabled)` : o.label}
+            </option>
+          ))}
         </select>
         <CaretIcon className="lgn-caret" />
       </div>

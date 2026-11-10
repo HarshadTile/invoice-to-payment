@@ -46,6 +46,7 @@ export default function LoginPage() {
 
   const busy = status === 'busy';
   const done = status === 'success';
+  const disabledPortalMessage = 'This portal is currently disabled. Contact your administrator.';
 
   async function runLogin(form, dest) {
     setError('');
@@ -57,10 +58,14 @@ export default function LoginPage() {
       navigate(dest);
     } catch (err) {
       setStatus('idle');
-      if (err.status === 401) {
-        setError(form.mode === 'supplierPassword'
-          ? 'Email or password is incorrect, or the account is inactive.'
-          : 'Invalid email or password.');
+      if (form.mode === 'supplierPassword' && err.status === 429) {
+        setError(err.message);
+      } else if (err.status === 401) {
+        setError(form.mode === 'supplier'
+          ? 'Invalid vendor code.'
+          : form.mode === 'supplierPassword'
+            ? 'Email or password is incorrect, or the account is inactive.'
+            : 'Invalid email or password.');
       } else {
         setError(err.message || 'Something went wrong. Please try again.');
       }
@@ -74,6 +79,10 @@ export default function LoginPage() {
     if (!password) fe.password = 'Enter your password.';
     setFieldErr(fe);
     if (Object.keys(fe).length) return;
+    if (availability[channelScope] === false) {
+      setError(disabledPortalMessage);
+      return;
+    }
     runLogin({ mode: 'internal', username: empId.trim(), password, channelScope }, '/app/invoices');
   }
 
