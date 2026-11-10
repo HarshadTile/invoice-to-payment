@@ -239,8 +239,8 @@ screen. Apply the supplier email schema change with `alembic upgrade head`.
 - **Rate limit**: `LOGIN_ATTEMPTS_PER_IP` (default 30) sign-in attempts per address per 5
   minutes. The limit is per backend process (run one worker, or put a limit in the proxy too).
 - **Behind a reverse proxy**, start uvicorn with
-  `--proxy-headers --forwarded-allow-ips=<proxy address>` so the real client address and
-  HTTPS scheme are seen. `X-Forwarded-For` is never read directly (anyone can forge it).
+  `--proxy-headers --forwarded-allow-ips=<proxy address> --no-server-header` so the real
+  client address and HTTPS scheme are seen, and uvicorn doesn't advertise itself. `X-Forwarded-For` is never read directly (anyone can forge it).
 - **Security headers** (`app/core/security_headers.py`) are added to every API response:
   `nosniff`, `X-Frame-Options: DENY`, a strict CSP, `no-store` on `/api/*`, and HSTS over HTTPS.
   The web server that serves the built frontend must send its own headers for the HTML/JS.
