@@ -9,6 +9,7 @@ from app.main import app
 from app.models.ticket import Ticket
 from app.repositories.srm_invoice import get_all_cached_invoices
 from app.services import attachment_service
+from tests.helpers.suppliers import supplier_headers_for_code
 
 
 client = TestClient(app)
@@ -22,9 +23,7 @@ def _invoice_for(vendor_code=None):
 
 
 def _supplier_headers(vendor_code):
-    response = client.post("/api/v1/auth/supplier/login", json={"vcode": vendor_code, "company": "Supplier"})
-    assert response.status_code == 200
-    return {"Authorization": f"Bearer {response.json()['token']}"}
+    return supplier_headers_for_code(vendor_code, "Ticket Test Supplier")
 
 
 def _internal_headers(username, password, channel_scope):

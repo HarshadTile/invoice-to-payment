@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from app.core.bigquery_api import InvoiceSourceError, use_api
+from app.core.cors import cors_allowed_origins
 from app.core.email import wait_for_outgoing_email
+from app.core.security import get_secret_key
 from app.api.v1.invoice import router as invoice_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router
@@ -24,14 +26,19 @@ from app.jobs.ticket_jobs import start_jobs, stop_jobs
 # `alembic upgrade head` before starting the app for the first time on a
 # fresh database, and after pulling any change that adds a migration.
 
+# Refuse to start with a missing or placeholder signing key (see app/core/security.py).
+get_secret_key()
+
 app = FastAPI(title="M&M Invoice-to-Payment Tracker")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=cors_allowed_origins(),
+    # Sign-in uses a bearer token in the Authorization header, not cookies, so browsers never
+    # need to send credentials cross-origin.
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Idempotency-Key"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=1)
  

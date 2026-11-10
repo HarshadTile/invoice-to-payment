@@ -2,7 +2,6 @@ import { api } from './client';
 
 const LOGIN_PATH = {
   supplierPassword: '/v1/auth/supplier/login-with-password',
-  supplier: '/v1/auth/supplier/login',
   internal: '/v1/auth/login',
 };
 

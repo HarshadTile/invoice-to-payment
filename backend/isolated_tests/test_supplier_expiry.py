@@ -11,6 +11,7 @@ if os.environ.get('I2P_LINK_TEST_ISOLATED') != '1':
     pytest.skip('Requires isolated isolated_tests.support plugin', allow_module_level=True)
 
 from app.main import app
+from isolated_tests.support import supplier_auth_headers
 from app.core.database import SessionLocal
 from app.core.permissions import DEFAULT_ROLE_MATRIX
 from app.core.security import create_access_token, get_password_hash
@@ -127,7 +128,7 @@ def test_supplier_policy_permissions_and_allowed_durations(clients):
         assert internal_manager.put('/api/v1/settings', json={field: 60}).status_code == 403
         assert denied.put('/api/v1/settings', json={field: 60}).status_code == 403
     assert manager.put('/api/v1/settings', json={'inviteLinkExpiryMinutes': 60, 'supplierInviteLinkExpiryMinutes': 60}).status_code == 403
-    supplier = TestClient(app, headers={'Authorization': 'Bearer '+create_access_token('EXP001', 'supplier', {})})
+    supplier = TestClient(app, headers=supplier_auth_headers('EXP001'))
     assert supplier.put('/api/v1/settings', json={'supplierResetLinkExpiryMinutes': 60}).status_code == 403
     assert TestClient(app).put('/api/v1/settings', json={'supplierResetLinkExpiryMinutes': 60}).status_code in (401, 403)
 

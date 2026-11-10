@@ -44,6 +44,17 @@ copy .env.example .env
 notepad .env
 ```
 
+**`JWT_SECRET_KEY` is required.** It signs every login token and the backend refuses to
+start without it (or with a placeholder / a value under 32 characters). Generate one per
+environment and never commit it:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Changing the key signs everyone out. Cross-origin browser access is limited to
+`FRONTEND_URL` plus any origins listed in `CORS_ORIGINS` (never `*`).
+
 The code falls back to MySQL (`mysql+pymysql://root:root@localhost:3306/mahindra_i2p`)
 if `.env` doesn't exist and `DATABASE_URL` isn't set some other way.
 

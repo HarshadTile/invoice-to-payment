@@ -9,7 +9,7 @@ from jwt.exceptions import InvalidTokenError as JWTError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import ALGORITHM, SECRET_KEY
+from app.core.security import ALGORITHM, get_secret_key
 from app.models.user import User
 from app.services.auth_service import allowed_channels_of, ticket_role_of
 from app.services.supplier_service import is_managed_supplier_token, load_active_supplier, vendor_codes_of
@@ -21,8 +21,13 @@ TICKET_ACCESS_ROLES = ("ADMIN", "CHANNEL_LEAD", "ASSIGNEE")
 
 
 def decode_token(raw: str) -> dict:
-    """The token's claims; raises JWTError when it is invalid or expired."""
-    return jwt.decode(raw, SECRET_KEY, algorithms=[ALGORITHM])
+    """The token's claims; raises JWTError when it is invalid, expired, or an old-style supplier
+    token. The passwordless vendor-code login was removed, so a supplier token must be a managed
+    one (email + password login); anything else is treated as an invalid session."""
+    payload = jwt.decode(raw, get_secret_key(), algorithms=[ALGORITHM])
+    if payload.get("auth_type") == "supplier" and not is_managed_supplier_token(payload):
+        raise JWTError("Supplier token was not issued by the password login.")
+    return payload
 
 
 def get_current_user_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -50,26 +55,6 @@ def get_current_user(payload: dict = Depends(get_current_user_token), db: Sessio
             "name": supplier.name or "Vendor",
             "ticket_role": "SUPPLIER",
             "channel_scope": "all",  # vendor codes scope a supplier, not a channel
-            "allowed_channels": [],
-        }
-
-    if auth_type == "supplier":
-        vendor_code = str(payload.get("sub") or "").strip()
-        if not vendor_code:
-            raise HTTPException(status_code=401, detail="Supplier session is missing a vendor code.")
-        scope = payload.get("scope") or {}
-        company = scope.get("company") or "Vendor"
-        return {
-            "auth_type": "supplier",
-            "supplier_id": None,
-            "vendor_code": vendor_code,
-            "vendor_codes": [vendor_code],
-            "company": company,
-            "pan": scope.get("pan") or "-",
-            "user_id": None,
-            "name": company,
-            "ticket_role": "SUPPLIER",
-            "channel_scope": None,
             "allowed_channels": [],
         }
 

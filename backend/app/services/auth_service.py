@@ -191,21 +191,6 @@ def reset_password(db: Session, token: str, password: str) -> None:
 
 # ---------- suppliers ----------
 
-def login_supplier_vendor_code(db: Session, vcode: str, company: str | None) -> dict:
-    """The original vendor-code sign-in, kept alongside email + password."""
-    vcode = vcode.strip()
-    match = next((row for row in get_all_cached_invoices()
-                  if str(row.get("SUPPLIER", "")).strip().lower() == vcode.lower()), None)
-    if match is None:
-        write_audit(db, f"Supplier {vcode}", "Failed login", "unknown vendor code")
-        _fail(401, "Invalid vendor code. Please check and try again.")
-    company = str(match.get("SUPPLIER_NAME") or company or "Vendor").strip()
-    pan = str(match.get("PAN_NO") or "-").strip() or "-"
-    token = create_access_token(subject=vcode, auth_type="supplier", scope={"company": company, "pan": pan, "vcode": vcode})
-    write_audit(db, f"Supplier {vcode}", "Logged in", f"{company}, supplier portal")
-    return {"token": token, "auth": {"authType": "supplier", "vcode": vcode, "company": company, "pan": pan}}
-
-
 def login_supplier_password(db: Session, email: str, password: str) -> dict:
     """Email + password sign-in for managed supplier accounts (the email is unique; a PAN may
     have several accounts and is sometimes blank)."""

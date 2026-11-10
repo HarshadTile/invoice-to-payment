@@ -39,6 +39,13 @@ def supplier_headers(supplier_id) -> dict:
         db.close()
 
 
+def supplier_headers_for_code(vendor_code, name="Test Supplier") -> dict:
+    """A signed-in managed supplier that owns exactly `vendor_code` (created on first use).
+    Replaces the removed vendor-code-only login for tests that need "a supplier of code X"."""
+    pan = "T" + hashlib.md5(vendor_code.encode()).hexdigest()[:9].upper()
+    return supplier_headers(get_or_create_supplier(pan, [vendor_code], name=name))
+
+
 def free_vendor_codes(count) -> list[str]:
     """`count` real vendor codes from the invoice data that no supplier owns yet."""
     db = SessionLocal()

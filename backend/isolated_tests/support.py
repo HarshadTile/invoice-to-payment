@@ -13,6 +13,7 @@ from tempfile import TemporaryDirectory
 _scratch = TemporaryDirectory(prefix="i2p-link-tests-")
 os.environ["DATABASE_URL"] = "sqlite:///" + (Path(_scratch.name) / "tests.db").as_posix()
 os.environ["DISABLE_TICKET_JOBS"] = "true"
+os.environ["JWT_SECRET_KEY"] = "test-only-secret-key-not-for-real-use-0123456789"
 os.environ["SMTP_HOST"] = ""
 os.environ["I2P_LINK_TEST_ISOLATED"] = "1"
 os.environ["FRONTEND_URL"] = "http://192.168.1.10:5173"
@@ -55,3 +56,23 @@ def issued_links(monkeypatch):
 def pytest_unconfigure(config):
     engine.dispose()
     _scratch.cleanup()
+
+
+def supplier_auth_headers(vendor_code: str) -> dict:
+    """Authorization header for a real (managed) supplier account that owns `vendor_code`.
+    The passwordless vendor-code login is gone, so a supplier session needs a supplier row."""
+    from app.core.database import SessionLocal
+    from app.core.security import get_password_hash
+    from app.models.supplier import Supplier, SupplierVendorCode
+    from app.services.supplier_service import build_session
+    email = f"{vendor_code.lower()}@supplier-test.example.com"
+    with SessionLocal() as db:
+        supplier = db.query(Supplier).filter(Supplier.email == email).first()
+        if not supplier:
+            supplier = Supplier(name="Test Supplier", email=email, channel="msetuSrm", status="Active",
+                                password_hash=get_password_hash("TestPassword1!"))
+            supplier.vendor_codes = [SupplierVendorCode(vendor_code=vendor_code)]
+            db.add(supplier)
+            db.commit()
+            db.refresh(supplier)
+        return {"Authorization": f"Bearer {build_session(supplier)['token']}"}

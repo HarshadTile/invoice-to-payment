@@ -1,10 +1,8 @@
 """Shared supplier logic: setup links, lock-out, and the supplier's session token.
 
-Two kinds of supplier token exist side by side:
-  * managed   - issued by the email + password login; `sub` is the supplier id and `scope.stamp`
-                is present. Re-checked against the database on every request.
-  * legacy    - issued by the original vendor-code login; `sub` is the vendor code itself and
-                there is no `stamp`. Behaves exactly as it always did.
+A supplier token is issued only by the email + password login: `sub` is the supplier id and
+`scope.stamp` is present. It is re-checked against the database on every request. (The old
+passwordless vendor-code login and its tokens were removed; such a token is rejected.)
 """
 import hashlib
 import logging
@@ -323,10 +321,7 @@ def load_active_supplier(db: Session, payload: dict) -> Supplier:
 
 
 def supplier_vendor_codes_from_token(db: Session, payload: dict) -> list[str] | None:
-    """The vendor codes a supplier token may see, or None when the token is not a supplier's.
-    A legacy token (vendor-code login) is limited to its own single vendor code, as before."""
+    """The vendor codes a supplier token may see, or None when the token is not a supplier's."""
     if payload.get("auth_type") != "supplier":
         return None
-    if not is_managed_supplier_token(payload):
-        return [str(payload.get("sub") or "").strip()]
     return vendor_codes_of(load_active_supplier(db, payload))

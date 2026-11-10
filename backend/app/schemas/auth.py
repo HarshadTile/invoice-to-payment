@@ -3,11 +3,6 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr
 
 
-class SupplierLoginRequest(BaseModel):
-    vcode: str
-    company: Optional[str] = "Vendor"
-
-
 class SupplierPasswordLoginRequest(BaseModel):
     email: str
     password: str

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user_token
+from app.api.v1 import invoice as invoice_api
 from app.api.v1.invoice import router
 from app.core.database import get_db
 from app.repositories import srm_invoice as source
@@ -100,6 +101,9 @@ def api(monkeypatch):
                 INVOICE_UPLOAD_DATE=date(2026, 10, 20)),
             row(VENDOR_INVOICE_NO="INV/4", STATUS_FLAG="I", Invoice_Uploaded="NO", INVOICE_UPLOAD_DATE=None)]
     monkeypatch.setattr(source, "_cached_invoices", rows)
+    # These tests stub the token and the DB; a supplier token here stands for a supplier that owns V1.
+    monkeypatch.setattr(invoice_api, "supplier_vendor_codes_from_token",
+                        lambda db, payload: ["V1"] if payload.get("auth_type") == "supplier" else None)
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
     app.dependency_overrides[get_current_user_token] = lambda: {"auth_type": "internal"}

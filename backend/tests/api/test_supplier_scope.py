@@ -77,9 +77,9 @@ def test_tickets_listing_works_for_a_managed_supplier(two_code_supplier):
     assert response.status_code == 200
 
 
-def test_a_legacy_vendor_code_token_still_sees_only_its_one_code():
+def test_an_old_vendor_code_token_is_rejected_everywhere():
     code = str(get_all_cached_invoices()[0]["SUPPLIER"]).strip()
     token = create_access_token(subject=code, auth_type="supplier", scope={"company": "Legacy"})
     legacy = {"Authorization": f"Bearer {token}"}
-    assert _codes(legacy) <= {code}
-    assert client.get("/api/v1/workspace", headers=legacy).status_code == 200
+    for path in ("/api/v1/workspace", "/api/v1/auth/me", "/api/v1/invoices/list-invoices", "/api/v1/tickets"):
+        assert client.get(path, headers=legacy).status_code == 401, path

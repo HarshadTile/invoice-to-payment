@@ -18,7 +18,6 @@ The application uses these routes for its screens and actions. Some backend rout
 | Method | Endpoint | Purpose / when to call | Request parameters or body |
 |---|---|---|---|
 | POST | `/api/v1/auth/login` | Sign in an internal team member. | `InternalLoginRequest` JSON |
-| POST | `/api/v1/auth/supplier/login` | Sign in a supplier using the supplier login flow. | `SupplierLoginRequest` JSON |
 | POST | `/api/v1/auth/supplier/login-with-password` | Sign in a supplier with email and password (the email is unique per account; a PAN may have several accounts or be blank). | `{email, password}` JSON |
 | POST | `/api/v1/auth/supplier/forgot-password` | Email a reset link to an active supplier account. The reply is the same whether or not the email exists. Rate limited. | `{email}` JSON |
 | POST | `/api/v1/auth/logout` | End the current session. | Bearer access token |

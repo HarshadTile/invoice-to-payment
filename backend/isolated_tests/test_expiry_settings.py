@@ -9,6 +9,7 @@ if os.environ.get('I2P_LINK_TEST_ISOLATED') != '1':
     pytest.skip('Requires isolated isolated_tests.support plugin', allow_module_level=True)
 
 from app.main import app
+from isolated_tests.support import supplier_auth_headers
 from app.core.database import SessionLocal
 from app.core.security import create_access_token, get_password_hash
 from app.core.permissions import DEFAULT_ROLE_MATRIX
@@ -86,7 +87,7 @@ def test_expiry_validation_and_permissions(clients):
     for value in (30, 60, 240, 720, 1440, 2880, 4320, 10080):
         assert manager.put('/api/v1/settings', json={'resetLinkExpiryMinutes': value}).status_code == 200
     assert denied.put('/api/v1/settings', json={'resetLinkExpiryMinutes': 60}).status_code == 403
-    supplier = TestClient(app, headers={'Authorization': 'Bearer '+create_access_token('vendor', 'supplier', {})})
+    supplier = TestClient(app, headers=supplier_auth_headers('VENDOR1'))
     assert supplier.put('/api/v1/settings', json={'resetLinkExpiryMinutes': 60}).status_code == 403
     assert TestClient(app).put('/api/v1/settings', json={'resetLinkExpiryMinutes': 60}).status_code in (401, 403)
     # Manage Users does not grant permission to edit other configuration.

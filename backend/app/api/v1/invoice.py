@@ -27,8 +27,7 @@ router = APIRouter(
 
 def _supplier_codes(user: dict, db: Session) -> list[str] | None:
     """Vendor codes a supplier token may see; None for internal users. A supplier created on the
-    Suppliers screen is read from the database (so edits and deactivation apply at once); one
-    from the original vendor-code login is locked to that single code, as before."""
+    Suppliers screen is read from the database (so edits and deactivation apply at once)."""
     return supplier_vendor_codes_from_token(db, user)
 
 
@@ -71,9 +70,6 @@ def _channel_scope(filters, user, db):
         # sees its invoices from both.
         load_active_supplier(db, user)
         scope = 'all'
-    elif user.get('auth_type') == 'supplier':
-        # Legacy vendor-code sessions predate PO Portal and retain SRM access.
-        scope = 'msetuSrm'
     requested = filters.get('channel', 'msetuSrm')
     if scope and scope != 'all':
         if requested not in ('all', scope):

@@ -2,6 +2,7 @@ import os
 
 os.environ["DATABASE_URL"] = "mysql+pymysql://root:root@localhost:3306/mahindra_i2p_test"
 os.environ["DISABLE_TICKET_JOBS"] = "true"
+os.environ["JWT_SECRET_KEY"] = "test-only-secret-key-not-for-real-use-0123456789"
 # Never use a developer's local SMTP credentials from automated tests.
 os.environ["SMTP_HOST"] = ""
 # Tests read the fixture files, never the live BigQuery API.

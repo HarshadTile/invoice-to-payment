@@ -37,8 +37,9 @@ npm run lint    # oxlint
 Sign in with the account you (or an admin) created via the backend's
 `seed_admin.py` or Settings → Users. There's no demo/seed account baked into
 this frontend — if login fails, the backend most likely has no accounts yet.
-Supplier sign-in accepts any vendor code today (no password); see
-[../backend/README.md](../backend/README.md) for details on that and on the
+Suppliers sign in with the email and password of their supplier account (created
+from Settings → Suppliers or by approving an access request); there is no
+vendor-code-only login. See [../backend/README.md](../backend/README.md) for the
 role/portal model.
 
 ## Backend

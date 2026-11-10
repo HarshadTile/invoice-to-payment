@@ -14,7 +14,6 @@ from app.schemas.auth import (
     EmailRequest,
     InternalLoginRequest,
     ResetPasswordRequest,
-    SupplierLoginRequest,
     SupplierPasswordLoginRequest,
     SupplierSetupRequest,
     TokenRequest,
@@ -80,11 +79,6 @@ def reset_password(request: ResetPasswordRequest, response: Response, db: Sessio
 
 
 # ---------- suppliers ----------
-
-@router.post("/supplier/login")
-def supplier_login(request: SupplierLoginRequest, db: Session = Depends(get_db)):
-    return auth_service.login_supplier_vendor_code(db, request.vcode, request.company)
-
 
 @router.post("/supplier/login-with-password")
 def supplier_login_with_password(request: SupplierPasswordLoginRequest, db: Session = Depends(get_db)):

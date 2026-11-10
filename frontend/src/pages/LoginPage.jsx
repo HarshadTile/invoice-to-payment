@@ -58,11 +58,9 @@ export default function LoginPage() {
     } catch (err) {
       setStatus('idle');
       if (err.status === 401) {
-        setError(form.mode === 'supplier'
-          ? 'Invalid vendor code.'
-          : form.mode === 'supplierPassword'
-            ? 'Email or password is incorrect, or the account is inactive.'
-            : 'Invalid email or password.');
+        setError(form.mode === 'supplierPassword'
+          ? 'Email or password is incorrect, or the account is inactive.'
+          : 'Invalid email or password.');
       } else {
         setError(err.message || 'Something went wrong. Please try again.');
       }

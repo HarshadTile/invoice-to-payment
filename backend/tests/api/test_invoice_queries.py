@@ -7,15 +7,18 @@ from fastapi.testclient import TestClient
 
 from app.core.security import create_access_token
 from app.main import app
+from tests.helpers.suppliers import supplier_headers_for_code
 
 
 def _client(auth_type, subject, scope=None):
+    if auth_type == "supplier":
+        return TestClient(app, headers=supplier_headers_for_code(subject, (scope or {}).get("company", "Vendor")))
     token = create_access_token(subject=subject, auth_type=auth_type, scope=scope)
     return TestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
 internal = _client("internal", 1, {"channelScope": "all"})
-supplier = _client("supplier", "V1", {"company": "Supplier One"})  # legacy session: SRM, vendor V1 only
+supplier = _client("supplier", "V1", {"company": "Supplier One"})  # managed supplier owning vendor V1 only
 
 
 def srm(no, **changes):

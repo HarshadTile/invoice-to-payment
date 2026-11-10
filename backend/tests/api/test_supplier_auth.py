@@ -172,11 +172,8 @@ def test_sessions_end_when_the_supplier_is_deactivated_reset_or_deleted():
     assert client.get(f"{AUTH}/me", headers=headers).status_code == 401
 
 
-def test_the_original_vendor_code_login_still_works_unchanged():
+def test_the_passwordless_vendor_code_login_no_longer_exists():
     vendor_code = str(get_all_cached_invoices()[0]["SUPPLIER"]).strip()
     response = client.post(f"{AUTH}/supplier/login", json={"vcode": vendor_code, "company": "Supplier"})
-    assert response.status_code == 200
-    body = response.json()
-    assert body["auth"]["vcode"] == vendor_code and "vcodes" not in body["auth"]
-    me = client.get(f"{AUTH}/me", headers={"Authorization": f"Bearer {body['token']}"})
-    assert me.status_code == 200 and me.json()["auth"]["vcode"] == vendor_code
+    assert response.status_code in (404, 405)
+    assert "token" not in response.text

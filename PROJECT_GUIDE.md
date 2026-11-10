@@ -160,9 +160,9 @@ Recent history (79 commits): supplier dashboard "Total Invoices" tile amount rem
 Severity: 🔴 security/correctness, 🟠 reliability/maintainability, 🟡 polish. Not yet verified by fixing; each needs confirmation when picked up.
 
 ### 🔴 Security
-1. **Hard-coded JWT secret** — `backend/app/core/security.py:8` (`"SUPER_SECRET_KEY_REPLACE_IN_PRODUCTION"`). Anyone with the source can forge admin tokens. Move to env var; fail startup if unset in non-dev.
-2. **Passwordless supplier login still live** — `POST /auth/supplier/login` → `login_supplier_vendor_code` (`services/auth_service.py:194`) issues a supplier token for *any* vendor code that exists in the invoice data, no password/OTP. Anyone who knows/guesses a code can read that supplier's invoices and tickets. The frontend README and `otp_codes` table show this was meant to be temporary. Decide: remove, or gate behind a feature flag.
-3. **CORS `allow_origins=["*"]` with `allow_credentials=True`** — `main.py:29`. Restrict to the known frontend origin(s).
+1. ~~Hard-coded JWT secret~~ — **Fixed (branch `security/pre-vapt`):** key now comes from `JWT_SECRET_KEY`; startup fails if missing/placeholder/<32 chars.
+2. ~~Passwordless supplier login~~ — **Fixed:** `/auth/supplier/login` removed; old vendor-code tokens are rejected with 401.
+3. ~~CORS `*` with credentials~~ — **Fixed:** explicit origin list (`FRONTEND_URL` + `CORS_ORIGINS`), credentials off, limited methods/headers.
 4. **Rate limiter trusts `X-Forwarded-For`** (`core/rate_limit.py`) — spoofable unless behind a trusted proxy; also per-process memory only. Login endpoints (internal and supplier-by-code) have no rate limit at all; internal login has no lockout.
 5. **7-day non-revocable tokens** — logout only writes an audit entry; no server-side invalidation. Consider shorter expiry + refresh, or a token denylist.
 6. **`VITE_DISABLE_AUTH`** bypass exists in production code paths (`AUTH_BYPASS`); make sure it's stripped/ignored in production builds.

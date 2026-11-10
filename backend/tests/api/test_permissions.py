@@ -10,11 +10,14 @@ from app.main import app
 from app.models.settings import AppSettings, TableRow
 from app.models.user import User
 from app.services.ticket_permissions import permission_matrix
+from tests.helpers.suppliers import supplier_headers_for_code
 
 Base.metadata.create_all(bind=engine)
 
 
 def _auth(auth_type, subject, scope=None):
+    if auth_type == "supplier":
+        return supplier_headers_for_code(subject, (scope or {}).get("company", "Vendor"))
     return {"Authorization": f"Bearer {create_access_token(subject=subject, auth_type=auth_type, scope=scope)}"}
 
 

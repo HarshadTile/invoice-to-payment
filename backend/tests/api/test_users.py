@@ -8,9 +8,12 @@ from app.core.security import create_access_token, get_password_hash
 from app.main import app
 from app.models.settings import TableRow
 from app.models.user import PasswordResetToken, User
+from tests.helpers.suppliers import supplier_headers_for_code
 
 
 def _auth(auth_type, subject, scope=None):
+    if auth_type == "supplier":
+        return supplier_headers_for_code(subject, (scope or {}).get("company", "Vendor"))
     token = create_access_token(subject=subject, auth_type=auth_type, scope=scope)
     return {"Authorization": f"Bearer {token}"}
 
