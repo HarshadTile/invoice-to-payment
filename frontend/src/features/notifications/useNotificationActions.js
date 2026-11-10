@@ -29,7 +29,8 @@ export function useNotificationActions() {
     }
     if (afterOpen) afterOpen();
     // `from` lets the query's Back button return to this page instead of the queries list
-    if (item.request_id) navigate(`/app/settings/suppliers?tab=requests&request=${item.request_id}`);
+    if (supplier && !item.ticket_id) navigate('/supplier/profile');
+    else if (item.request_id) navigate(`/app/settings/suppliers?tab=requests&request=${item.request_id}`);
     else if (item.ticket_id) navigate(supplier ? `/supplier/tickets/${item.ticket_id}` : `/app/inquiry-desk/${item.ticket_id}`, { state: { from: location.pathname + location.search } });
   }, [dispatch, identity, location.pathname, location.search, markRead, navigate, supplier]);
 

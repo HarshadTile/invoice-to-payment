@@ -26,7 +26,7 @@ from app.core.rate_limit import client_ip, rate_limit
 from app.models.supplier import Supplier, SupplierAccessRequest, SupplierVendorCode
 from app.models.user import User
 from app.services import vendor_directory
-from app.services.notification_service import add_for_supplier_managers
+from app.services.notification_service import add_for_supplier_account, add_for_supplier_managers
 from app.services.supplier_service import (
     CHANNEL_LABEL, channels_for_codes, code_channel_map, create_supplier, normalize_email, supplier_channels, normalize_pan, resolve_codes, send_access_email, send_notice,
     serialize_supplier, set_vendor_codes, split_codes, supplier_label, vendor_codes_of,
@@ -323,6 +323,8 @@ def approve_request(request_id: int, body: ApproveIn, db: Session = Depends(get_
         db.refresh(supplier)
         wanted = merge_team_codes(actor, vendor_codes_of(supplier), resolve_codes(supplier.pan, _codes_or_400(body.vendorCodes)))
         added, removed = set_vendor_codes(db, supplier, wanted)
+        # No request_id in supplier payloads: the frontend opens those on the internal review page.
+        add_for_supplier_account(db, supplier.id, "SUPPLIER_CODES_APPROVED", {"added": added, "removed": removed, "note": note or None})
         email_sent = send_notice(
             supplier.email, "Your vendor code access changed",
             supplier_access_changed_email(supplier.name, added, removed, vendor_codes_of(supplier), note),
@@ -353,6 +355,11 @@ def reject_request(request_id: int, body: RejectIn, db: Session = Depends(get_db
         raise HTTPException(status_code=400, detail="Write a note for the supplier.")
     req.status, req.decision_reason, req.decision_note = "Rejected", body.reason, message or None
     req.decided_by, req.decided_at = actor.id, datetime.utcnow()
+    if req.kind == "CHANGE_ACCESS" and req.supplier_id:
+        add_for_supplier_account(db, req.supplier_id, "SUPPLIER_CODES_REJECTED", {
+            "reason": None if body.reason == "other" else REJECT_REASONS[body.reason],
+            "note": message or None,
+        })
     db.commit()
     email_sent = send_notice(
         req.email, "Your supplier portal access request",

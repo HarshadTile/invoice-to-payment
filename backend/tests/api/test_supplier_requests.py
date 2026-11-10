@@ -62,7 +62,7 @@ def setup(monkeypatch):
     db.query(SupplierAccessRequest).filter(SupplierAccessRequest.email.like("treq-%")).delete(synchronize_session=False)
     db.query(Supplier).filter(Supplier.email.like("treq-%")).delete(synchronize_session=False)
     db.query(Supplier).filter(Supplier.pan == "TRQPA1111A").delete(synchronize_session=False)
-    db.query(Notification).filter(Notification.type.like("SUPPLIER_ACCESS_%")).delete(synchronize_session=False)
+    db.query(Notification).filter(Notification.type.like("SUPPLIER_%")).delete(synchronize_session=False)
     db.commit()
     db.close()
     reset_rate_limits()
@@ -198,6 +198,107 @@ def test_a_supplier_asks_to_add_and_remove_codes(setup):
     applied = team.post(f"{REQ}/{rid}/approve-request", json={"vendorCodes": ["TRQV001", "TRQV003"]})
     assert applied.status_code == 200 and applied.json()["supplier"]["vendorCodes"] == ["TRQV001", "TRQV003"]
     assert setup[0][0] == "treq-change@example.com" and "Added: TRQV003" in setup[0][2] and "Removed: TRQV002" in setup[0][2]
+
+
+def _supplier_notifications(client, event_type):
+    return [n for n in client.get("/api/v1/notifications/list-notifications").json() if n["type"] == event_type]
+
+
+def _change_request(email, add="TRQV003", remove=("TRQV002",)):
+    sid = get_or_create_supplier("TRQPA1111A", ["TRQV001", "TRQV002"], email=email)
+    client = TestClient(app, headers=supplier_headers(sid))
+    made = client.post(f"{REQ}/request-access-change", json={"addCodes": add, "removeCodes": list(remove), "note": "New plant"})
+    assert made.status_code == 200, made.text
+    return client, made.json()["id"]
+
+
+def test_a_new_account_gets_a_welcome_notification_from_either_path():
+    _submit(email="treq-welcome@example.com", codes="TRQV001")
+    approved = team.post(f"{REQ}/{_request_id('treq-welcome@example.com')}/approve-request", json={"vendorCodes": ["TRQV001"]})
+    assert approved.status_code == 200, approved.text
+    added = admin.post("/api/v1/suppliers/add-supplier", json={"pan": "TRQPA1111A", "email": "treq-added@example.com", "vendorCodes": ["TRQV002"]})
+    assert added.status_code == 200, added.text
+
+    for sid, code in ((approved.json()["supplier"]["id"], "TRQV001"), (added.json()["id"], "TRQV002")):
+        # It waits for them: an Invited account can't sign in until setup is finished.
+        db = SessionLocal()
+        db.get(Supplier, sid).status = "Active"
+        db.commit()
+        db.close()
+        client = TestClient(app, headers=supplier_headers(sid))
+        welcome, = _supplier_notifications(client, "SUPPLIER_ACCOUNT_CREATED")
+        assert welcome["payload"] == {"vendor_codes": [code]} and welcome["read_at"] is None
+        assert welcome["request_id"] is None and welcome["ticket_id"] is None
+        assert client.get("/api/v1/notifications/unread-notification-count").json()["unread"] == 1
+
+
+def test_approving_a_code_change_notifies_the_supplier_with_what_really_changed():
+    supplier, rid = _change_request("treq-ok@example.com")
+    # The reviewer keeps TRQV002 and only adds TRQV003, so the supplier must not be told it was removed.
+    applied = team.post(f"{REQ}/{rid}/approve-request", json={"vendorCodes": ["TRQV001", "TRQV002", "TRQV003"], "note": "Kept TRQV002"})
+    assert applied.status_code == 200, applied.text
+    done, = _supplier_notifications(supplier, "SUPPLIER_CODES_APPROVED")
+    assert done["payload"] == {"added": ["TRQV003"], "removed": [], "note": "Kept TRQV002"}
+    assert done["request_id"] is None
+
+
+def test_a_code_change_notification_survives_removing_that_code():
+    supplier, rid = _change_request("treq-gone@example.com", add="", remove=("TRQV002",))
+    assert team.post(f"{REQ}/{rid}/approve-request", json={"vendorCodes": ["TRQV001"]}).status_code == 200
+    done, = _supplier_notifications(supplier, "SUPPLIER_CODES_APPROVED")
+    assert done["payload"]["removed"] == ["TRQV002"]
+
+
+def test_rejecting_a_code_change_notifies_the_supplier_with_the_reason():
+    supplier, rid = _change_request("treq-no@example.com")
+    rejected = team.post(f"{REQ}/{rid}/reject-request", json={"reason": "mismatch", "message": "Check the PAN."})
+    assert rejected.status_code == 200, rejected.text
+    done, = _supplier_notifications(supplier, "SUPPLIER_CODES_REJECTED")
+    assert done["payload"] == {"reason": "the details don't match our records", "note": "Check the PAN."}
+    assert done["request_id"] is None
+
+
+def test_an_other_rejection_sends_only_the_teams_note():
+    supplier, rid = _change_request("treq-other@example.com")
+    assert team.post(f"{REQ}/{rid}/reject-request", json={"reason": "other", "message": "Call us."}).status_code == 200
+    done, = _supplier_notifications(supplier, "SUPPLIER_CODES_REJECTED")
+    assert done["payload"] == {"reason": None, "note": "Call us."}
+
+
+def test_account_notifications_stay_private_and_can_be_marked_read():
+    supplier, rid = _change_request("treq-mine@example.com")
+    assert team.post(f"{REQ}/{rid}/reject-request", json={"reason": "incomplete"}).status_code == 200
+    # A second account sharing the same vendor codes must not see it.
+    other_id = get_or_create_supplier("TRQPB2222B", ["TRQV001", "TRQV002"], email="treq-theirs@example.com")
+    other = TestClient(app, headers=supplier_headers(other_id))
+    assert _supplier_notifications(other, "SUPPLIER_CODES_REJECTED") == []
+
+    done, = _supplier_notifications(supplier, "SUPPLIER_CODES_REJECTED")
+    assert other.post(f"/api/v1/notifications/{done['id']}/mark-as-read").status_code == 404
+    assert supplier.post(f"/api/v1/notifications/{done['id']}/mark-as-read").status_code == 200
+    assert _supplier_notifications(supplier, "SUPPLIER_CODES_REJECTED")[0]["read_at"] is not None
+
+
+def test_rejecting_a_new_account_request_creates_no_supplier_notification():
+    _submit(email="treq-noacct@example.com")
+    assert team.post(f"{REQ}/{_request_id('treq-noacct@example.com')}/reject-request", json={"reason": "incomplete"}).status_code == 200
+    db = SessionLocal()
+    try:
+        assert db.query(Notification).filter(Notification.type == "SUPPLIER_CODES_REJECTED").count() == 0
+    finally:
+        db.close()
+
+
+def test_deleting_a_supplier_removes_its_account_notifications():
+    added = admin.post("/api/v1/suppliers/add-supplier", json={"pan": "TRQPA1111A", "email": "treq-del@example.com", "vendorCodes": ["TRQV001"]})
+    assert added.status_code == 200, added.text
+    sid = added.json()["id"]
+    assert admin.delete(f"/api/v1/suppliers/{sid}/delete-supplier").status_code == 200
+    db = SessionLocal()
+    try:
+        assert db.query(Notification).filter(Notification.recipient_key == f"supplier-account:{sid}").count() == 0
+    finally:
+        db.close()
 
 
 def test_only_the_supplier_team_reviews_requests():

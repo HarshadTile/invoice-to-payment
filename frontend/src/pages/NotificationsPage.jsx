@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useGetNotificationsQuery, useGetUnreadCountQuery, NOTIFICATION_LIVE } from '../api/notificationsApi';
 import { useNotificationActions } from '../features/notifications/useNotificationActions';
-import { CheckCircle, Clock, Inbox, Key, Mail, MessageSquare, RotateCcw, Search, Send, User, Users } from '../components/common/icons.jsx';
+import { CheckCircle, Clock, Inbox, Key, Mail, MessageSquare, RotateCcw, Search, Send, User, Users, X } from '../components/common/icons.jsx';
 import { NOTIFICATION_DETAIL, NOTIFICATION_TONE, dayLabel, notificationLabel, notificationRef, notificationSubject, notificationTime } from '../utils/notifications';
 
 // One icon per event, in the event's tone, so the list reads at a glance.
@@ -10,6 +10,7 @@ const NOTIFICATION_ICON = {
   TICKET_RESOLVED: CheckCircle, TICKET_REOPENED: RotateCcw, TICKET_CLOSED: CheckCircle,
   TICKET_AUTO_CLOSED: CheckCircle, SLA_BREACHED: Clock,
   SUPPLIER_ACCESS_REQUEST: Users, SUPPLIER_ACCESS_CHANGE: Key,
+  SUPPLIER_ACCOUNT_CREATED: User, SUPPLIER_CODES_APPROVED: CheckCircle, SUPPLIER_CODES_REJECTED: X,
 };
 
 const PAGE = 50;
@@ -58,7 +59,7 @@ export default function NotificationsPage() {
           </div>
           <label className="ticket-search">
             <Search />
-            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by query no or subject" aria-label="Search notifications" />
+            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search notifications" aria-label="Search notifications" />
           </label>
         </div>
 
@@ -73,11 +74,11 @@ export default function NotificationsPage() {
             <div className="inbox-empty">
               <span className="inbox-empty-icon"><Inbox size={22} /></span>
               <b>{filtering ? 'No notifications match' : 'No notifications yet'}</b>
-              <span>{tab === 'unread' && !search ? 'Everything has been read.' : filtering ? 'Try clearing the filters.' : 'Updates on your queries will appear here.'}</span>
+              <span>{tab === 'unread' && !search ? 'Everything has been read.' : filtering ? 'Try clearing the filters.' : 'Updates will appear here.'}</span>
             </div>
           )}
           {shown.length > 0 && (
-            <div className="inbox-cols" aria-hidden="true"><span /><span>Event</span><span>Query</span><span>Received</span></div>
+            <div className="inbox-cols" aria-hidden="true"><span /><span>Event</span><span>Reference</span><span>Received</span></div>
           )}
           {shown.map((n) => {
             const Icon = NOTIFICATION_ICON[n.type] || Inbox;

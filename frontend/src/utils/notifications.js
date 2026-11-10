@@ -10,6 +10,9 @@ export const NOTIFICATION_LABEL = {
   SLA_BREACHED: 'Response SLA breached',
   SUPPLIER_ACCESS_REQUEST: 'Supplier account request',
   SUPPLIER_ACCESS_CHANGE: 'Vendor code change request',
+  SUPPLIER_ACCOUNT_CREATED: 'Welcome to the supplier portal',
+  SUPPLIER_CODES_APPROVED: 'Vendor code request approved',
+  SUPPLIER_CODES_REJECTED: 'Vendor code request rejected',
 };
 
 // One plain-language line per event, shown under the title.
@@ -25,6 +28,9 @@ export const NOTIFICATION_DETAIL = {
   SLA_BREACHED: 'No reply was sent within the target time.',
   SUPPLIER_ACCESS_REQUEST: 'A supplier asked for a portal account. Review it in Supplier Management.',
   SUPPLIER_ACCESS_CHANGE: 'An existing supplier asked to change their vendor codes.',
+  SUPPLIER_ACCOUNT_CREATED: 'Your supplier account has been created.',
+  SUPPLIER_CODES_APPROVED: 'The team approved your vendor code request.',
+  SUPPLIER_CODES_REJECTED: 'The team could not approve your vendor code request.',
 };
 
 // Colour per event, using the app's chip tones (blue, amber, green, red, gray).
@@ -40,7 +46,30 @@ export const NOTIFICATION_TONE = {
   SLA_BREACHED: 'red',
   SUPPLIER_ACCESS_REQUEST: 'red',
   SUPPLIER_ACCESS_CHANGE: 'amber',
+  SUPPLIER_ACCOUNT_CREATED: 'blue',
+  SUPPLIER_CODES_APPROVED: 'green',
+  SUPPLIER_CODES_REJECTED: 'red',
 };
+
+const SUPPLIER_ACCOUNT_REF = {
+  SUPPLIER_ACCOUNT_CREATED: 'Your account',
+  SUPPLIER_CODES_APPROVED: 'Vendor codes',
+  SUPPLIER_CODES_REJECTED: 'Vendor codes',
+};
+const MAX_CODES_SHOWN = 3;
+
+function codeList(codes) {
+  const hidden = codes.length - MAX_CODES_SHOWN;
+  return `${codes.slice(0, MAX_CODES_SHOWN).join(', ')}${hidden > 0 ? ` +${hidden} more` : ''}`;
+}
+
+function supplierAccountSubject({ type, payload }) {
+  const { vendor_codes: codes = [], added = [], removed = [], reason, note } = payload || {};
+  if (type === 'SUPPLIER_ACCOUNT_CREATED') return codes.length ? `Vendor codes: ${codeList(codes)}` : '';
+  if (type === 'SUPPLIER_CODES_REJECTED') return [reason && `Reason: ${reason}`, note].filter(Boolean).join(' · ');
+  const changes = [added.length > 0 && `Added ${codeList(added)}`, removed.length > 0 && `Removed ${codeList(removed)}`].filter(Boolean);
+  return [...(changes.length ? changes : ['No change to your vendor codes']), note].filter(Boolean).join(' · ');
+}
 
 export function notificationLabel(item) {
   return NOTIFICATION_LABEL[item.type] || item.type.toLowerCase().replaceAll('_', ' ');
@@ -70,12 +99,13 @@ export function dayLabel(value, now = new Date()) {
 export function notificationRef(item) {
   if (item.ticket_no) return item.ticket_no;
   if (item.request_id) return item.payload?.name || 'Supplier';
-  return 'Query';
+  return SUPPLIER_ACCOUNT_REF[item.type] || 'Query';
 }
 
 /** The second line: the query subject, or the requester's email and PAN. */
 export function notificationSubject(item) {
   if (item.subject) return item.subject;
   if (item.request_id) return [item.payload?.email, item.payload?.pan && `PAN ${item.payload.pan}`].filter(Boolean).join(' · ');
+  if (SUPPLIER_ACCOUNT_REF[item.type]) return supplierAccountSubject(item);
   return '';
 }

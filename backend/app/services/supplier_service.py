@@ -22,6 +22,7 @@ from app.core.password_reset import FRONTEND_URL, link_expiry_settings
 from app.core.security import create_access_token
 from app.models.supplier import Supplier, SupplierSetupToken, SupplierVendorCode
 from app.services import vendor_directory
+from app.services.notification_service import add_for_supplier_account
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +154,8 @@ def create_supplier(db: Session, actor, *, email: str, pan: str | None, codes: l
     )
     supplier.vendor_codes = [SupplierVendorCode(vendor_code=c) for c in codes]
     db.add(supplier)
+    db.flush()
+    add_for_supplier_account(db, supplier.id, "SUPPLIER_ACCOUNT_CREATED", {"vendor_codes": list(codes)})
     db.commit()
     db.refresh(supplier)
     return supplier

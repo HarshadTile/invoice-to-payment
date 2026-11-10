@@ -19,6 +19,20 @@ def add_for_supplier(db: Session, vendor_code: str, ticket_id: str, event_type: 
     )
 
 
+def _account_key(supplier_id: int) -> str:
+    return f"supplier-account:{supplier_id}"
+
+
+def add_for_supplier_account(db: Session, supplier_id: int, event_type: str, payload: dict | None = None):
+    """For events about the account itself. Keyed by account, because a notification keyed by
+    vendor code would disappear when that code is removed from the account."""
+    db.add(Notification(recipient_key=_account_key(supplier_id), type=event_type, payload=payload))
+
+
+def delete_for_supplier_account(db: Session, supplier_id: int) -> None:
+    db.query(Notification).filter(Notification.recipient_key == _account_key(supplier_id)).delete(synchronize_session=False)
+
+
 def oversight_user_ids(db: Session, channel: str) -> set[int]:
     admin_ids = {
         user_id
@@ -59,7 +73,10 @@ def add_for_oversight_team(
 
 def recipient_filter(query, user: dict):
     if user["auth_type"] == "supplier":
-        return query.filter(Notification.recipient_key.in_([f"supplier:{c}" for c in user["vendor_codes"]]))
+        keys = [f"supplier:{c}" for c in user["vendor_codes"]]
+        if user.get("supplier_id"):
+            keys.append(_account_key(user["supplier_id"]))
+        return query.filter(Notification.recipient_key.in_(keys))
     return query.filter(Notification.user_id == user["user_id"])
 
 

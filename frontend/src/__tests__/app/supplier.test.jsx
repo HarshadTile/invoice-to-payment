@@ -13,11 +13,28 @@ import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import AppRoutes from '../../routes/AppRoutes.jsx';
+import { api as mockApi } from '../../api/client';
 import { freshStore, resetAppTestState, loginSupplier } from '../../test/renderApp.jsx';
 
 beforeEach(resetAppTestState);
 
 describe('Supplier session', () => {
+  it('opening a vendor code decision from the bell goes to the supplier profile', async () => {
+    mockApi.notifications.length = 0;
+    mockApi.notifications.push({
+      id: 9, ticket_id: null, request_id: null, type: 'SUPPLIER_CODES_APPROVED',
+      payload: { added: ['V100'], removed: [], note: null }, read_at: null, created_at: '2026-11-06T10:00:00Z',
+    });
+    const { user } = await loginSupplier();
+    await user.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
+    const row = await screen.findByRole('button', { name: /Vendor code request approved/ });
+    expect(row).toHaveTextContent('Vendor codes - Added V100');
+    await user.click(row);
+    expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument();
+    await waitFor(() => expect(mockApi.notifications[0].read_at).toBeTruthy());
+    mockApi.notifications.length = 0;
+  });
+
   it('shows only this vendor code nav (no HQ items)', async () => {
     await loginSupplier();
     expect(screen.getAllByText('My Invoices').length).toBeGreaterThan(0);

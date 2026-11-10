@@ -13,6 +13,7 @@ from app.core.permissions import require_capability
 from app.models.supplier import Supplier
 from app.models.user import User
 from app.services import vendor_directory
+from app.services.notification_service import delete_for_supplier_account
 from app.services.supplier_service import (
     CHANNEL_LABEL, channels_for_codes, code_channel_map, code_channels, supplier_channels,
     create_supplier, ensure_email_free, normalize_email, normalize_pan, resolve_codes,
@@ -267,6 +268,7 @@ def delete_supplier(supplier_id: int, db: Session = Depends(get_db), actor: User
         raise HTTPException(status_code=403, detail="Only an Admin can delete a supplier.")
     supplier = _get_or_404(db, actor, supplier_id)
     label = supplier_label(supplier)
+    delete_for_supplier_account(db, supplier.id)
     db.delete(supplier)
     db.commit()
     write_audit(db, actor, "Deleted supplier", label)

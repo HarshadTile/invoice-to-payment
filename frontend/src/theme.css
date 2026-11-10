@@ -1214,10 +1214,12 @@ tbody tr{transition:background .12s ease;}
 .chart-tip-series{margin-left:0.5rem;}
 
 /* stacked columns: <=24px, 4px rounded top, 2px surface gaps, hairline grid */
-.col-chart{display:flex;flex-direction:column;gap:0.5rem;}
-.col-chart .chart-tip{position:static;min-height:1.75rem;}
-.col-plot{position:relative;height:clamp(9rem,30vw,13rem);padding:0 0 1.5rem 2.25rem;}
-.col-grid{position:absolute;inset:0 0 1.5rem 2.25rem;}
+.col-chart{position:relative;display:flex;flex-direction:column;gap:0.5rem;}
+/* the tip floats over the legend: any height change here moves the bars away from the cursor */
+.col-chart .chart-tip{top:0;left:0;right:auto;max-width:100%;min-height:1.75rem;}
+.col-chart .chart-tip + .chart-legend{visibility:hidden;}
+.col-plot{position:relative;height:clamp(9rem,30vw,13rem);padding:0 0 2.125rem 2.25rem;}
+.col-grid{position:absolute;inset:0 0 2.125rem 2.25rem;}
 .col-grid span{position:absolute;left:0;right:0;height:0;border-top:0.0625rem solid #ECEAE3;}
 .col-grid span:first-child{border-top-color:#C3C2B7;}
 .col-grid em{position:absolute;right:calc(100% + 0.375rem);top:-0.4375rem;font-style:normal;font-size:0.65625rem;color:#898781;font-variant-numeric:tabular-nums;white-space:nowrap;}
@@ -1229,7 +1231,8 @@ tbody tr{transition:background .12s ease;}
 .col-seg{display:block;flex-basis:0;min-height:0.0625rem;}
 .col-stack .col-seg:last-child{border-radius:0.25rem 0.25rem 0 0;}
 .col-cap{position:absolute;bottom:calc(100% + 0.25rem);left:50%;transform:translateX(-50%);font-size:0.6875rem;font-weight:700;color:var(--ink);white-space:nowrap;}
-.col-x{position:absolute;top:calc(100% + 0.375rem);left:50%;transform:translateX(-50%);font-size:0.65625rem;color:#898781;white-space:nowrap;}
+/* min-content puts the month over the year: a one-line label is as wide as a column at 12 months */
+.col-x{position:absolute;top:calc(100% + 0.375rem);left:50%;transform:translateX(-50%);width:min-content;font-size:0.65625rem;line-height:1.2;text-align:center;color:#898781;}
 @media (max-width:40em){.col-x{font-size:0.5625rem;}}
 
 

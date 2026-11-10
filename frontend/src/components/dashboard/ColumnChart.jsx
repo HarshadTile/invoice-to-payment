@@ -27,7 +27,7 @@ export default function ColumnChart({ columns, series, label, format = formatCou
 
   return (
     <div className="col-chart">
-      {active ? (
+      {active && (
         <div className="chart-tip" role="status">
           <b>{active.label}</b>
           <span>{format(totals[hi])}{unit ? ` ${unit}` : ''}</span>
@@ -36,11 +36,10 @@ export default function ColumnChart({ columns, series, label, format = formatCou
             <span key={s.key} className="chart-tip-series"><i style={{ background: s.color }} />{s.label} {format(active[s.key] || 0)}</span>
           ))}
         </div>
-      ) : (
-        <div className="chart-legend">
-          {series.length > 1 && visibleSeries.map((s) => <span key={s.key}><i style={{ background: s.color }} />{s.label}</span>)}
-        </div>
       )}
+      <div className="chart-legend">
+        {series.length > 1 && visibleSeries.map((s) => <span key={s.key}><i style={{ background: s.color }} />{s.label}</span>)}
+      </div>
       <div className="col-plot" role="group" aria-label={label}>
         <div className="col-grid" aria-hidden="true">
           {ticks.map((t) => (
