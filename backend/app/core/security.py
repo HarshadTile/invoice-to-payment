@@ -35,7 +35,17 @@ def get_secret_key() -> str:
         )
     return key
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+def _token_lifetime_minutes() -> int:
+    """ACCESS_TOKEN_EXPIRE_MINUTES (default 8 hours: one working day). A stolen token is only
+    useful until it expires, so keep this short; signing in again is cheap."""
+    try:
+        minutes = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
+    except ValueError:
+        minutes = 480
+    return max(5, min(minutes, 60 * 24))  # between 5 minutes and 1 day
+
+
+ACCESS_TOKEN_EXPIRE_MINUTES = _token_lifetime_minutes()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
@@ -53,3 +63,11 @@ def create_access_token(subject: Union[str, Any], auth_type: str, scope: dict = 
         to_encode["scope"] = scope
     encoded_jwt = jwt.encode(to_encode, get_secret_key(), algorithm=ALGORITHM)
     return encoded_jwt
+
+
+def token_session_version(payload: dict) -> int:
+    """The session version a token was issued with (tokens from before this existed count as 0)."""
+    try:
+        return int((payload.get("scope") or {}).get("sv", 0))
+    except (TypeError, ValueError):
+        return -1

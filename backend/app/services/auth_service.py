@@ -1,6 +1,6 @@
 """Sign-in rules: staff and supplier login, supplier account setup, forgot/reset password and
 logout. The routes in app/api/v1/auth.py only translate HTTP to these calls."""
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 from fastapi import HTTPException
@@ -12,16 +12,14 @@ from app.core.channels import channel_availability, require_enabled_channel
 from app.core.email import is_configured as smtp_is_configured, send_email
 from app.core.email_templates import password_reset_email
 from app.core.password_reset import issue_password_reset, token_digest
-from app.core.security import create_access_token, get_password_hash, verify_password
+from app.core.security import create_access_token, get_password_hash, token_session_version, verify_password
 from app.models.supplier import Supplier, SupplierSetupToken
 from app.models.user import PasswordResetToken, User
-from app.repositories.srm_invoice import get_all_cached_invoices
 from app.services.supplier_service import (
     GENERIC_LOGIN_ERROR,
     build_session,
     clear_failures,
     is_locked,
-    is_managed_supplier_token,
     normalize_email,
     register_failure,
     send_access_email,
@@ -34,6 +32,13 @@ VALID_CHANNEL_SCOPES = {"all", "msetuSrm", "poPortal", "manual", "mfoxPortal"}
 INVALID_RESET_LINK = "This reset link is invalid or has expired. Request a new one."
 INVALID_SETUP_LINK = "This link is invalid or has expired. Ask the team for a new one."
 MIN_PASSWORD = 8
+MAX_FAILED_LOGINS = 5
+LOGIN_LOCK_MINUTES = 15
+# One message for every failed staff sign-in, so the reply never reveals whether an account
+# exists, is locked, or which part was wrong.
+INTERNAL_LOGIN_FAILED = "Invalid username or password."
+# Checked against when the username is unknown, so that reply takes as long as a wrong password.
+_DUMMY_HASH = get_password_hash("dummy-password-for-timing")
 
 
 def _fail(status: int, detail: str):
@@ -84,21 +89,44 @@ def session_auth(identity: dict) -> dict:
 
 # ---------- staff ----------
 
+def _user_is_locked(user: User) -> bool:
+    return bool(user.locked_until and user.locked_until > datetime.utcnow())
+
+
+def _register_user_failure(db: Session, user: User) -> None:
+    user.failed_attempts = (user.failed_attempts or 0) + 1
+    if user.failed_attempts >= MAX_FAILED_LOGINS:
+        user.locked_until = datetime.utcnow() + timedelta(minutes=LOGIN_LOCK_MINUTES)
+        user.failed_attempts = 0
+        write_audit(db, user, "Account locked",
+                    f"{MAX_FAILED_LOGINS} wrong passwords; locked for {LOGIN_LOCK_MINUTES} minutes")
+    db.commit()
+
+
 def login_internal(db: Session, username: str, password: str, requested_scope: str | None) -> dict:
     login_id = username.strip().lower()
     user = db.query(User).filter((User.username == login_id) | (User.email == login_id)).first()
     if not user:
+        verify_password(password, _DUMMY_HASH)  # same timing as a wrong password
         write_audit(db, login_id, "Failed login", "no account with that username/email")
-        _fail(401, "Invalid username or password.")
+        _fail(401, INTERNAL_LOGIN_FAILED)
+    if _user_is_locked(user):
+        write_audit(db, user, "Failed login", "account is locked after too many wrong passwords")
+        _fail(401, INTERNAL_LOGIN_FAILED)
+    if not verify_password(password, user.password_hash):
+        _register_user_failure(db, user)
+        write_audit(db, user, "Failed login", "wrong password")
+        _fail(401, INTERNAL_LOGIN_FAILED)
+    # The account's state is only revealed to someone who knows its password.
     if user.status == "Invited":
         write_audit(db, user, "Failed login", "account not activated yet (invite pending)")
         _fail(403, "This account hasn't been activated yet. Use your password setup link, or ask an administrator for a new one.")
     if user.status != "Active":
         write_audit(db, user, "Failed login", "account is deactivated")
         _fail(403, "This account has been deactivated. Contact an administrator.")
-    if not verify_password(password, user.password_hash):
-        write_audit(db, user, "Failed login", "wrong password")
-        _fail(401, "Invalid username or password.")
+    if user.failed_attempts or user.locked_until:
+        user.failed_attempts, user.locked_until = 0, None
+        db.commit()
 
     if requested_scope and requested_scope not in VALID_CHANNEL_SCOPES:
         write_audit(db, user, "Failed login", f"requested unknown workspace '{requested_scope}'")
@@ -117,7 +145,8 @@ def login_internal(db: Session, username: str, password: str, requested_scope: s
     require_enabled_channel(db, final_scope)
     login_by = "username" if user.username.lower() == login_id else "email"
     token = create_access_token(subject=user.id, auth_type="internal",
-                                scope={"channelScope": final_scope, "loginBy": login_by, "loginId": login_id})
+                                scope={"channelScope": final_scope, "loginBy": login_by, "loginId": login_id,
+                                       "sv": user.session_version or 0})
     write_audit(db, user, "Logged in", f"{user.role}, portal {final_scope}")
     identity = {"auth_type": "internal", "user_id": user.id, "username": user.username, "name": user.name,
                 "email": user.email, "role": user.role, "title": user.title, "dept": user.dept,
@@ -180,6 +209,8 @@ def reset_password(db: Session, token: str, password: str) -> None:
         db.rollback()
         _fail(400, INVALID_RESET_LINK)
     user.password_hash = get_password_hash(password)
+    user.session_version = (user.session_version or 0) + 1  # sign out every existing session
+    user.failed_attempts, user.locked_until = 0, None
     if was_invited:
         user.status = "Active"
     db.query(PasswordResetToken).filter(
@@ -263,10 +294,19 @@ def supplier_forgot_password(db: Session, email: str) -> None:
 # ---------- sign-out ----------
 
 def record_logout(db: Session, payload: dict) -> None:
+    """Sign-out ends the session on the server too: the account's session version goes up, so
+    this token (and any other session of the same account) stops working at once."""
     if payload.get("auth_type") == "supplier":
-        who = (payload.get("scope") or {}).get("pan") if is_managed_supplier_token(payload) else payload.get("sub")
+        supplier = db.get(Supplier, int(payload.get("sub")))
+        if supplier and token_session_version(payload) == (supplier.session_version or 0):
+            supplier.session_version = (supplier.session_version or 0) + 1
+            db.commit()
+        who = (payload.get("scope") or {}).get("pan") or (supplier.email if supplier else payload.get("sub"))
         write_audit(db, f"Supplier {who}", "Logged out", "supplier portal")
         return
     user = db.query(User).filter(User.id == int(payload.get("sub"))).first()
     if user:
+        if token_session_version(payload) == (user.session_version or 0):
+            user.session_version = (user.session_version or 0) + 1
+            db.commit()
         write_audit(db, user, "Logged out", "")

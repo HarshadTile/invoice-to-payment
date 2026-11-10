@@ -12,9 +12,9 @@ _lock = Lock()
 
 
 def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """The caller's address as the server sees it. X-Forwarded-For is deliberately NOT read here:
+    anyone can send that header to dodge the limit. Behind a reverse proxy, start uvicorn with
+    --proxy-headers --forwarded-allow-ips=<proxy address> so request.client is the real caller."""
     return request.client.host if request.client else "unknown"
 
 

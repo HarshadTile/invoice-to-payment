@@ -4,6 +4,7 @@ import pytest
 from app.core.security import create_access_token
 from app.main import app
 from tests.helpers.suppliers import supplier_headers_for_code
+from tests.helpers.users import internal_user_id
 
 
 def _auth(auth_type, subject, scope=None):
@@ -14,7 +15,7 @@ def _auth(auth_type, subject, scope=None):
 
 
 anonymous = TestClient(app)
-client = TestClient(app, headers=_auth("internal", 1, {"channelScope": "all"}))
+client = TestClient(app, headers=_auth("internal", internal_user_id(), {"channelScope": "all"}))
 supplier = TestClient(app, headers=_auth("supplier", "DIM00505AA", {"company": "Forvis Mazars LLP"}))
 
 

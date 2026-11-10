@@ -119,9 +119,11 @@ def test_new_account_is_invited_not_active_until_the_link_is_used(issued_links):
     assert issued_links[0]["email"] == "temp1@example.com"
 
     # An invited account cannot log in — with a clear reason, not a generic error
+    # A wrong password gets the same generic reply as any other failed sign-in: the account's
+    # state (invited, deactivated, ...) is never revealed to someone who doesn't know the password.
     blocked = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_1", "password": "anything"})
-    assert blocked.status_code == 403
-    assert "activated" in blocked.json()["error"]["message"].lower()
+    assert blocked.status_code == 401
+    assert blocked.json()["error"]["message"] == "Invalid username or password."
 
     _activate(user_id, "Passw0rd!")
     activated = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_1", "password": "Passw0rd!"})
@@ -292,14 +294,12 @@ def test_deactivated_user_cannot_log_in_or_use_an_existing_token():
     })
     user_id = created.json()["id"]
     _activate(user_id, "Passw0rd!")
-    token_headers = _auth("internal", user_id, {"channelScope": "msetuSrm"})
-    as_temp = TestClient(app, headers=token_headers)
-
     # Works while active
     login = anonymous.post("/api/v1/auth/login", json={
         "username": "temp_user_5", "password": "Passw0rd!", "channelScope": "msetuSrm",
     })
     assert login.status_code == 200
+    as_temp = TestClient(app, headers={"Authorization": f"Bearer {login.json()['token']}"})
     assert as_temp.get("/api/v1/auth/me").status_code == 200
 
     as_admin.patch(f"/api/v1/users/{user_id}", json={"status": "Inactive"})
@@ -357,7 +357,7 @@ def test_admin_reset_on_a_still_invited_user_resends_the_invite_instead(issued_l
 
     # Still only usable via the (new) invite link, not yet a normal account
     still_invited = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_14", "password": "anything"})
-    assert still_invited.status_code == 403
+    assert still_invited.status_code == 401  # generic reply; the invite state is not revealed
 
     _activate(user_id, "Passw0rd!")
     activated = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_14", "password": "Passw0rd!"})

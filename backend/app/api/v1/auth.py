@@ -1,5 +1,7 @@
 """Sign-in endpoints. The rules live in app/services/auth_service.py; the "who is calling"
 dependencies other routers use live in app/api/deps.py."""
+import os
+
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from jwt.exceptions import InvalidTokenError as JWTError
@@ -23,6 +25,11 @@ from app.services.supplier_service import normalize_email
 
 router = APIRouter()
 
+# Sign-in attempts per caller address per 5 minutes (all accounts together). Each account also
+# locks after 5 wrong passwords; this stops one address from spraying passwords across accounts.
+LOGIN_ATTEMPTS_PER_IP = int(os.getenv("LOGIN_ATTEMPTS_PER_IP", "30"))
+LOGIN_WINDOW_SECONDS = 300
+
 
 def _no_store(response: Response) -> None:
     response.headers["Cache-Control"] = "no-store"
@@ -36,7 +43,8 @@ def public_portal_availability(response: Response, db: Session = Depends(get_db)
 
 
 @router.post("/login")
-def internal_login(request: InternalLoginRequest, db: Session = Depends(get_db)):
+def internal_login(request: InternalLoginRequest, http: Request, db: Session = Depends(get_db)):
+    rate_limit("staff-login", client_ip(http), limit=LOGIN_ATTEMPTS_PER_IP, window_seconds=LOGIN_WINDOW_SECONDS)
     return auth_service.login_internal(db, request.username, request.password, request.channelScope)
 
 
@@ -81,7 +89,8 @@ def reset_password(request: ResetPasswordRequest, response: Response, db: Sessio
 # ---------- suppliers ----------
 
 @router.post("/supplier/login-with-password")
-def supplier_login_with_password(request: SupplierPasswordLoginRequest, db: Session = Depends(get_db)):
+def supplier_login_with_password(request: SupplierPasswordLoginRequest, http: Request, db: Session = Depends(get_db)):
+    rate_limit("supplier-login", client_ip(http), limit=LOGIN_ATTEMPTS_PER_IP, window_seconds=LOGIN_WINDOW_SECONDS)
     return auth_service.login_supplier_password(db, request.email, request.password)
 
 

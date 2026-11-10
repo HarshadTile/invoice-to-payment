@@ -7,7 +7,7 @@ check it here: the frontend is a convenience, not the enforcement point.
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user_token
+from app.api.deps import get_current_user_token, load_active_internal_user
 from app.core.database import get_db
 from app.models.settings import AppSettings
 from app.models.user import User
@@ -69,16 +69,7 @@ def require_internal_user(
 ) -> User:
     if payload.get("auth_type") != "internal":
         raise HTTPException(status_code=403, detail="Internal users only.")
-    try:
-        user_id = int(payload.get("sub"))
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid session.")
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid session.")
-    if user.status != "Active":
-        raise HTTPException(status_code=403, detail="This account has been deactivated.")
-    return user
+    return load_active_internal_user(db, payload)
 
 
 def has_capability(db: Session, user: User, capability: str) -> bool:

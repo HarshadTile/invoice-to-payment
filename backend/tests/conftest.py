@@ -3,6 +3,7 @@ import os
 os.environ["DATABASE_URL"] = "mysql+pymysql://root:root@localhost:3306/mahindra_i2p_test"
 os.environ["DISABLE_TICKET_JOBS"] = "true"
 os.environ["JWT_SECRET_KEY"] = "test-only-secret-key-not-for-real-use-0123456789"
+os.environ["ENABLE_API_DOCS"] = "false"  # tests check the deployed default, whatever a dev .env says
 # Never use a developer's local SMTP credentials from automated tests.
 os.environ["SMTP_HOST"] = ""
 # Tests read the fixture files, never the live BigQuery API.
@@ -114,3 +115,11 @@ def clean_ticket_database():
     db.commit()
     yield
     db.close()
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """Login and public-endpoint rate limits are per process; start every test with a clean slate."""
+    from app.core.rate_limit import reset_rate_limits
+    reset_rate_limits()
+    yield

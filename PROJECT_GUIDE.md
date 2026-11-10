@@ -163,8 +163,8 @@ Severity: 🔴 security/correctness, 🟠 reliability/maintainability, 🟡 poli
 1. ~~Hard-coded JWT secret~~ — **Fixed (branch `security/pre-vapt`):** key now comes from `JWT_SECRET_KEY`; startup fails if missing/placeholder/<32 chars.
 2. ~~Passwordless supplier login~~ — **Fixed:** `/auth/supplier/login` removed; old vendor-code tokens are rejected with 401.
 3. ~~CORS `*` with credentials~~ — **Fixed:** explicit origin list (`FRONTEND_URL` + `CORS_ORIGINS`), credentials off, limited methods/headers.
-4. **Rate limiter trusts `X-Forwarded-For`** (`core/rate_limit.py`) — spoofable unless behind a trusted proxy; also per-process memory only. Login endpoints (internal and supplier-by-code) have no rate limit at all; internal login has no lockout.
-5. **7-day non-revocable tokens** — logout only writes an audit entry; no server-side invalidation. Consider shorter expiry + refresh, or a token denylist.
+4. ~~Rate limiter trusts `X-Forwarded-For`; no login rate limit/lockout~~ — **Fixed (step 3):** IP from the connection only (uvicorn `--proxy-headers` behind a proxy), per-IP login limit, 5-strike/15-min lockout for staff, generic failure reply (no account enumeration, constant timing).
+5. ~~7-day non-revocable tokens~~ — **Fixed (step 3):** 8-hour tokens (`ACCESS_TOKEN_EXPIRE_MINUTES`); logout and password reset end sessions server-side (`session_version`); every request re-checks the account, so a **deactivated user is cut off at once** (previously invoice endpoints accepted their token until expiry). `/docs` off unless `ENABLE_API_DOCS=true`; security headers on all API responses.
 6. **`VITE_DISABLE_AUTH`** bypass exists in production code paths (`AUTH_BYPASS`); make sure it's stripped/ignored in production builds.
 
 ### 🟠 Reliability / correctness

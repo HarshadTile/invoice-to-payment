@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.core.security import create_access_token
 from app.main import app
 from tests.helpers.suppliers import supplier_headers_for_code
+from tests.helpers.users import internal_user_id
 
 
 def _client(auth_type, subject, scope=None):
@@ -17,7 +18,7 @@ def _client(auth_type, subject, scope=None):
     return TestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
-internal = _client("internal", 1, {"channelScope": "all"})
+internal = _client("internal", internal_user_id(), {"channelScope": "all"})
 supplier = _client("supplier", "V1", {"company": "Supplier One"})  # managed supplier owning vendor V1 only
 
 
@@ -272,7 +273,7 @@ def test_invoice_details_find_zero_padded_po_items(monkeypatch):
 
 # --- who sees what on the new endpoints ---
 
-channel_locked = _client("internal", 1, {"channelScope": "msetuSrm"})
+channel_locked = _client("internal", internal_user_id(), {"channelScope": "msetuSrm"})
 
 
 def test_supplier_totals_cover_only_their_own_vendor_code():

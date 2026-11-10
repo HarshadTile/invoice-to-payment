@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.email import is_configured as smtp_is_configured, send_email
 from app.core.email_templates import supplier_access_email
 from app.core.password_reset import FRONTEND_URL, link_expiry_settings
-from app.core.security import create_access_token
+from app.core.security import create_access_token, token_session_version
 from app.models.supplier import Supplier, SupplierSetupToken, SupplierVendorCode
 from app.services import vendor_directory
 from app.services.notification_service import add_for_supplier_account
@@ -285,7 +285,8 @@ def build_session(supplier: Supplier) -> dict:
     token = create_access_token(
         subject=str(supplier.id),
         auth_type="supplier",
-        scope={"pan": supplier.pan, "company": supplier.name, "stamp": session_stamp(supplier)},
+        scope={"pan": supplier.pan, "company": supplier.name, "stamp": session_stamp(supplier),
+               "sv": supplier.session_version or 0},
     )
     return {
         "token": token,
@@ -315,7 +316,8 @@ def load_active_supplier(db: Session, payload: dict) -> Supplier:
         raise HTTPException(status_code=401, detail="Supplier account is unavailable.")
     if supplier.status != "Active":
         raise HTTPException(status_code=403, detail="This account has been deactivated.")
-    if (payload.get("scope") or {}).get("stamp") != session_stamp(supplier):
+    if ((payload.get("scope") or {}).get("stamp") != session_stamp(supplier)
+            or token_session_version(payload) != (supplier.session_version or 0)):
         raise HTTPException(status_code=401, detail="Your session has ended. Please sign in again.")
     return supplier
 

@@ -453,3 +453,18 @@ def test_internal_users_cannot_raise_a_query_only_suppliers_can():
     assert _create_ticket(admin, invoice_no, key="staff-create-1").status_code == 403
     assert _create_ticket(lead, invoice_no, key="staff-create-2").status_code == 403
     assert _create_ticket(_supplier_headers(vendor_code), invoice_no, key="supplier-create-1").status_code == 201
+
+
+def test_an_application_admin_without_a_ticket_role_can_be_assigned():
+    """The assignable-users list offers an application Admin whose ticket role is unset (like
+    the first account seed_admin.py creates); assigning a ticket to them must then work too."""
+    from tests.helpers.users import internal_user_id
+    seeded_admin_id = internal_user_id("seeded_style_admin", role="Admin")
+    invoice_no, vendor_code = _invoice_for()
+    admin = _internal_headers("admin", "admin123", "all")
+    ticket = _create_ticket(_supplier_headers(vendor_code), invoice_no, key="seeded-admin-1").json()
+    offered = client.get("/api/v1/tickets/assignable-users?channel=msetuSrm", headers=admin).json()
+    assert seeded_admin_id in {item["id"] for item in offered}
+    assigned = client.post(f"/api/v1/tickets/{ticket['id']}/assign", headers=admin,
+                           json={"assignee_id": seeded_admin_id, "expected_version": ticket["row_version"]})
+    assert assigned.status_code == 200, assigned.text

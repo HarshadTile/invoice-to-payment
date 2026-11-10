@@ -108,11 +108,12 @@ def test_fast_unfiltered_result_does_not_mutate_source_or_bypass_empty_vendor_sc
 def test_large_invoice_responses_are_compressed_without_changing_data(monkeypatch):
     from fastapi.testclient import TestClient
     from app.core.security import create_access_token
+    from tests.helpers.users import internal_user_id
     from app.main import app
     monkeypatch.setattr(source, '_cached_invoices', [
         {'VENDOR_INVOICE_NO': f'INV/{i}', 'SUPPLIER': 'V1', 'STATUS_FLAG': 'A'} for i in range(100)
     ])
-    headers = {'Authorization': 'Bearer ' + create_access_token(subject='1', auth_type='internal', scope={'channelScope': 'all'})}
+    headers = {'Authorization': 'Bearer ' + create_access_token(subject=str(internal_user_id()), auth_type='internal', scope={'channelScope': 'all'})}
     client = TestClient(app)
     compressed = client.get('/api/v1/invoices/list-invoices?page_size=100', headers={**headers, 'Accept-Encoding': 'gzip'})
     plain = client.get('/api/v1/invoices/list-invoices?page_size=100', headers={**headers, 'Accept-Encoding': 'identity'})

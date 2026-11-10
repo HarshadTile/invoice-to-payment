@@ -20,6 +20,10 @@ class User(Base):
     status = Column(String(32), nullable=False, default="Active")
     channel_scope = Column(String(32), nullable=False, default="all")
     ticket_role = Column(String(24), nullable=True)
+    failed_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    locked_until = Column(DateTime, nullable=True)
+    # Copied into each login token; raising it (logout, password reset) ends older sessions.
+    session_version = Column(Integer, nullable=False, default=0, server_default="0")
 
     ticket_channels = relationship(
         "UserChannelAccess", back_populates="user", cascade="all, delete-orphan"

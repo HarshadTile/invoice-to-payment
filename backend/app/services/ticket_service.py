@@ -349,8 +349,11 @@ def assign_ticket(db: Session, user: dict, ticket_id: str, assign_in):
     assignee = db.get(User, assign_in.assignee_id)
     if not assignee or assignee.status != "Active":
         _error(422, "VALIDATION_ERROR", "The selected assignee is not active.")
-    eligible = assignee.ticket_role in ("ASSIGNEE", "CHANNEL_LEAD", "ADMIN")
-    has_channel = assignee.ticket_role == "ADMIN" or any(m.channel == ticket.channel for m in assignee.ticket_channels)
+    # Same rule as assignable_users(): an application Admin counts as a ticket Admin even when
+    # its ticket role is unset (e.g. the first account from seed_admin.py).
+    assignee_role = ticket_role_of(assignee)
+    eligible = assignee_role in ("ASSIGNEE", "CHANNEL_LEAD", "ADMIN")
+    has_channel = assignee_role == "ADMIN" or any(m.channel == ticket.channel for m in assignee.ticket_channels)
     if not eligible or not has_channel:
         _error(422, "VALIDATION_ERROR", "The selected user cannot be assigned in this channel.")
     old_assignee = ticket.assignee_id

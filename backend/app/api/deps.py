@@ -9,7 +9,7 @@ from jwt.exceptions import InvalidTokenError as JWTError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import ALGORITHM, get_secret_key
+from app.core.security import ALGORITHM, get_secret_key, token_session_version
 from app.models.user import User
 from app.services.auth_service import allowed_channels_of, ticket_role_of
 from app.services.supplier_service import is_managed_supplier_token, load_active_supplier, vendor_codes_of
@@ -30,11 +30,39 @@ def decode_token(raw: str) -> dict:
     return payload
 
 
-def get_current_user_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def load_active_internal_user(db: Session, payload: dict) -> User:
+    """The staff account an internal token belongs to, re-checked on every request: it must still
+    exist, be Active, and the session must not have been ended (logout / password reset)."""
     try:
-        return decode_token(credentials.credentials)
+        user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid internal user identity.")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Internal account is unavailable.")
+    if user.status != "Active":
+        raise HTTPException(status_code=403, detail="This account has been deactivated.")
+    if token_session_version(payload) != (user.session_version or 0):
+        raise HTTPException(status_code=401, detail="Your session has ended. Please sign in again.")
+    return user
+
+
+def get_current_user_token(credentials: HTTPAuthorizationCredentials = Depends(security),
+                           db: Session = Depends(get_db)):
+    """The token's claims, after checking that the account behind it is still allowed in. Every
+    protected route depends on this, so a deactivated account or a signed-out session stops
+    working at once everywhere, not only when the token expires."""
+    try:
+        payload = decode_token(credentials.credentials)
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    if payload.get("auth_type") == "internal":
+        load_active_internal_user(db, payload)
+    elif payload.get("auth_type") == "supplier":
+        load_active_supplier(db, payload)
+    else:
+        raise HTTPException(status_code=401, detail="Invalid authentication context.")
+    return payload
 
 
 def get_current_user(payload: dict = Depends(get_current_user_token), db: Session = Depends(get_db)):
@@ -60,16 +88,7 @@ def get_current_user(payload: dict = Depends(get_current_user_token), db: Sessio
 
     if auth_type != "internal":
         raise HTTPException(status_code=401, detail="Invalid authentication context.")
-    try:
-        user_id = int(payload.get("sub"))
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid internal user identity.")
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Internal account is unavailable.")
-    if user.status != "Active":
-        raise HTTPException(status_code=403, detail="This account has been deactivated.")
+    user = load_active_internal_user(db, payload)
 
     ticket_role = ticket_role_of(user)
     allowed_channels = allowed_channels_of(user)

@@ -20,6 +20,8 @@ class Supplier(Base):
     password_hash = Column(String(255), nullable=True)
     failed_attempts = Column(Integer, nullable=False, default=0)
     locked_until = Column(DateTime, nullable=True)
+    # Copied into each login token; raising it (logout) ends older sessions.
+    session_version = Column(Integer, nullable=False, default=0, server_default="0")
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 

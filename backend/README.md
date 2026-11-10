@@ -105,7 +105,8 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 - API: http://127.0.0.1:8000
-- Interactive docs: http://127.0.0.1:8000/docs
+- Interactive docs: http://127.0.0.1:8000/docs (only with `ENABLE_API_DOCS=true` in `.env`;
+  off by default so deployed servers don't publish the endpoint list)
 - Health check: http://127.0.0.1:8000/health
 
 The frontend expects this on port 8000 and proxies `/api/v1` to it — see
@@ -223,3 +224,23 @@ screen. Apply the supplier email schema change with `alembic upgrade head`.
   `app/api/v1/auth.py`, not just hidden in the UI.
 - User management actions (create/update/remove/reset password) are written
   to the Settings → Audit Logs table.
+
+## Sign-in and session security
+
+- **Sessions last 8 hours** (`ACCESS_TOKEN_EXPIRE_MINUTES`), then the user signs in again.
+- **Signing out ends the session on the server**, not just in the browser: the account's
+  `session_version` goes up and every token issued before stops working (all devices).
+  A password reset does the same.
+- **Every request re-checks the account**: a deactivated or deleted user or supplier is
+  cut off at once on every endpoint, not when their token expires.
+- **Lockout**: 5 wrong passwords lock a staff or supplier account for 15 minutes. Failed
+  sign-ins always get the same reply, so it never reveals whether an account exists or is
+  invited / deactivated.
+- **Rate limit**: `LOGIN_ATTEMPTS_PER_IP` (default 30) sign-in attempts per address per 5
+  minutes. The limit is per backend process (run one worker, or put a limit in the proxy too).
+- **Behind a reverse proxy**, start uvicorn with
+  `--proxy-headers --forwarded-allow-ips=<proxy address>` so the real client address and
+  HTTPS scheme are seen. `X-Forwarded-For` is never read directly (anyone can forge it).
+- **Security headers** (`app/core/security_headers.py`) are added to every API response:
+  `nosniff`, `X-Frame-Options: DENY`, a strict CSP, `no-store` on `/api/*`, and HSTS over HTTPS.
+  The web server that serves the built frontend must send its own headers for the HTML/JS.

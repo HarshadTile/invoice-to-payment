@@ -14,6 +14,7 @@ _scratch = TemporaryDirectory(prefix="i2p-link-tests-")
 os.environ["DATABASE_URL"] = "sqlite:///" + (Path(_scratch.name) / "tests.db").as_posix()
 os.environ["DISABLE_TICKET_JOBS"] = "true"
 os.environ["JWT_SECRET_KEY"] = "test-only-secret-key-not-for-real-use-0123456789"
+os.environ["ENABLE_API_DOCS"] = "false"  # tests check the deployed default, whatever a dev .env says
 os.environ["SMTP_HOST"] = ""
 os.environ["I2P_LINK_TEST_ISOLATED"] = "1"
 os.environ["FRONTEND_URL"] = "http://192.168.1.10:5173"
@@ -76,3 +77,11 @@ def supplier_auth_headers(vendor_code: str) -> dict:
             db.commit()
             db.refresh(supplier)
         return {"Authorization": f"Bearer {build_session(supplier)['token']}"}
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """Login and public-endpoint rate limits are per process; start every test with a clean slate."""
+    from app.core.rate_limit import reset_rate_limits
+    reset_rate_limits()
+    yield

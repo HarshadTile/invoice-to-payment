@@ -10,6 +10,7 @@ from app.core.bigquery_api import InvoiceSourceError, use_api
 from app.core.cors import cors_allowed_origins
 from app.core.email import wait_for_outgoing_email
 from app.core.security import get_secret_key
+from app.core.security_headers import SecurityHeadersMiddleware, api_docs_enabled
 from app.api.v1.invoice import router as invoice_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router
@@ -29,7 +30,14 @@ from app.jobs.ticket_jobs import start_jobs, stop_jobs
 # Refuse to start with a missing or placeholder signing key (see app/core/security.py).
 get_secret_key()
 
-app = FastAPI(title="M&M Invoice-to-Payment Tracker")
+_docs = api_docs_enabled()
+app = FastAPI(
+    title="M&M Invoice-to-Payment Tracker",
+    # Interactive docs only when ENABLE_API_DOCS=true (developer machines); see security_headers.py.
+    docs_url="/docs" if _docs else None,
+    redoc_url="/redoc" if _docs else None,
+    openapi_url="/openapi.json" if _docs else None,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,6 +49,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "Accept", "Idempotency-Key"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=1)
+app.add_middleware(SecurityHeadersMiddleware)
  
 app.include_router(invoice_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])

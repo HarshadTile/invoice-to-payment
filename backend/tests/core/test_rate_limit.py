@@ -38,8 +38,8 @@ def test_old_hits_leave_the_window(monkeypatch):
     rl.rate_limit("test", "a", limit=1, window_seconds=60)
 
 
-def test_client_ip_prefers_the_first_forwarded_address():
+def test_client_ip_ignores_a_spoofable_forwarded_header():
     request = SimpleNamespace(headers={"x-forwarded-for": "10.0.0.1, 10.0.0.2"}, client=SimpleNamespace(host="127.0.0.1"))
-    assert rl.client_ip(request) == "10.0.0.1"
+    assert rl.client_ip(request) == "127.0.0.1"
     assert rl.client_ip(SimpleNamespace(headers={}, client=SimpleNamespace(host="127.0.0.1"))) == "127.0.0.1"
     assert rl.client_ip(SimpleNamespace(headers={}, client=None)) == "unknown"
