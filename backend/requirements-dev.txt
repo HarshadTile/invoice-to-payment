@@ -1,0 +1,8 @@
+# Everything the app needs, plus the test tools. Developers and CI install this file:
+#   pip install -r requirements-dev.txt
+-r requirements.txt
+
+pytest==9.1.1
+iniconfig==2.3.0
+pluggy==1.6.0
+Pygments==2.21.0

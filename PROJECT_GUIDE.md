@@ -171,15 +171,15 @@ Severity: 🔴 security/correctness, 🟠 reliability/maintainability, 🟡 poli
 7. **`datetime.utcnow()` used in 45 places** (deprecated in 3.12+, naive datetimes). Migrate to timezone-aware UTC; watch token-expiry comparisons.
 8. **Deprecated FastAPI `@app.on_event`** in `main.py` — switch to `lifespan`.
 9. **Docs out of date:** `frontend/README.md` still says supplier sign-in has "no password", lists a `features/tickets/` slice (replaced by RTK Query in `api/ticketsApi.js`), describes a "live identity switcher" and `src/data` seed data, none of which match the current code; `backend/README.md` and `docs/po-portal-mapping.md` say PO Portal reads a `.csv` but an untracked `.xlsx` was added beside it; README references `data/tbl_dw_inv_paymt_SRM.xlsx` (gitignored — fresh clones can't run file mode).
-10. **`vite.config.js` still proxies `/api` → `localhost:3001`** (the old Express server). Dead config; any call without the `/v1` prefix silently fails.
-11. **`requirements.txt` hygiene:** unpinned `sqlalchemy`, `pymysql`, `pyjwt`, `email-validator`; test deps (`pytest`) mixed with runtime; blank line + mixed encoding. Pin versions.
+10. ~~Dead `/api → :3001` Vite proxy~~ — **Fixed (step 4):** removed; all calls go through `/api/v1`.
+11. ~~`requirements.txt` hygiene~~ — **Fixed (step 4):** every version pinned, test tools in `requirements-dev.txt`, `python-multipart` 0.0.20 → 0.0.33 (6 known vulnerabilities), unmaintained `passlib` replaced by `bcrypt` (existing hashes verified). `pip-audit` and `npm audit`: 0 vulnerabilities; Vite 8.3.8 / Vitest 5.1.0.
 12. **Migration chain is messy** (merge, "restore", "reconcile legacy" revisions; MySQL-only SQL). A fresh `alembic upgrade head` on a blank DB should be verified end-to-end and `alembic check` drift (legacy `sessions`, `invoices`, `integrations` tables) cleaned up deliberately.
 13. **Tests depend on MySQL by default** (`pytest` drops a fixed DB). Make the SQLite isolated path the default or add CI config so tests can't hit a real DB.
 14. **Large in-memory dataset per process** — multi-worker deployment would duplicate memory and refresh jobs, and the rate limiter wouldn't be shared. Document single-worker constraint or externalise.
 15. ~~Generated/real data in the repo~~ — **Done:** `gcp_invoice_data.xlsx` (old test data) removed from git; all extracts incl. `PO_PORTAL.xlsx` are now gitignored.
 
 ### 🟡 Frontend polish
-16. **Lint warnings:** unused imports/variables in `RolesTab.jsx` (`Search`, `Users`, `navigate`, `capLabel`, `granted`), `LoginPage.jsx` (`notify`), and fast-refresh warnings in `InvoiceFilterBar.jsx`, `SupplierRequestPage.jsx`.
+16. **Lint warnings** — dead code removed (47 → 38). Remaining 38 are dev-only fast-refresh notes (13), React-compiler advice in `Breadcrumb.jsx` refs (21) and `VendorCodePage.jsx` memoization (3), one test-file note; no security impact, left to avoid restructuring working components before handover.
 17. **`theme.css` is a single 1,849-line stylesheet** — hard to maintain; consider splitting per feature.
 18. **Test speed:** jsdom is re-created per file (156 s of 60 s wall); Vitest suggests `pool: 'vmThreads'` / `isolate: false`.
 19. **Dead/legacy code to confirm and remove:** hidden "Manual" channel stages/views in `constants.js`, `otp_codes` model, legacy `Deleted` status aliases, compatibility-alias routes hidden from OpenAPI, `/app/sync-log` redirect (Sync Log page removed but backend `sync_log` router/model remain).

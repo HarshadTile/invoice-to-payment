@@ -1,7 +1,7 @@
 import InvoiceDateTypeFilter from '../components/invoices/InvoiceDateTypeFilter.jsx';
 import { calendarMonthOf, invoiceDateTypeLabel } from '../utils/invoiceDates';
 import { useState, useCallback, useRef, useEffect, useMemo, useDeferredValue } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useSelector, useDispatch, useStore } from 'react-redux';
 import { useScope } from '../features/ui/scope';
 import { clearScopeFilters, setPageFilters, setScopeFilter, setTablePage } from '../features/ui/uiSlice';
@@ -69,7 +69,6 @@ export default function SearchInvoicePage() {
   const dateLabel = invoiceDateTypeLabel(dateField).replace(/\b\w/g, (letter) => letter.toUpperCase());
   const savedFilters = useSelector((s) => s.ui.pageFilters[PAGE_FILTER_KEY]);
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   // Arrived by clicking a KPI card on Invoice Tracking: offer the way back
   const fromTracking = searchParams.get('from') === 'tracking';
 

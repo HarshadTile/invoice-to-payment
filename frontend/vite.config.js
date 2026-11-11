@@ -10,7 +10,6 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api/v1': 'http://127.0.0.1:8000',
-      '/api': 'http://localhost:3001',
     },
   },
 })

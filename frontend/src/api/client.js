@@ -1,6 +1,6 @@
 /* Thin fetch wrapper for the I2P API.
  *
- * - prefixes every path with /api (Vite proxies that to the Express server)
+ * - prefixes every path with /api (paths start with /v1, which Vite proxies to the FastAPI backend)
  * - attaches the bearer token (from localStorage if "remember me" was checked,
  *   otherwise sessionStorage)
  * - throws an Error carrying the server's message + status on non-2xx */

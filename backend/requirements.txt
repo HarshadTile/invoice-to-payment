@@ -1,38 +1,49 @@
-annotated-doc==0.0.5
-annotated-types==0.8.0
-anyio==4.15.1
-click==8.5.0
-colorama==0.4.6
-et_xmlfile==2.0.0
+# Runtime dependencies of the backend, every version pinned so each install (developer
+# machine, CI, server) gets exactly the tested set. Test tools are in requirements-dev.txt.
+# Check for known vulnerabilities with:  pip-audit -r requirements.txt
+
+# Web framework and server
 fastapi==0.141.1
-h11==0.16.0
-httptools==0.8.0
-httpx==0.28.1
-idna==3.19
-iniconfig==2.3.0
-MarkupSafe==3.0.3
-openpyxl==3.1.5
-packaging==26.3
-pluggy==1.6.0
-pydantic==2.13.5
-pydantic_core==2.46.5
-Pygments==2.21.0
-pytest==9.1.1
-python-dotenv==1.2.3
-PyYAML==6.0.3
 starlette==1.6.0
-typing-inspection==0.4.4
-typing_extensions==4.16.0
 uvicorn==0.53.0
+httptools==0.8.0
 watchfiles==1.2.0
 websockets==17.1
+python-multipart==0.0.33
+annotated-doc==0.0.5
+anyio==4.15.1
+h11==0.16.0
+idna==3.19
+click==8.5.0
+colorama==0.4.6
+PyYAML==6.0.3
 
-sqlalchemy
-pymysql
-passlib[bcrypt]==1.7.4
-bcrypt==4.1.2
-pyjwt
-email-validator
+# Data validation
+pydantic==2.13.5
+pydantic_core==2.46.5
+annotated-types==0.8.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+email-validator==2.3.0
+dnspython==2.9.1
+
+# Database and migrations
+SQLAlchemy==2.1.6
+PyMySQL==1.2.3
 alembic==1.20.0
-python-multipart==0.0.20
+Mako==1.4.3
+MarkupSafe==3.0.3
+
+# Sign-in and passwords
+PyJWT==2.15.1
+bcrypt==4.1.2
+
+# Invoice sources: Excel / CSV files, the BigQuery query API over HTTPS
+openpyxl==3.1.5
+et_xmlfile==2.0.0
+httpx==0.28.1
 truststore==0.10.5
+
+# Configuration
+python-dotenv==1.2.3
+packaging==26.3

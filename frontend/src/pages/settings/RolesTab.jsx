@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
 import { settingsApi } from '../../api/settingsApi';
 import { createRole, deleteRole, loadRoleSummary, renameRole, togglePermission } from '../../features/settings/settingsSlice';
 import { pushToast } from '../../features/ui/uiSlice';
 import ModalShell from '../../components/modals/ModalShell.jsx';
-import { Plus, Edit, Trash, ChevronRight, Search, Users, Lock } from '../../components/common/icons.jsx';
+import { Plus, Edit, Trash, ChevronRight, Lock } from '../../components/common/icons.jsx';
 
 // Mirrors ADMIN_LOCKED_CAPABILITIES on the server (app/core/permissions.py).
 const ADMIN_LOCKED = ['manageUsers', 'manageConfig', 'manageRoles', 'manageSuppliers'];
@@ -26,7 +25,6 @@ const CAPS = [
  *  Roles can be created (blank or copied), renamed and deleted; Admin is fixed. */
 export default function RolesTab() {
   const dispatch = useDispatch();
-  const navigate = useNavigate();
   const roleMatrix = useSelector((s) => s.settings.roleMatrix);
   const roles = Object.keys(roleMatrix);
   const [counts, setCounts] = useState({});
@@ -38,8 +36,6 @@ export default function RolesTab() {
   }, [dispatch]);
 
   const selected = roles.includes(picked) ? picked : (roles.find((r) => r !== 'Admin') || roles[0]);  // the role a dialog acts on
-  const capLabel = Object.fromEntries(CAPS);
-  const granted = (role) => CAPS.filter(([k]) => roleMatrix[role]?.[k]).length;
   const toast = (msg) => dispatch(pushToast(msg));
 
   const toggle = (role, capKey) => dispatch(togglePermission({ role, cap: capKey }))

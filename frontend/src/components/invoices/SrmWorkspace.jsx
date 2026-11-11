@@ -51,7 +51,7 @@ export default function SrmWorkspace({ invoices, canExport }) {
   const search = useWorkspaceSearch(filters.q, commitQuery, historyShown ? invoices : NO_INVOICES);
   const update = (changes) => {
     // The search box saves its own text; never write back a q older than what's being typed.
-    const { q, ...rest } = filters;
+    const { q: _staleQuery, ...rest } = filters;
     if ('q' in changes) search.setQuery(changes.q);
     writeParams({ ...rest, ...changes });
   };

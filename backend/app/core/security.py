@@ -1,16 +1,24 @@
 import os
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Union
 
+import bcrypt
 import jwt
 from dotenv import load_dotenv
-from passlib.context import CryptContext
 
 # backend/.env is gitignored and holds this machine's secrets (see .env.example).
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env")
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password hashing uses bcrypt directly (passlib, used before, is no longer maintained).
+# Hashes are the standard $2b$ format with cost 12, exactly what passlib produced, so every
+# existing password keeps working (tests/core/test_password_hashing.py proves it).
+BCRYPT_ROUNDS = 12
+BCRYPT_MAX_BYTES = 72
+# A well-formed bcrypt hash. Anything else is rejected before bcrypt sees it: a truncated or
+# corrupted value can make bcrypt's native code crash instead of simply not matching.
+_BCRYPT_HASH = re.compile(r"^\$2[aby]\$(0[4-9]|[12][0-9]|3[01])\$[./A-Za-z0-9]{53}$")
 
 ALGORITHM = "HS256"
 MIN_SECRET_LENGTH = 32
@@ -47,11 +55,25 @@ def _token_lifetime_minutes() -> int:
 
 ACCESS_TOKEN_EXPIRE_MINUTES = _token_lifetime_minutes()
 
+def _password_bytes(password: str) -> bytes:
+    # bcrypt only ever reads the first 72 bytes. passlib cut long passwords there too, so cutting
+    # them the same way keeps old hashes valid (newer bcrypt releases raise instead of cutting).
+    return (password or "").encode("utf-8")[:BCRYPT_MAX_BYTES]
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """True when the password matches the stored hash; False for a wrong password or an empty /
+    unreadable hash (an account without a password can never be signed in to)."""
+    if not isinstance(hashed_password, str) or not _BCRYPT_HASH.match(hashed_password):
+        return False
+    try:
+        return bcrypt.checkpw(_password_bytes(plain_password), hashed_password.encode("ascii"))
+    except (ValueError, TypeError, UnicodeEncodeError):
+        return False
+
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode("ascii")
 
 def create_access_token(subject: Union[str, Any], auth_type: str, scope: dict = None, expires_delta: timedelta = None) -> str:
     if expires_delta:

@@ -30,7 +30,7 @@ at most four additional invoice page requests in flight and preserves page order
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # the app plus the test tools (servers use requirements.txt)
 ```
 
 ### 1. Point the app at a database

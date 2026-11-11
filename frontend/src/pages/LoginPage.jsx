@@ -89,8 +89,6 @@ export default function LoginPage() {
   }
 
 
-  const notify = (msg) => dispatch(pushToast(msg));
-
   function selectAccountType(nextTab) {
     setError('');
     setFieldErr({});

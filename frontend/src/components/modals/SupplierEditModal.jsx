@@ -23,6 +23,9 @@ export default function SupplierEditModal({ supplier, onClose, onSaved }) {
         setCodeChannels((prev) => ({ ...prev, ...(match.codeChannels || {}) }));
       }
     }).catch(() => {});
+    // Runs once per supplier (PAN) on purpose: the codes are only the starting list, and re-running
+    // on every change to them would reload the options while the user is editing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supplier.pan]);
 
   function toggle(code) {
