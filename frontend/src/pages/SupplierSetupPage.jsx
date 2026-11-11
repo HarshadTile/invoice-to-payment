@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { api } from '../api/client';
 import { authApi } from '../api/authApi';
+import { PASSWORD_HINT, passwordProblem } from '../utils/passwordRules';
 import { logoutThunk } from '../features/bootstrap/hydrateThunks';
 import AuthLayout from '../components/login/AuthLayout.jsx';
 import FormField from '../components/login/FormField.jsx';
@@ -44,7 +45,8 @@ export default function SupplierSetupPage() {
     e.preventDefault();
     const emailValue = email.trim().toLowerCase();
     if (!EMAIL_PATTERN.test(emailValue)) { setError('Enter the email address this link was sent to.'); return; }
-    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    const weak = passwordProblem(password);
+    if (weak) { setError(weak); return; }
     if (password !== confirm) { setError("Passwords don't match."); return; }
     setError('');
     setBusy(true);
@@ -94,7 +96,7 @@ export default function SupplierSetupPage() {
           <PasswordField
             id="sp-password" label="New password" value={password} onChange={setPassword}
             visible={showPw} onToggleVisible={() => setShowPw((v) => !v)}
-            autoComplete="new-password" placeholder="At least 8 characters"
+            autoComplete="new-password" placeholder="At least 12 characters" note={PASSWORD_HINT}
           />
           <PasswordField
             id="sp-confirm" label="Confirm password" value={confirm} onChange={setConfirm}

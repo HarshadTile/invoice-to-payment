@@ -277,3 +277,21 @@ users always get the data the backend already holds.
 - **Deployment**: run **one** backend process (the sync runs inside it; several processes would each
   sync and hold their own copy) and keep `data/.invoice-cache/` on a persistent volume so restarts
   and deploys start warm.
+
+## Passwords and attachments
+
+**New passwords** (staff setup / reset, supplier setup) must be 12-64 characters, use at least 3
+of uppercase / lowercase / number / symbol, and not be a common password ("Password@123",
+"Mahindra#2026" ...) or contain the person's name, username or email
+(`app/core/password_policy.py`). Existing passwords keep working until they are next changed.
+Hashing is bcrypt (cost 12).
+
+**Ticket attachments** (`app/services/attachment_service.py`): PDF, PNG, JPG, XLSX, DOCX and CSV
+up to 5 MB. Each upload must really be that type (file signature); PDFs with JavaScript, launch
+actions or embedded files, Office files with macros or that unpack to more than 50 MB, and CSV
+cells that start a spreadsheet formula (`=`, `+`, `-`, `@`, except plain numbers) are rejected.
+Files are stored under random names in `TICKET_ATTACHMENT_DIR` (default `data/attachments/`;
+put it on persistent storage outside any web root). Downloads check ticket access, take the
+content type from the server's own table, are always sent as a download, and are sandboxed.
+**Antivirus**: `scan()` is the hook for the organisation's scanner (e.g. ClamAV); none is
+connected yet.

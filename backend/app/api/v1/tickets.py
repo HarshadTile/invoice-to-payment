@@ -267,4 +267,12 @@ def download_attachment(
 ):
     attachment = ticket_repository.attachment_or_404(db, user, ticket_id, attachment_id)
     path = attachment_service.stored_path(attachment)
-    return FileResponse(path, media_type=attachment.mime_type, filename=attachment.original_name)
+    # Type from the server's own table (older rows stored the uploader's claim), always sent as a
+    # download, and sandboxed: a disguised file can't run as a page in the browser.
+    return FileResponse(
+        path,
+        media_type=attachment_service.content_type_for(attachment.stored_key),
+        filename=attachment.original_name,
+        content_disposition_type="attachment",
+        headers={"Content-Security-Policy": "default-src 'none'; sandbox", "X-Content-Type-Options": "nosniff"},
+    )

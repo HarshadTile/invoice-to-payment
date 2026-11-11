@@ -11,6 +11,7 @@ from app.core.audit import write_audit
 from app.core.channels import channel_availability, require_enabled_channel
 from app.core.email import is_configured as smtp_is_configured, send_email
 from app.core.email_templates import password_reset_email
+from app.core import password_policy
 from app.core.password_reset import issue_password_reset, token_digest
 from app.core.security import create_access_token, get_password_hash, token_session_version, verify_password
 from app.models.supplier import Supplier, SupplierSetupToken
@@ -31,7 +32,6 @@ logger = logging.getLogger(__name__)
 VALID_CHANNEL_SCOPES = {"all", "msetuSrm", "poPortal", "manual", "mfoxPortal"}
 INVALID_RESET_LINK = "This reset link is invalid or has expired. Request a new one."
 INVALID_SETUP_LINK = "This link is invalid or has expired. Ask the team for a new one."
-MIN_PASSWORD = 8
 MAX_FAILED_LOGINS = 5
 LOGIN_LOCK_MINUTES = 15
 # One message for every failed staff sign-in, so the reply never reveals whether an account
@@ -45,9 +45,11 @@ def _fail(status: int, detail: str):
     raise HTTPException(status_code=status, detail=detail)
 
 
-def _require_password_length(password: str) -> None:
-    if len(password) < MIN_PASSWORD:
-        _fail(400, f"Password must be at least {MIN_PASSWORD} characters.")
+def _require_strong_password(password: str, personal: list[str | None] = ()) -> None:
+    """The rules in app/core/password_policy.py; every broken rule is listed for the person."""
+    broken = password_policy.problems(password, personal)
+    if broken:
+        _fail(400, " ".join(broken))
 
 
 # ---------- identity ----------
@@ -189,7 +191,7 @@ def password_link_info(db: Session, token: str) -> dict:
 
 
 def reset_password(db: Session, token: str, password: str) -> None:
-    _require_password_length(password)
+    _require_strong_password(password)
     record = _reset_token_query(db, token).first()
     if not record:
         _fail(400, INVALID_RESET_LINK)
@@ -200,6 +202,7 @@ def reset_password(db: Session, token: str, password: str) -> None:
             or record.used or record.expires_at <= datetime.utcnow()):
         _fail(400, INVALID_RESET_LINK)
 
+    _require_strong_password(password, [user.username, user.email, user.name])
     was_invited = user.status == "Invited"
     claimed = db.query(PasswordResetToken).filter(
         PasswordResetToken.id == record.id, PasswordResetToken.used.is_(False),
@@ -263,7 +266,7 @@ def valid_setup_record(db: Session, token: str) -> SupplierSetupToken:
 
 
 def complete_supplier_setup(db: Session, token: str, email: str, password: str) -> None:
-    _require_password_length(password)
+    _require_strong_password(password)
     record = valid_setup_record(db, token)
     supplier = db.get(Supplier, record.supplier_id)
     actor = f"Supplier {supplier.email}"
@@ -274,6 +277,7 @@ def complete_supplier_setup(db: Session, token: str, email: str, password: str) 
         write_audit(db, actor, "Failed setup", "email did not match the setup link")
         _fail(400, "That email doesn't match this link.")
 
+    _require_strong_password(password, [supplier.email, supplier.name])
     supplier.password_hash = get_password_hash(password)
     supplier.status = "Active"
     supplier.failed_attempts, supplier.locked_until = 0, None

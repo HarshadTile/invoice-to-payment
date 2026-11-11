@@ -49,7 +49,7 @@ describe('SupplierSetupPage', () => {
     await userEvent.type(screen.getByLabelText(/^new password/i), 'short');
     await userEvent.type(screen.getByLabelText(/^confirm/i), 'short');
     await userEvent.click(screen.getByRole('button', { name: /set password/i }));
-    expect(await screen.findByText(/at least 8 characters/i)).toBeInTheDocument();
+    expect(await screen.findByText('Password must be at least 12 characters.')).toBeInTheDocument();
     expect(mockAuth.completeSupplierSetup).not.toHaveBeenCalled();
 
     await userEvent.clear(screen.getByLabelText(/^new password/i));

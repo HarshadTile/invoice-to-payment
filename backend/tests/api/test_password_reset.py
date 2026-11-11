@@ -101,7 +101,7 @@ def test_full_reset_flow_and_the_token_can_only_be_used_once(no_real_email):
 
 
 def test_reset_rejects_an_unknown_or_expired_token(no_real_email):
-    bogus = client.post("/api/v1/auth/reset-password", json={"token": "not-a-real-token", "password": "Whatever1!"})
+    bogus = client.post("/api/v1/auth/reset-password", json={"token": "not-a-real-token", "password": "Whatever-Pass-71"})
     assert bogus.status_code == 400
 
     _cleanup("reset_user_3")
@@ -114,7 +114,7 @@ def test_reset_rejects_an_unknown_or_expired_token(no_real_email):
     db.commit()
     db.close()
 
-    expired = client.post("/api/v1/auth/reset-password", json={"token": "already-expired-token", "password": "Whatever1!"})
+    expired = client.post("/api/v1/auth/reset-password", json={"token": "already-expired-token", "password": "Whatever-Pass-71"})
     assert expired.status_code == 400
 
     _cleanup("reset_user_3")
@@ -132,10 +132,10 @@ def test_a_new_request_invalidates_the_previous_outstanding_token(no_real_email)
     second_token = _request_link(user_id)
     assert second_token != first_token
 
-    stale = client.post("/api/v1/auth/reset-password", json={"token": first_token, "password": "Whatever1!"})
+    stale = client.post("/api/v1/auth/reset-password", json={"token": first_token, "password": "Whatever-Pass-71"})
     assert stale.status_code == 400
 
-    fresh = client.post("/api/v1/auth/reset-password", json={"token": second_token, "password": "Whatever1!"})
+    fresh = client.post("/api/v1/auth/reset-password", json={"token": second_token, "password": "Whatever-Pass-71"})
     assert fresh.status_code == 200
 
     _cleanup("reset_user_4")

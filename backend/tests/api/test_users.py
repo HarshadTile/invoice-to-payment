@@ -23,7 +23,7 @@ def _get_or_create(db, username, role):
     if user:
         return user
     user = User(
-        username=username, password_hash=get_password_hash("Passw0rd!"),
+        username=username, password_hash=get_password_hash("Blue-Harbor-71"),
         name=username.title(), email=f"{username}@example.com", role=role,
     )
     db.add(user)
@@ -86,7 +86,7 @@ def _latest_token(user_id):
     return _issued_tokens[user_id]
 
 
-def _activate(user_id, password="Passw0rd!"):
+def _activate(user_id, password="Blue-Harbor-71"):
     """Completes a newly-invited account's invite link, the same way the real person
     would — the only way this app ever sets an account's actual usable password."""
     response = anonymous.post("/api/v1/auth/reset-password", json={"token": _latest_token(user_id), "password": password})
@@ -125,8 +125,8 @@ def test_new_account_is_invited_not_active_until_the_link_is_used(issued_links):
     assert blocked.status_code == 401
     assert blocked.json()["error"]["message"] == "Invalid username or password."
 
-    _activate(user_id, "Passw0rd!")
-    activated = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_1", "password": "Passw0rd!"})
+    _activate(user_id, "Blue-Harbor-71")
+    activated = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_1", "password": "Blue-Harbor-71"})
     assert activated.status_code == 200
     assert activated.json()["auth"]["role"] == "Invoice Team L3"
 
@@ -199,10 +199,10 @@ def test_login_defaults_to_the_accounts_assigned_portal():
         "role": "Invoice Team L1", "channelScope": "poPortal",
     })
     user_id = created.json()["id"]
-    _activate(user_id, "Passw0rd!")
+    _activate(user_id, "Blue-Harbor-71")
 
     # No portal named on the login form — falls back to whatever the account was assigned.
-    login = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_11", "password": "Passw0rd!"})
+    login = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_11", "password": "Blue-Harbor-71"})
     assert login.status_code == 200
     assert login.json()["auth"]["channelScope"] == "poPortal"
 
@@ -216,22 +216,22 @@ def test_a_locked_account_cannot_sign_in_to_a_different_portal():
         "role": "Invoice Team L1", "channelScope": "poPortal",
     })
     user_id = created.json()["id"]
-    _activate(user_id, "Passw0rd!")
+    _activate(user_id, "Blue-Harbor-71")
 
     # Picking a portal this account was never assigned must be rejected outright, not
     # silently swapped for the real one — the login form's dropdown isn't the source of truth.
     wrong_portal = anonymous.post("/api/v1/auth/login", json={
-        "username": "temp_user_13", "password": "Passw0rd!", "channelScope": "msetuSrm",
+        "username": "temp_user_13", "password": "Blue-Harbor-71", "channelScope": "msetuSrm",
     })
     assert wrong_portal.status_code == 403
 
     wants_all = anonymous.post("/api/v1/auth/login", json={
-        "username": "temp_user_13", "password": "Passw0rd!", "channelScope": "all",
+        "username": "temp_user_13", "password": "Blue-Harbor-71", "channelScope": "all",
     })
     assert wants_all.status_code == 403
 
     own_portal = anonymous.post("/api/v1/auth/login", json={
-        "username": "temp_user_13", "password": "Passw0rd!", "channelScope": "poPortal",
+        "username": "temp_user_13", "password": "Blue-Harbor-71", "channelScope": "poPortal",
     })
     assert own_portal.status_code == 200
 
@@ -243,7 +243,7 @@ def test_an_all_access_account_may_preview_any_single_channel():
     # view preference, not a widening of access, so the login form may still offer it.
     for portal in ("msetuSrm", "poPortal", "all"):
         response = anonymous.post("/api/v1/auth/login", json={
-            "username": admin_username, "password": "Passw0rd!", "channelScope": portal,
+            "username": admin_username, "password": "Blue-Harbor-71", "channelScope": portal,
         })
         assert response.status_code == 200
         assert response.json()["auth"]["channelScope"] == portal
@@ -293,10 +293,10 @@ def test_deactivated_user_cannot_log_in_or_use_an_existing_token():
         "role": "Invoice Team L1", "channelScope": "msetuSrm",
     })
     user_id = created.json()["id"]
-    _activate(user_id, "Passw0rd!")
+    _activate(user_id, "Blue-Harbor-71")
     # Works while active
     login = anonymous.post("/api/v1/auth/login", json={
-        "username": "temp_user_5", "password": "Passw0rd!", "channelScope": "msetuSrm",
+        "username": "temp_user_5", "password": "Blue-Harbor-71", "channelScope": "msetuSrm",
     })
     assert login.status_code == 200
     as_temp = TestClient(app, headers={"Authorization": f"Bearer {login.json()['token']}"})
@@ -306,7 +306,7 @@ def test_deactivated_user_cannot_log_in_or_use_an_existing_token():
 
     # Blocked once deactivated — both a fresh login and an already-issued token
     blocked_login = anonymous.post("/api/v1/auth/login", json={
-        "username": "temp_user_5", "password": "Passw0rd!", "channelScope": "msetuSrm",
+        "username": "temp_user_5", "password": "Blue-Harbor-71", "channelScope": "msetuSrm",
     })
     assert blocked_login.status_code == 403
     assert as_temp.get("/api/v1/auth/me").status_code == 403
@@ -323,20 +323,20 @@ def test_admin_reset_emails_a_link_and_never_sets_the_password(issued_links):
         "role": "Invoice Team L1", "channelScope": "msetuSrm",
     })
     user_id = created.json()["id"]
-    _activate(user_id, "Passw0rd!")  # must be Active for this to be a "reset", not a resend-invite
+    _activate(user_id, "Blue-Harbor-71")  # must be Active for this to be a "reset", not a resend-invite
 
     triggered = as_admin.post(f"/api/v1/users/{user_id}/reset-password")
     assert triggered.status_code == 200
     assert len(issued_links) == 2  # the invite, then this reset
     assert issued_links[-1]["email"] == "temp6@example.com"
 
-    completed = anonymous.post("/api/v1/auth/reset-password", json={"token": _latest_token(user_id), "password": "BrandNew1!"})
+    completed = anonymous.post("/api/v1/auth/reset-password", json={"token": _latest_token(user_id), "password": "BrandNew-Pass-71"})
     assert completed.status_code == 200
 
-    old_password_login = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_6", "password": "Passw0rd!"})
+    old_password_login = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_6", "password": "Blue-Harbor-71"})
     assert old_password_login.status_code == 401
 
-    new_password_login = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_6", "password": "BrandNew1!"})
+    new_password_login = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_6", "password": "BrandNew-Pass-71"})
     assert new_password_login.status_code == 200
 
     as_admin.delete(f"/api/v1/users/{user_id}")
@@ -359,8 +359,8 @@ def test_admin_reset_on_a_still_invited_user_resends_the_invite_instead(issued_l
     still_invited = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_14", "password": "anything"})
     assert still_invited.status_code == 401  # generic reply; the invite state is not revealed
 
-    _activate(user_id, "Passw0rd!")
-    activated = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_14", "password": "Passw0rd!"})
+    _activate(user_id, "Blue-Harbor-71")
+    activated = anonymous.post("/api/v1/auth/login", json={"username": "temp_user_14", "password": "Blue-Harbor-71"})
     assert activated.status_code == 200
 
     as_admin.delete(f"/api/v1/users/{user_id}")
@@ -428,10 +428,10 @@ def test_changing_an_email_revokes_old_links_and_emails_a_fresh_one(issued_links
     assert updated.json()["email"] == "new1@example.com"
 
     # The link sent to the old address is dead; a new one went to the new address.
-    assert anonymous.post("/api/v1/auth/reset-password", json={"token": old_token, "password": "BrandNew1!"}).status_code == 400
+    assert anonymous.post("/api/v1/auth/reset-password", json={"token": old_token, "password": "BrandNew-Pass-71"}).status_code == 400
     assert [m["email"] for m in issued_links] == ["new1@example.com"]
     assert "setupLink" not in updated.json()  # links are only ever emailed
-    assert anonymous.post("/api/v1/auth/reset-password", json={"token": _latest_token(user_id), "password": "BrandNew1!"}).status_code == 200
+    assert anonymous.post("/api/v1/auth/reset-password", json={"token": _latest_token(user_id), "password": "BrandNew-Pass-71"}).status_code == 200
     _cleanup("temp_user_email_1")
 
 

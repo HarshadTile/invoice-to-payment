@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { api } from '../api/client';
 import { authApi } from '../api/authApi';
+import { PASSWORD_HINT, passwordProblem } from '../utils/passwordRules';
 import { logoutThunk } from '../features/bootstrap/hydrateThunks';
 import AuthLayout from '../components/login/AuthLayout.jsx';
 import PasswordField from '../components/login/PasswordField.jsx';
@@ -39,7 +40,8 @@ function PasswordSetupForm({ token }) {
 
   async function submit(e) {
     e.preventDefault();
-    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    const weak = passwordProblem(password);
+    if (weak) { setError(weak); return; }
     if (password !== confirm) { setError("Passwords don't match."); return; }
     setError('');
     setStatus('busy');
@@ -87,7 +89,8 @@ function PasswordSetupForm({ token }) {
             onToggleVisible={() => setShowPw((v) => !v)}
             autoFocus
             autoComplete="new-password"
-            placeholder="At least 8 characters"
+            placeholder="At least 12 characters"
+            note={PASSWORD_HINT}
           />
           <PasswordField
             id="rp-confirm"

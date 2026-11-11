@@ -4,13 +4,14 @@ import { LockIcon, EyeIcon, EyeOffIcon } from './icons.jsx';
 /** Password input with a label-row action slot and an accessible show/hide toggle. */
 export default function PasswordField({
   id = 'lgn-password', label = 'Password', value, onChange, error, visible, onToggleVisible,
-  labelAction, autoComplete = 'current-password', placeholder = 'Enter your password', autoFocus,
+  labelAction, autoComplete = 'current-password', placeholder = 'Enter your password', autoFocus, note,
 }) {
   return (
     <FormField
       id={id}
       label={label}
       labelAction={labelAction}
+      note={note}
       error={error}
       icon={<LockIcon className="lgn-ic" />}
       type={visible ? 'text' : 'password'}
