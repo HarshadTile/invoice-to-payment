@@ -49,6 +49,7 @@ class _State:
     next_sync_at: datetime | None = None
     schedule: str = ""
     live: bool = False  # INVOICE_SOURCE=api
+    auto: bool = False  # INVOICE_AUTO_SYNC=true
 
 
 _state = _State()
@@ -68,9 +69,9 @@ def reset() -> None:
         _state = _State()
 
 
-def configure(*, live: bool, schedule: str) -> None:
+def configure(*, live: bool, schedule: str, auto: bool = False) -> None:
     with _lock:
-        _state.live, _state.schedule = live, schedule
+        _state.live, _state.schedule, _state.auto = live, schedule, auto
 
 
 def set_running(running: bool) -> None:
@@ -139,5 +140,5 @@ def oldest_data_as_of() -> datetime | None:
 def snapshot(*, include_error: bool) -> dict:
     with _lock:
         sources = [s.to_dict(include_error) for s in _state.sources.values()]
-        return {"live": _state.live, "schedule": _state.schedule, "running": _state.running,
+        return {"live": _state.live, "autoSync": _state.auto, "schedule": _state.schedule, "running": _state.running,
                 "nextSyncAt": _iso(_state.next_sync_at), "sources": sources}

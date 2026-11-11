@@ -21,6 +21,14 @@ _TIME = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 _OFFSET = re.compile(r"^([+-])(\d{1,2}):?(\d{2})$")
 
 
+def auto_sync_enabled() -> bool:
+    """INVOICE_AUTO_SYNC=true lets the backend call BigQuery by itself (start-up sync, schedule,
+    retries). Off by default: until the GCP team approves automatic use of their API, data only
+    changes when an administrator presses "Sync now" (or, on a server with no saved snapshot yet,
+    once, to get any data at all)."""
+    return os.getenv("INVOICE_AUTO_SYNC", "false").strip().lower() in ("1", "true", "yes", "on")
+
+
 class ScheduleError(ValueError):
     """A sync setting that can't be understood; the message names the setting."""
 

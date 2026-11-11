@@ -32,6 +32,7 @@ export function freshnessLabel(status, now = new Date()) {
   const warn = Boolean(status.stale || failing);
   let title = `Invoice data was last updated from the source ${formatAge(ageMinutes)}.`;
   if (status.live === false) title = 'Invoice data comes from local files (live sync is off).';
+  else if (status.autoSync === false) title = `Invoice data is updated on request (automatic sync is off). Last update ${formatAge(ageMinutes)}.`;
   if (failing) title = 'The latest automatic update failed, so you are seeing the last successful data. The team has been notified in the sync log.';
   else if (status.stale) title = `Invoice data has not been updated for ${formatAge(ageMinutes).replace(' ago', '')}.`;
   return { text: `Data as of ${when}`, tone: warn ? 'warn' : 'ok', title };

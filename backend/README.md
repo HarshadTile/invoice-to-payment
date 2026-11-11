@@ -247,8 +247,15 @@ screen. Apply the supplier email schema change with `alembic upgrade head`.
 
 ## Automatic invoice sync
 
-With `INVOICE_SOURCE=api` the backend keeps invoice data in step with BigQuery by itself
-(`app/services/invoice_refresh.py`). Signing in or refreshing the browser never calls BigQuery;
+**Currently switched off.** `INVOICE_AUTO_SYNC=false` (the default) until the GCP team approves
+automatic use of their API. While off, the backend never calls BigQuery by itself: it serves the
+saved snapshot, and data changes only when an administrator presses **Sync now** (Settings →
+Integrations). A server with no snapshot yet loads once, so it has data to show. The "Data as of"
+label still shows the data's age, but old data is not reported as stale or `degraded`. Set
+`INVOICE_AUTO_SYNC=true` to enable everything below; no code change is needed.
+
+With `INVOICE_SOURCE=api` and `INVOICE_AUTO_SYNC=true` the backend keeps invoice data in step with
+BigQuery by itself (`app/services/invoice_refresh.py`). Signing in or refreshing the browser never calls BigQuery;
 users always get the data the backend already holds.
 
 - **Start-up**: the last snapshot loads in seconds, then a sync runs at once in the background.

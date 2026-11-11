@@ -39,4 +39,10 @@ describe('invoice data freshness wording', () => {
     expect(label.tone).toBe('ok');
     expect(label.title).toMatch(/local files/);
   });
+  it('explains that updates are manual while automatic sync is off', () => {
+    const label = freshnessLabel({ live: true, autoSync: false, dataAsOf: '2026-11-06T12:52:00Z', lastSyncOk: true, stale: false }, NOW);
+    expect(label.tone).toBe('ok');
+    expect(label.title).toMatch(/updated on request/);
+    expect(label.title).toMatch(/4 days ago/);
+  });
 });

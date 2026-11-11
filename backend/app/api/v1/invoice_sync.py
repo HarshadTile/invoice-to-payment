@@ -33,7 +33,7 @@ def _file_mode_status() -> dict:
         sources.append({"source": name, "label": sync_status.LABELS[name], "rows": None, "dataAsOf": as_of,
                         "loadedFrom": "file", "lastAttemptAt": None, "lastSuccessAt": None, "lastSyncOk": True,
                         "consecutiveFailures": 0, "lastError": None})
-    return {"live": False, "schedule": "Live sync is off (INVOICE_SOURCE=file)", "running": False,
+    return {"live": False, "autoSync": False, "schedule": "Live sync is off (INVOICE_SOURCE=file)", "running": False,
             "nextSyncAt": None, "sources": sources}
 
 
@@ -53,7 +53,8 @@ def _with_summary(status: dict) -> dict:
     status["dataAsOf"] = oldest
     status["dataAgeMinutes"] = round(age) if age is not None else None
     status["lastSyncOk"] = all(s["lastSyncOk"] for s in status["sources"])
-    status["stale"] = bool(status["live"] and (age is None or age > _stale_after_minutes()))
+    # With automatic sync off the data ages by design, so it is not reported as stale.
+    status["stale"] = bool(status["live"] and status.get("autoSync") and (age is None or age > _stale_after_minutes()))
     return status
 
 
@@ -70,7 +71,7 @@ def readiness() -> tuple[int, dict]:
     return (503 if state == "starting" else 200), {
         "status": state, "invoiceSource": "bigquery" if status["live"] else "file",
         "dataAsOf": status["dataAsOf"], "dataAgeMinutes": status["dataAgeMinutes"],
-        "lastSyncOk": status["lastSyncOk"], "stale": status["stale"],
+        "lastSyncOk": status["lastSyncOk"], "stale": status["stale"], "autoSync": bool(status.get("autoSync")),
     }
 
 

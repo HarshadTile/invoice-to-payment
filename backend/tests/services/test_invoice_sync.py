@@ -161,7 +161,7 @@ def test_sync_now_needs_manage_config_and_live_mode(monkeypatch):
 
 def test_readiness_reports_starting_ready_and_degraded(monkeypatch):
     monkeypatch.setattr("app.api.v1.invoice_sync.use_api", lambda: True)
-    sync_status.configure(live=True, schedule="Every 60 minutes")
+    sync_status.configure(live=True, schedule="Every 60 minutes", auto=True)
     starting = client.get("/health/ready")
     assert starting.status_code == 503 and starting.json()["status"] == "starting"
 
@@ -176,3 +176,76 @@ def test_readiness_reports_starting_ready_and_degraded(monkeypatch):
 def test_the_sync_log_is_staff_only(monkeypatch):
     assert client.get("/api/v1/sync-log", headers=supplier_headers_for_code("SYNC-V1")).status_code == 403
     assert client.get("/api/v1/sync-log", headers=_staff()).status_code == 200
+
+
+# ---------- INVOICE_AUTO_SYNC: automatic BigQuery calls can be switched off (the default) ----------
+
+import time as _time  # noqa: E402
+
+from app.services.sync_schedule import auto_sync_enabled  # noqa: E402
+
+
+def test_automatic_sync_is_off_unless_switched_on(monkeypatch):
+    monkeypatch.delenv("INVOICE_AUTO_SYNC", raising=False)
+    assert auto_sync_enabled() is False
+    for value in ("true", "1", "yes", "ON"):
+        monkeypatch.setenv("INVOICE_AUTO_SYNC", value)
+        assert auto_sync_enabled() is True
+    monkeypatch.setenv("INVOICE_AUTO_SYNC", "false")
+    assert auto_sync_enabled() is False
+
+
+def _run_loop(monkeypatch, *, auto, stale_start=True):
+    """Starts the real sync loop with BigQuery replaced by a counter; returns (calls, stop)."""
+    calls = []
+    monkeypatch.setenv("INVOICE_AUTO_SYNC", "true" if auto else "false")
+    monkeypatch.setenv("INVOICE_REFRESH_MINUTES", "60")
+    monkeypatch.setattr(invoice_refresh, "warm_up", lambda: stale_start)
+    monkeypatch.setattr(invoice_refresh, "refresh_all", lambda: calls.append(1) or True)
+    monkeypatch.setattr(invoice_refresh, "use_api", lambda: True)
+    invoice_refresh.start()
+
+    def stop():
+        invoice_refresh.stop()
+        invoice_refresh._thread.join(timeout=5)
+    return calls, stop
+
+
+def _wait_until(condition, seconds=3.0):
+    deadline = _time.monotonic() + seconds
+    while _time.monotonic() < deadline and not condition():
+        _time.sleep(0.02)
+    return condition()
+
+
+def test_with_automatic_sync_off_bigquery_is_called_only_for_sync_now(monkeypatch):
+    calls, stop = _run_loop(monkeypatch, auto=False)
+    try:
+        assert _wait_until(lambda: sync_status.snapshot(include_error=False)["schedule"] == invoice_refresh.OFF_DESCRIPTION)
+        _time.sleep(0.3)
+        assert calls == []  # no start-up sync, no schedule, no retries
+        status = sync_status.snapshot(include_error=False)
+        assert status["autoSync"] is False and status["nextSyncAt"] is None
+        assert invoice_refresh.request_sync() == "started"
+        assert _wait_until(lambda: calls == [1])  # Sync now still works
+    finally:
+        stop()
+
+
+def test_with_automatic_sync_on_a_stale_start_syncs_at_once(monkeypatch):
+    calls, stop = _run_loop(monkeypatch, auto=True)
+    try:
+        assert _wait_until(lambda: calls == [1])
+        assert _wait_until(lambda: sync_status.snapshot(include_error=False)["nextSyncAt"] is not None)
+        assert sync_status.snapshot(include_error=False)["autoSync"] is True
+    finally:
+        stop()
+
+
+def test_old_data_is_not_an_alarm_while_automatic_sync_is_off(monkeypatch):
+    monkeypatch.setattr("app.api.v1.invoice_sync.use_api", lambda: True)
+    sync_status.configure(live=True, schedule=invoice_refresh.OFF_DESCRIPTION, auto=False)
+    sync_status.record_loaded("srm", 10, datetime.now(timezone.utc) - timedelta(days=5), "snapshot")
+    body = client.get("/health/ready").json()
+    assert body["status"] == "ready" and body["stale"] is False and body["autoSync"] is False
+    assert body["dataAgeMinutes"] > 5 * 24 * 60 - 5  # the age is still reported

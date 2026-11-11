@@ -8,6 +8,9 @@ save a snapshot if it came straight from BigQuery. Then, in the background:
     times or every N minutes;
   * after a failure, retry sooner (5, 10, 20 ... minutes) until it works again;
   * "Sync now" (Settings > Integrations) wakes the loop for an immediate run.
+With INVOICE_AUTO_SYNC off (the default) none of the automatic steps run: the saved snapshot is
+served as it is and BigQuery is called only for "Sync now" (or once, when there is no snapshot at
+all, since there would be nothing to show).
 Fresh data is swapped in only once it is fully indexed, so users keep seeing the previous data
 until then, and keep seeing it if the sync fails. Only one sync runs at a time. Every attempt is
 recorded (app/services/sync_status.py).
@@ -20,7 +23,7 @@ from app.core.bigquery_api import use_api
 from app.repositories import api_snapshot, po_portal_invoice, srm_invoice
 from app.services import sync_status
 from app.services.invoice_index import index_of
-from app.services.sync_schedule import Schedule
+from app.services.sync_schedule import Schedule, auto_sync_enabled
 
 logger = logging.getLogger("app.bigquery")
 SOURCES = ((srm_invoice, srm_invoice._load_excel_data), (po_portal_invoice, po_portal_invoice.get_all_cached_invoices))
@@ -95,19 +98,28 @@ def refresh_all() -> bool:
     return True
 
 
+OFF_DESCRIPTION = "Automatic sync is off; data is updated only with Sync now"
+
+
 def _run():
-    try:
-        schedule = _schedule()
-    except ValueError as exc:
-        logger.error("Invoice sync schedule is invalid, so only the start-up sync runs: %s", exc)
-        schedule = None
-    sync_status.configure(live=True, schedule=schedule.describe() if schedule else "Invalid schedule")
+    auto = auto_sync_enabled()
+    schedule = None
+    if auto:
+        try:
+            schedule = _schedule()
+        except ValueError as exc:
+            logger.error("Invoice sync schedule is invalid, so only the start-up sync runs: %s", exc)
+    description = (schedule.describe() if schedule else "Invalid schedule") if auto else OFF_DESCRIPTION
+    sync_status.configure(live=True, schedule=description, auto=auto)
+    if not auto:
+        logger.info("Automatic invoice sync is off (INVOICE_AUTO_SYNC); BigQuery is called only for Sync now")
     last_run = None
-    if warm_up():
+    if warm_up() and auto:
         last_run = datetime.now(timezone.utc)
         refresh_all()
     while not _stop.is_set():
         now = datetime.now(timezone.utc)
+        # No schedule and no retries while automatic sync is off: only Sync now wakes the loop.
         planned = schedule.next_run(now, last_run, sync_status.consecutive_failures()) if schedule else None
         sync_status.set_next_sync(planned)
         woken = _wake.wait((planned - now).total_seconds() if planned else None)
