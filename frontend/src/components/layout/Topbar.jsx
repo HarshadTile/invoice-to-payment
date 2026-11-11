@@ -11,6 +11,7 @@ import { useScope } from '../../features/ui/scope';
 import { HelpCircle, ChevronDown, Menu, Calendar, Layers, Building } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
 import NotificationBell from './NotificationBell.jsx';
+import DataFreshness from './DataFreshness.jsx';
 import useEnabledChannels from '../../features/settings/useEnabledChannels';
 
 const CRUMB_PARENTS = ['Processing Channels', 'Supplier Visibility', 'Settings'];
@@ -339,6 +340,7 @@ export default function Topbar() {
           </div>
         )}
 
+        <DataFreshness />
         <NotificationBell />
         <a className="icon-btn help-button" href={userManualUrl(authType, channelScope)} target="_blank" rel="noreferrer"
           aria-label="Help: open the user manual" title="User manual">

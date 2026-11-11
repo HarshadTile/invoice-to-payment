@@ -24,6 +24,8 @@ _APP = Path(__file__).resolve().parents[1]
 _SOURCES = ("repositories/srm_invoice.py", "repositories/po_portal_invoice.py", "services/invoice_index.py",
             "services/invoice_service.py", "services/po_portal_invoice_service.py", "schemas/invoice.py")
 _code_version = None
+# When each loaded snapshot was saved, i.e. when its data came from BigQuery (for "data as of").
+last_saved_at: dict[str, datetime] = {}
 
 
 def code_version() -> str:
@@ -51,6 +53,10 @@ def load(name: str) -> list[dict] | None:
         rows = snapshot["rows"]
         for row, index in zip(rows, snapshot["index"]):
             row[INDEX_KEY] = index_from_json(index)
+        try:
+            last_saved_at[name] = datetime.fromisoformat(snapshot["saved_at"])
+        except (KeyError, TypeError, ValueError):
+            last_saved_at.pop(name, None)
         logger.info("Loaded %s %s invoices from the snapshot of %s", len(rows), name, snapshot.get("saved_at"))
         return rows
     except FileNotFoundError:

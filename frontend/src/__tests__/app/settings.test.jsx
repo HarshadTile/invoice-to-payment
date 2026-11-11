@@ -164,4 +164,19 @@ describe('Internal admin - Settings: roles, users and permissions', () => {
     expect(screen.queryAllByTitle('Edit')).toHaveLength(0);
     expect(screen.queryAllByTitle('Delete')).toHaveLength(0);
   });
+  it('Integration Settings shows the automatic invoice sync and can start one', async () => {
+    const { user } = await loginAdmin();
+    // the top bar says how current the invoice data is, in amber while a source is failing
+    const freshness = await screen.findByText(/^Data as of /);
+    expect(freshness.closest('.data-freshness')).toHaveClass('is-warn');
+    await user.click(screen.getAllByText('Settings')[0]);
+    await user.click(document.querySelector('.nav-item[aria-label="Integration Settings"]'));
+    const panel = within((await screen.findByRole('heading', { name: 'Invoice data sync' })).closest('.card'));
+    expect(panel.getByText(/Every 60 minutes/)).toBeInTheDocument();
+    expect(panel.getByText('Msetu / SRM')).toBeInTheDocument();
+    expect(panel.getByText(/certificate has expired/)).toBeInTheDocument();
+    expect(panel.getByText('Failing')).toBeInTheDocument();
+    await user.click(panel.getByRole('button', { name: /Sync now/ }));
+    expect(await screen.findByText(/Sync started/)).toBeInTheDocument();
+  });
 });

@@ -7,6 +7,7 @@ import uiReducer from '../features/ui/uiSlice';
 import { ticketsApi } from '../api/ticketsApi';
 import { notificationsApi } from '../api/notificationsApi';
 import { invoicesQueryApi } from '../api/invoicesQueryApi';
+import { invoiceSyncApi } from '../api/invoiceSyncApi';
 
 export const store = configureStore({
   reducer: {
@@ -17,7 +18,8 @@ export const store = configureStore({
     [ticketsApi.reducerPath]: ticketsApi.reducer,
     [notificationsApi.reducerPath]: notificationsApi.reducer,
     [invoicesQueryApi.reducerPath]: invoicesQueryApi.reducer,
+    [invoiceSyncApi.reducerPath]: invoiceSyncApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware().concat(ticketsApi.middleware, notificationsApi.middleware, invoicesQueryApi.middleware),
+    getDefaultMiddleware().concat(ticketsApi.middleware, notificationsApi.middleware, invoicesQueryApi.middleware, invoiceSyncApi.middleware),
 });

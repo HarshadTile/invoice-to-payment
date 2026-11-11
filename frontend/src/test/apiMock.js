@@ -145,6 +145,7 @@ export function installApiMock() {
 
   const get = vi.fn(async (path) => {
     if (path === '/v1/load-workspace-data') return bootstrap();
+    if (path === '/v1/invoice-sync/status') return structuredClone(syncStatus);
     if (path === '/v1/auth/me') throw Object.assign(new Error('no session'), { status: 401 });
     if (path === '/v1/users/list-users') return persistedUsers;
     if (path.startsWith('/tables/')) return TABLE_SEED[path.slice('/tables/'.length)] || [];
@@ -200,6 +201,16 @@ export function installApiMock() {
     return {};
   });
 
+  // The automatic invoice sync: one healthy source, one failing (an expired certificate).
+  const syncStatus = {
+    live: true, schedule: 'Every 60 minutes', running: false, nextSyncAt: '2026-08-06T02:30:00+00:00',
+    dataAsOf: '2026-08-06T00:30:00+00:00', dataAgeMinutes: 30, lastSyncOk: false, stale: false,
+    sources: [
+      { source: 'srm', label: 'Msetu / SRM', rows: 214, dataAsOf: '2026-08-06T01:30:00+00:00', loadedFrom: 'bigquery', lastAttemptAt: '2026-08-06T01:30:00+00:00', lastSuccessAt: '2026-08-06T01:30:00+00:00', lastSyncOk: true, consecutiveFailures: 0, lastError: null },
+      { source: 'po-portal', label: 'PO Portal', rows: 58, dataAsOf: '2026-08-06T00:30:00+00:00', loadedFrom: 'snapshot', lastAttemptAt: '2026-08-06T01:31:00+00:00', lastSuccessAt: null, lastSyncOk: false, consecutiveFailures: 2, lastError: 'certificate has expired' },
+    ],
+  };
+
   const accessRequests = [];
   const CREDS = { admin: 'admin123', 'admin@company.com': 'admin123', ravi: 'ravi123', 'r.kulkarni@company.com': 'ravi123', priya: 'priya123' };
 
@@ -241,6 +252,7 @@ export function installApiMock() {
       return { token: 'test-token', auth: authFor(form) };
     }
     if (path === '/v1/auth/logout') return { ok: true };
+    if (path === '/v1/invoice-sync/run') { syncStatus.running = true; return { msg: 'Sync started. Fresh data appears in 1-2 minutes.' }; }
     if (path === '/v1/notifications/mark-all-as-read') {
       notifications.forEach((n) => { n.read_at = n.read_at || new Date().toISOString(); });
       return { read: true };

@@ -450,3 +450,6 @@
   .sidebar-collapsed .brand-text{display:none;}
   .sidebar-collapsed .sidebar .brand img.brand-emblem{width:1.875rem;height:1.8125rem;}
 }
+
+/* The data-freshness label gives way to the controls on narrow screens. */
+@media (max-width: 900px){ .topbar-right .data-freshness{display:none;} }

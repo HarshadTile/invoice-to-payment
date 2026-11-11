@@ -130,7 +130,7 @@ in these tables, so each page is ordered by every selected column to keep the or
 between requests. The first load from BigQuery (and building the search index) takes 1-2 minutes; it is
 then saved as a snapshot in `data/.invoice-cache/` (gitignored), so every later start serves the
 last data within about 20 seconds while fresh data is fetched in the background and swapped in.
-After that the data is refreshed every `INVOICE_REFRESH_MINUTES` (default 60). A snapshot written
+After that the data is synced automatically on a schedule (see "Automatic invoice sync" below). A snapshot written
 by older code is ignored automatically. If the API can't be reached or rejects
 the token, invoice endpoints return `503 SOURCE_UNAVAILABLE` and the reason is logged.
 
@@ -244,3 +244,29 @@ screen. Apply the supplier email schema change with `alembic upgrade head`.
 - **Security headers** (`app/core/security_headers.py`) are added to every API response:
   `nosniff`, `X-Frame-Options: DENY`, a strict CSP, `no-store` on `/api/*`, and HSTS over HTTPS.
   The web server that serves the built frontend must send its own headers for the HTML/JS.
+
+## Automatic invoice sync
+
+With `INVOICE_SOURCE=api` the backend keeps invoice data in step with BigQuery by itself
+(`app/services/invoice_refresh.py`). Signing in or refreshing the browser never calls BigQuery;
+users always get the data the backend already holds.
+
+- **Start-up**: the last snapshot loads in seconds, then a sync runs at once in the background.
+- **Schedule** (set from the environment, no code change; the GCP team decides the timing):
+  `INVOICE_SYNC_TIMES=06:30,14:30` for fixed daily times (with `INVOICE_SYNC_UTC_OFFSET=+05:30`
+  if the server clock is UTC), or `INVOICE_REFRESH_MINUTES=60` for every N minutes.
+- **Failures**: users keep seeing the last good data; the sync retries after
+  `INVOICE_SYNC_RETRY_MINUTES` (5), then 10, 20 ... minutes, never later than the next scheduled run.
+- **One at a time**: a sync never overlaps another; fresh data is swapped in only when fully indexed.
+- **Record**: every attempt (time, source, rows, success / error) is written to `sync_log` and shown on
+  each channel's History tab. Settings → Integrations shows each source's status, the schedule, the
+  next run, the last error, and a **Sync now** button (Manage Integration Settings, 3 per 10 minutes).
+- **In the app**: the top bar shows "Data as of ..." and turns amber when the data is stale or the last
+  sync failed. Suppliers see only the timestamp, never error details.
+- **Monitoring**: `GET /health/ready` (no sign-in) returns `starting` (HTTP 503) until data is
+  loaded, `degraded` when the data is older than `INVOICE_STALE_AFTER_MINUTES` or the last sync failed,
+  and `ready` otherwise, with `dataAsOf` and `dataAgeMinutes`. Alert on anything but `ready`.
+  `GET /health` stays a plain liveness check.
+- **Deployment**: run **one** backend process (the sync runs inside it; several processes would each
+  sync and hold their own copy) and keep `data/.invoice-cache/` on a persistent volume so restarts
+  and deploys start warm.

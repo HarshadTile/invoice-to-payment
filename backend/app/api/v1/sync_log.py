@@ -1,9 +1,9 @@
-﻿from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.api.deps import get_current_user_token
 from app.core.database import get_db
+from app.core.permissions import require_internal_user
 from app.models.sync_log import SyncLog
 from app.schemas.sync_log import SyncLogResponse
 
@@ -16,7 +16,9 @@ router = APIRouter(prefix="/sync-log", tags=["Sync Log"])
     summary="Get invoice synchronization history",
 )
 def get_sync_logs(
-    user: dict = Depends(get_current_user_token),
-    db: Session = Depends(get_db)
+    user=Depends(require_internal_user),
+    db: Session = Depends(get_db),
+    limit: int = 100,
 ):
-    return db.query(SyncLog).all()
+    """Staff only (it can contain infrastructure error text); newest first."""
+    return db.query(SyncLog).order_by(SyncLog.id.desc()).limit(max(1, min(limit, 500))).all()

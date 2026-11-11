@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +21,7 @@ from app.api.v1.tickets import router as tickets_router
 from app.api.v1.settings import router as settings_router
 from app.api.v1.sync_log import router as sync_log_router
 from app.api.v1.notifications import router as notifications_router
+from app.api.v1.invoice_sync import readiness, router as invoice_sync_router
 from app.jobs.ticket_jobs import start_jobs, stop_jobs
 
 # Schema is owned by Alembic now (see alembic/), not created here. Run
@@ -61,6 +62,7 @@ app.include_router(tickets_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(sync_log_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(invoice_sync_router, prefix="/api/v1")
 
 
 @app.exception_handler(HTTPException)
@@ -98,6 +100,9 @@ def start_ticket_jobs():
     if use_api():
         from app.services import invoice_refresh
         invoice_refresh.start()
+    else:
+        from app.services import sync_status
+        sync_status.configure(live=False, schedule="Live sync is off (INVOICE_SOURCE=file)")
 
 
 @app.on_event("shutdown")
@@ -111,4 +116,14 @@ def stop_ticket_jobs():
 
 @app.get("/health")
 def health_check():
+    """Liveness: the process is up."""
     return {"status": "ok"}
+
+
+@app.get("/health/ready")
+def readiness_check(response: Response):
+    """Readiness / monitoring: 503 until invoice data is loaded; "degraded" when the data is older than
+    INVOICE_STALE_AFTER_MINUTES or the last automatic sync failed. Alert on anything but "ready"."""
+    code, body = readiness()
+    response.status_code = code
+    return body

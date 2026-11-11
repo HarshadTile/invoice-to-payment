@@ -155,7 +155,7 @@ def get_workspace_data(
     
 
     # Query Sync Log
-    sync_logs_db = db.query(SyncLog).all()
+    sync_logs_db = (db.query(SyncLog).order_by(SyncLog.id.desc()).limit(100).all() if is_internal else [])
     sync_logs = [SyncLogResponse.model_validate(s).model_dump() for s in sync_logs_db]
     
     return {

@@ -16,6 +16,7 @@ import authReducer from '../features/auth/authSlice';
 import { ticketsApi } from '../api/ticketsApi';
 import { notificationsApi } from '../api/notificationsApi';
 import { invoicesQueryApi } from '../api/invoicesQueryApi';
+import { invoiceSyncApi } from '../api/invoiceSyncApi';
 import tablesReducer from '../features/tables/tablesSlice';
 import settingsReducer from '../features/settings/settingsSlice';
 import uiReducer from '../features/ui/uiSlice';
@@ -25,8 +26,8 @@ import { selectScopedInvoices, selectFilteredInvoices, selectFilteredInvoicesAny
 
 export function freshStore() {
   return configureStore({
-    reducer: { auth: authReducer, tables: tablesReducer, settings: settingsReducer, ui: uiReducer, [ticketsApi.reducerPath]: ticketsApi.reducer, [notificationsApi.reducerPath]: notificationsApi.reducer, [invoicesQueryApi.reducerPath]: invoicesQueryApi.reducer },
-    middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(ticketsApi.middleware, notificationsApi.middleware, invoicesQueryApi.middleware),
+    reducer: { auth: authReducer, tables: tablesReducer, settings: settingsReducer, ui: uiReducer, [ticketsApi.reducerPath]: ticketsApi.reducer, [notificationsApi.reducerPath]: notificationsApi.reducer, [invoicesQueryApi.reducerPath]: invoicesQueryApi.reducer, [invoiceSyncApi.reducerPath]: invoiceSyncApi.reducer },
+    middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(ticketsApi.middleware, notificationsApi.middleware, invoicesQueryApi.middleware, invoiceSyncApi.middleware),
   });
 }
 
