@@ -6,7 +6,9 @@ import { pageTitle } from '../../utils/pageTitle';
 import { getFiscalYear } from '../../utils/fiscalYear';
 import { useGetInvoiceFacetsQuery, useGetInvoiceVendorsQuery } from '../../api/invoicesQueryApi';
 import { useInvoiceAccessParams } from '../../features/invoices/useInvoiceScopeParams';
-import { setScopeFilter, toggleSidebar, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
+import { pushToast, setScopeFilter, toggleSidebar, toggleSidebarCollapsed } from '../../features/ui/uiSlice';
+import { api } from '../../api/client';
+import { userManualUrl } from '../../utils/manuals';
 import { useScope } from '../../features/ui/scope';
 import { HelpCircle, ChevronDown, Menu, Calendar, Layers, Building } from '../common/icons.jsx';
 import UserMenu from './UserMenu.jsx';
@@ -276,12 +278,38 @@ function TopbarFiscalYearDropdown({ scope, onUpdate, defaultFY }) {
   );
 }
 
-/** The user manual (PDF in public/user-manual) for this sign-in: suppliers get the Vendor View guide,
- *  internal users the guide for the portal they chose. */
-const USER_MANUALS = { msetuSrm: 'msetu-srm.pdf', poPortal: 'po-portal.pdf' };
-export function userManualUrl(authType, channelScope) {
-  const file = authType === 'supplier' ? 'vendor-view.pdf' : USER_MANUALS[channelScope] || 'all-channels-hq.pdf';
-  return `/user-manual/${file}`;
+/** Help: suppliers open the public Vendor View manual; staff get the manual for the portal they
+ *  signed in to from the backend, which needs their sign-in (so it is fetched, not linked). */
+function HelpButton({ authType }) {
+  const dispatch = useDispatch();
+  if (authType === 'supplier') {
+    return (
+      <a className="icon-btn help-button" href={userManualUrl('supplier')} target="_blank" rel="noreferrer"
+        aria-label="Help: open the user manual" title="User manual">
+        <HelpCircle size={18} />
+      </a>
+    );
+  }
+  async function openStaffManual() {
+    const tab = window.open('', '_blank'); // opened now, while the click still counts, so it isn't blocked
+    try {
+      const response = await fetch(userManualUrl('internal'), { headers: api.authHeaders() });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const url = URL.createObjectURL(await response.blob());
+      if (tab) tab.location.href = url;
+      else window.location.assign(url);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      tab?.close();
+      dispatch(pushToast("Couldn't open the user manual. Please try again."));
+    }
+  }
+  return (
+    <button type="button" className="icon-btn help-button" onClick={openStaffManual}
+      aria-label="Help: open the user manual" title="User manual">
+      <HelpCircle size={18} />
+    </button>
+  );
 }
 
 export default function Topbar() {
@@ -342,10 +370,7 @@ export default function Topbar() {
 
         <DataFreshness />
         <NotificationBell />
-        <a className="icon-btn help-button" href={userManualUrl(authType, channelScope)} target="_blank" rel="noreferrer"
-          aria-label="Help: open the user manual" title="User manual">
-          <HelpCircle size={18} />
-        </a>
+        <HelpButton authType={authType} />
 
         <UserMenu />
       </div>

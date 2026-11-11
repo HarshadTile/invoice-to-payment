@@ -1,14 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { userManualUrl } from './Topbar.jsx';
+import { userManualUrl } from '../../utils/manuals';
 
 describe('Help opens the manual for the signed-in workspace', () => {
-  it.each([
-    ['supplier', 'all', '/user-manual/vendor-view.pdf'],
-    ['internal', 'all', '/user-manual/all-channels-hq.pdf'],
-    ['internal', 'msetuSrm', '/user-manual/msetu-srm.pdf'],
-    ['internal', 'poPortal', '/user-manual/po-portal.pdf'],
-    ['internal', 'mfoxPortal', '/user-manual/all-channels-hq.pdf'],
-  ])('%s / %s → %s', (authType, scope, url) => {
-    expect(userManualUrl(authType, scope)).toBe(url);
+  it('suppliers get the public Vendor View manual', () => {
+    expect(userManualUrl('supplier')).toBe('/user-manual/vendor-view.pdf');
+  });
+
+  it('staff manuals come from the backend, which needs a sign-in and picks the portal', () => {
+    expect(userManualUrl('internal')).toBe('/api/v1/help/user-manual');
   });
 });

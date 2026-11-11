@@ -295,3 +295,12 @@ put it on persistent storage outside any web root). Downloads check ticket acces
 content type from the server's own table, are always sent as a download, and are sandboxed.
 **Antivirus**: `scan()` is the hook for the organisation's scanner (e.g. ClamAV); none is
 connected yet.
+
+## User manuals
+
+Only the supplier manual is public (`frontend/public/user-manual/vendor-view.pdf`, linked from
+Help on the supplier sign-in page); its screenshots must contain dummy data only. The staff
+manuals show real screens, so they live in `backend/manuals/` and are served by
+`GET /api/v1/help/user-manual` only to signed-in staff, who get the manual for the portal they
+signed in to (Help in the top bar). The internal sign-in tab has no Help link. Sources and the
+build script are in `docs/user-manual/`.

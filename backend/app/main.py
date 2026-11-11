@@ -22,6 +22,7 @@ from app.api.v1.settings import router as settings_router
 from app.api.v1.sync_log import router as sync_log_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.invoice_sync import readiness, router as invoice_sync_router
+from app.api.v1.help import router as help_router
 from app.jobs.ticket_jobs import start_jobs, stop_jobs
 
 # Schema is owned by Alembic now (see alembic/), not created here. Run
@@ -63,6 +64,7 @@ app.include_router(settings_router, prefix="/api/v1")
 app.include_router(sync_log_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(invoice_sync_router, prefix="/api/v1")
+app.include_router(help_router, prefix="/api/v1")
 
 
 @app.exception_handler(HTTPException)
