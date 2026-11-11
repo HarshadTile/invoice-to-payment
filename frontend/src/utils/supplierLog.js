@@ -149,6 +149,30 @@ export function filterLogRows(rows, filters = {}) {
   return rows.filter(logRowFilter(filters)).sort((a, b) => b.when - a.when);
 }
 
+/**
+ * One row per invoice instead of one per milestone (the same rules as the server's Logs / History):
+ * each invoice's newest milestone among `rows` (the filtered list), with a `trail` of all its
+ * milestones from `allRows`, oldest first, so the row tells the whole story. Query rows stay as they are.
+ */
+export function groupRowsByInvoice(rows, allRows = rows) {
+  const trails = new Map();
+  for (const row of [...allRows].sort((a, b) => a.when - b.when)) {
+    if (row.type === 'Query' || !row.invoice) continue;
+    const trail = trails.get(row.invoice);
+    if (trail) trail.push({ event: row.event, when: row.when }); else trails.set(row.invoice, [{ event: row.event, when: row.when }]);
+  }
+  const seen = new Set();
+  const grouped = [];
+  for (const row of [...rows].sort((a, b) => b.when - a.when)) {
+    if (row.type === 'Query' || !row.invoice) { grouped.push(row); continue; }
+    if (seen.has(row.invoice)) continue;
+    seen.add(row.invoice);
+    const trail = trails.get(row.invoice) || [{ event: row.event, when: row.when }];
+    grouped.push({ ...row, trail, milestones: trail.length });
+  }
+  return grouped;
+}
+
 export function logRowsToCsv(rows, { staff = false } = {}) {
   const cell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
   const header = staff

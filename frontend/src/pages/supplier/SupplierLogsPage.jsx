@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { invoiceFiscalYear, selectScopedInvoices } from '../../features/invoices/selectors';
 import { timestampedExportName } from '../../utils/csv';
 import { useScope } from '../../features/ui/scope';
 import { workspaceApi } from '../../api/workspaceApi';
 import {
-  filterLogRows, formatDay, formatDayTime, invoiceLogRows, withUniqueKeys, logRowsToCsv, queryLogRows,
+  filterLogRows, formatDay, formatDayTime, groupRowsByInvoice, invoiceLogRows, withUniqueKeys, logRowsToCsv, queryLogRows,
 } from '../../utils/supplierLog';
 import LogFilterBar from '../../components/common/LogFilterBar.jsx';
 import PagerFoot from '../../components/common/PagerFoot.jsx';
@@ -14,26 +12,30 @@ import SortDateTh from '../../components/common/SortDateTh.jsx';
 import { useDateSort } from '../../utils/dateSort';
 import StatCard from '../../components/common/StatCard.jsx';
 import { EventLabel, TypeBadge } from '../../components/common/GlobalLogsBody.jsx';
+import { logRanges, trailText } from '../../utils/logRanges';
 import { Banknote, Clock, FileText, History, MessageSquare } from '../../components/common/icons.jsx';
+import useSupplierInvoices from './useSupplierInvoices';
 
 const PAGE_SIZE = 20;
+// Suppliers sign in less often than staff, so the log opens on the last 30 days.
+const DEFAULT_RANGE = 'd30';
 // The summary cards double as the type filter.
 const TYPE_CARDS = [
-  { type: 'all', label: 'All activity', icon: History, tone: 'shade-total', sub: 'Every event in this selection' },
+  { type: 'all', label: 'All activity', icon: History, tone: 'shade-total', sub: 'Invoices and queries in this period' },
   { type: 'Invoice', label: 'Invoice events', icon: FileText, tone: 'shade-pending', sub: 'Upload, approval, SAP booking' },
   { type: 'Payment', label: 'Payments', icon: Banknote, tone: 'shade-paid', sub: 'Cleared payments and UTRs' },
   { type: 'Query', label: 'Query updates', icon: MessageSquare, tone: 'shade-approved', sub: 'Your questions and replies' },
 ];
 
+/** The supplier's activity: one row per invoice (its latest milestone, with the whole trail) plus
+ *  query updates, for the same invoices as the Dashboard and My Invoices (every assigned vendor
+ *  code, or the one picked in the top bar, in the top-bar financial year). */
 export default function SupplierLogsPage() {
   const navigate = useNavigate();
-  const code = useSelector((s) => s.auth.supplierLoginVcode);
-  const fySearch = useScope().fy;
-  const scopedInvoices = useSelector(selectScopedInvoices);
-  const invoices = useMemo(
-    () => scopedInvoices.filter((i) => i.vcode === code && (fySearch === 'all' || invoiceFiscalYear(i) === fySearch)),
-    [scopedInvoices, code, fySearch],
-  );
+  const { fy, vcode } = useScope();
+  const invoices = useSupplierInvoices();
+  // Only queries on these invoices once the view is narrowed to one year or one vendor code.
+  const narrowed = fy !== 'all' || (vcode && vcode !== 'all');
 
   const [queryEntries, setQueryEntries] = useState([]);
   const [queryError, setQueryError] = useState(false);
@@ -45,24 +47,35 @@ export default function SupplierLogsPage() {
     return () => { cancelled = true; };
   }, []);
 
-  const [filters, setFilters] = useState({ search: '', type: 'all', from: '', to: '' });
+  const ranges = useMemo(() => logRanges(), []);
+  const defaults = useMemo(() => {
+    const range = ranges.find((r) => r.key === DEFAULT_RANGE);
+    return { search: '', type: 'all', from: range.from, to: range.to };
+  }, [ranges]);
+  const [filters, setFilters] = useState(defaults);
   const [page, setPage] = useState(1);
   const setFilter = (key) => (e) => { setFilters((prev) => ({ ...prev, [key]: e.target.value })); setPage(1); };
-  const filtersActive = filters.search || filters.type !== 'all' || filters.from || filters.to;
+  const pickRange = (range) => { setFilters((prev) => ({ ...prev, from: range.from, to: range.to })); setPage(1); };
+  const filtersActive = Object.keys(defaults).some((key) => filters[key] !== defaults[key]);
+  const activeRange = ranges.find((r) => r.from === filters.from && r.to === filters.to);
 
   const allRows = useMemo(
-    () => withUniqueKeys([...invoiceLogRows(invoices), ...queryLogRows(queryEntries, invoices, fySearch !== 'all')]),
-    [invoices, queryEntries, fySearch],
+    () => withUniqueKeys([...invoiceLogRows(invoices), ...queryLogRows(queryEntries, invoices, narrowed)]),
+    [invoices, queryEntries, narrowed],
   );
-  const filteredRows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
+  // The export is the detailed record: one row per event.
+  const eventRows = useMemo(() => filterLogRows(allRows, filters), [allRows, filters]);
+  const groupedRows = useMemo(() => groupRowsByInvoice(eventRows, allRows), [eventRows, allRows]);
   // Counts per type follow the search and dates, but not the type itself.
   const typeCounts = useMemo(() => {
     const counts = { all: 0, Invoice: 0, Payment: 0, Query: 0 };
-    for (const row of filterLogRows(allRows, { ...filters, type: 'all' })) { counts.all += 1; counts[row.type] = (counts[row.type] || 0) + 1; }
+    for (const row of groupRowsByInvoice(filterLogRows(allRows, { ...filters, type: 'all' }), allRows)) {
+      counts.all += 1; counts[row.type] = (counts[row.type] || 0) + 1;
+    }
     return counts;
   }, [allRows, filters]);
   const pickType = (type) => { setFilters((prev) => ({ ...prev, type: prev.type === type ? 'all' : type })); setPage(1); };
-  const { sorted: rows, dir: dateDir, toggle: toggleDate } = useDateSort(filteredRows, (row) => row.when, 'desc');
+  const { sorted: rows, dir: dateDir, toggle: toggleDate } = useDateSort(groupedRows, (row) => row.when, 'desc');
   const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / PAGE_SIZE)));
   const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
@@ -72,7 +85,8 @@ export default function SupplierLogsPage() {
   };
 
   function exportCsv() {
-    const blob = new Blob(['﻿', logRowsToCsv(rows)], { type: 'text/csv;charset=utf-8' });
+    const sortedEvents = [...eventRows].sort((a, b) => b.when - a.when);
+    const blob = new Blob(['﻿', logRowsToCsv(sortedEvents)], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -93,9 +107,20 @@ export default function SupplierLogsPage() {
       <div className="card">
         <LogFilterBar
           filters={filters} onChange={setFilter} filtersActive={filtersActive}
-          onClear={() => { setFilters({ search: '', type: 'all', from: '', to: '' }); setPage(1); }} onExport={exportCsv} exportCount={rows.length}
+          onClear={() => { setFilters(defaults); setPage(1); }} onExport={exportCsv} exportCount={eventRows.length ? null : 0}
           searchPlaceholder="Search invoice, PO or details"
         />
+        <div className="log-ranges">
+          <div className="sm-filter" role="group" aria-label="Date range">
+            {ranges.map((range) => (
+              <button key={range.key} type="button" className={`sm-chip${activeRange === range ? ' active' : ''}`}
+                aria-pressed={activeRange === range} onClick={() => pickRange(range)}>{range.label}</button>
+            ))}
+          </div>
+          <span className="cell-muted">
+            {rows.length.toLocaleString('en-IN')} invoices and queries{activeRange && activeRange.key !== 'all' ? ` · ${activeRange.label.toLowerCase()}` : ''}
+          </span>
+        </div>
         {queryError && (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78125rem', margin: '0 0 0.625rem' }}>Your query history couldn't be loaded right now. Invoice and payment activity is shown below.</p>
         )}
@@ -117,12 +142,15 @@ export default function SupplierLogsPage() {
                   </td>
                   <td>{row.po}</td>
                   <td><TypeBadge type={row.type} /></td>
-                  <td><EventLabel event={row.event} type={row.type} /></td>
+                  <td>
+                    <EventLabel event={row.event} type={row.type} />
+                    {row.trail && row.trail.length > 1 && <div className="log-trail" title="This invoice's milestones, oldest first">{trailText(row.trail)}</div>}
+                  </td>
                   <td style={{ color: 'var(--text-muted)' }}>{row.detail || '-'}</td>
                 </tr>
               )) : (
                 <tr><td colSpan={6} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem' }}>
-                  {filtersActive ? 'No activity matches these filters.' : `No activity yet on ${code}.`}
+                  {filtersActive ? 'No activity matches these filters.' : 'No activity on your invoices in the last 30 days. Choose a longer period above.'}
                 </td></tr>
               )}
             </tbody>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterLogRows, invoiceLogRows, logRowsToCsv, queryLogRows, staffQueryLogRows } from './supplierLog';
+import { filterLogRows, groupRowsByInvoice, invoiceLogRows, logRowsToCsv, queryLogRows, staffQueryLogRows } from './supplierLog';
 
 const paid = {
   no: 'INV-1', po: '3400878804', poItem: 10, status: 'Paid', utr: 'UTR123', amount: '₹1,00,000.00',
@@ -66,5 +66,28 @@ describe('supplier log', () => {
     const csv = logRowsToCsv(filterLogRows(invoiceLogRows([rejected]), {}));
     expect(csv.split('\r\n')[0]).toBe('"Date","Invoice No","PO No","Type","Event","Details"');
     expect(csv).toContain('"PO mismatch"');
+  });
+});
+
+describe('one row per invoice', () => {
+  const invA = { no: 'A' };
+  const invB = { no: 'B' };
+  const row = (invoice, event, day, type = 'Invoice') => ({ key: `${invoice.no}|${event}`, when: new Date(2026, 10, day), type, event, invoice, invoiceNo: invoice.no });
+  const all = [row(invA, 'Invoice uploaded', 1), row(invA, 'Booked in SAP', 4), row(invA, 'Payment completed', 8, 'Payment'),
+    row(invB, 'Invoice uploaded', 7)];
+  const query = { key: 'q', when: new Date(2026, 10, 5, 12), type: 'Query', event: 'Ticket created', invoiceNo: 'A' };
+
+  it('keeps each invoice once, newest milestone first, with its whole trail', () => {
+    const grouped = groupRowsByInvoice([...all, query], [...all, query]);
+    expect(grouped.map((r) => [r.invoiceNo, r.event])).toEqual([['A', 'Payment completed'], ['B', 'Invoice uploaded'], ['A', 'Ticket created']]);
+    expect(grouped[0].trail.map((s) => s.event)).toEqual(['Invoice uploaded', 'Booked in SAP', 'Payment completed']);
+    expect(grouped[0].milestones).toBe(3);
+  });
+
+  it('shows the full trail even when only the last milestone is in the date range', () => {
+    const inRange = filterLogRows(all, { from: '2026-11-08', to: '2026-11-09' });
+    const [only] = groupRowsByInvoice(inRange, all);
+    expect(only.event).toBe('Payment completed');
+    expect(only.trail).toHaveLength(3);
   });
 });

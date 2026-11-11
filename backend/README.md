@@ -333,3 +333,8 @@ The screen opens on the **last 7 days** and asks for `group=invoice`, so each in
 (`Uploaded 03 Nov → Booked 04 Nov → Paid 05 Nov`). Query activity stays one row per action. Range
 chips widen it (30 / 90 days, this FY, all dates). `GET /api/v1/invoices/events` defaults to one row
 per event; the CSV export is always one row per event (the detailed record).
+
+Suppliers' Logs page follows the same rules (one row per invoice with its trail, query updates as
+their own rows), built in the browser from the supplier's own invoices: every assigned vendor code
+(or the one picked in the top bar) and the top-bar financial year, like the Dashboard and My Invoices.
+It opens on the last 30 days, since suppliers sign in less often.

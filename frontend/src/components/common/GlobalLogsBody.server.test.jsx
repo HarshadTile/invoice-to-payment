@@ -5,7 +5,8 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import uiReducer from '../../features/ui/uiSlice';
 import { invoicesQueryApi } from '../../api/invoicesQueryApi';
-import GlobalLogsBody, { localIsoDate, logRanges, trailText } from './GlobalLogsBody.jsx';
+import GlobalLogsBody from './GlobalLogsBody.jsx';
+import { localIsoDate, logRanges, trailText } from '../../utils/logRanges';
 
 // The live (server) log: built, grouped and paged by GET /v1/invoices/events.
 vi.mock('../../api/invoiceApi', async (original) => ({ ...await original(), USE_FASTAPI_INVOICES: true }));
