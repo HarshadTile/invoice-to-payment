@@ -174,21 +174,69 @@ def filter_events(events: list[dict], *, search=None, log_type=None, date_from: 
 
 
 _timeline_cache: OrderedDict = OrderedDict()
+_trail_cache: OrderedDict = OrderedDict()
 CSV_BATCH = 2000
 
 
-def timeline(rows: list[dict], kind: str, entries: list[dict], **filters) -> list[dict]:
-    """The merged, filtered timeline. Paging through it (or re-filtering the same way) reuses the
-    result while the rows and the query activity are unchanged."""
+def _invoice_identity(event: dict) -> tuple:
+    """One invoice line: the same invoice number can exist per PO item, vendor code and channel."""
+    ref = event.get("invoice") or {}
+    return (ref.get("sourceId") or "", ref.get("no"), ref.get("poItem"), ref.get("vcode"), ref.get("channel"))
+
+
+def _trail_index(all_events: list[dict]) -> dict[tuple, list[dict]]:
+    """Every milestone of every invoice, oldest first, keyed by invoice. Built once per event list."""
+    key = id(all_events)
+    with _cache_lock:
+        hit = _trail_cache.get(key)
+        if hit and hit[0] is all_events:
+            return hit[1]
+    index: dict[tuple, list] = {}
+    for event in all_events:  # newest first
+        index.setdefault(_invoice_identity(event), []).append(event)
+    trails = {ident: [{"event": e["event"], "when": e["when"]} for e in reversed(items)] for ident, items in index.items()}
+    with _cache_lock:
+        _trail_cache[key] = (all_events, trails)
+        while len(_trail_cache) > 8:
+            _trail_cache.popitem(last=False)
+    return trails
+
+
+def group_by_invoice(events: list[dict], all_invoice_events: list[dict], *, oldest_first: bool = False) -> list[dict]:
+    """One row per invoice instead of one per milestone. The row is the invoice's latest milestone in
+    `events` (the filtered range), with a `trail` of all its milestones, oldest first, even those
+    outside the range, so the row tells the whole story. Query rows are kept as they are."""
+    trails = _trail_index(all_invoice_events)
+    newest_first = list(reversed(events)) if oldest_first else events
+    seen, grouped = set(), []
+    for event in newest_first:
+        if event["type"] == "Query" or not event.get("invoice"):
+            grouped.append(event)
+            continue
+        ident = _invoice_identity(event)
+        if ident in seen:
+            continue
+        seen.add(ident)
+        trail = trails.get(ident) or [{"event": event["event"], "when": event["when"]}]
+        grouped.append({**event, "trail": trail, "milestones": len(trail)})
+    return list(reversed(grouped)) if oldest_first else grouped
+
+
+def timeline(rows: list[dict], kind: str, entries: list[dict], group: bool = False, **filters) -> list[dict]:
+    """The merged, filtered timeline (one row per invoice when `group`). Paging through it (or
+    re-filtering the same way) reuses the result while the rows and the query activity are unchanged."""
     activity = tuple((e.get("id"), e.get("created_at"), e.get("event")) for e in entries)
-    key = (id(rows), kind, activity, tuple(sorted((k, str(v)) for k, v in filters.items())))
+    key = (id(rows), kind, activity, group, tuple(sorted((k, str(v)) for k, v in filters.items())))
     with _cache_lock:
         entry = _timeline_cache.get(key)
         if entry and entry[0] is rows:
             _timeline_cache.move_to_end(key)
             return entry[1]
-    merged = merge_newest_first(invoice_events(rows, kind), query_events(entries, rows, strict=kind != "global"))
+    all_invoice_events = invoice_events(rows, kind)
+    merged = merge_newest_first(all_invoice_events, query_events(entries, rows, strict=kind != "global"))
     result = filter_events(merged, **filters)
+    if group:
+        result = group_by_invoice(result, all_invoice_events, oldest_first=filters.get("oldest_first", False))
     with _cache_lock:
         _timeline_cache[key] = (rows, result)  # holding `rows` keeps its id from being reused
         while len(_timeline_cache) > 16:

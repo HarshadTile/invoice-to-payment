@@ -248,7 +248,7 @@ def get_vendor_report(
     return vendor_report(rows)
 
 
-def _timeline(filters, token, staff, db, kind, log_q, log_type, log_from, log_to, order):
+def _timeline(filters, token, staff, db, kind, log_q, log_type, log_from, log_to, order, group=False):
     """The Logs / History rows for the filtered invoices, merged with the ticket activity on them."""
     rows, supplier_codes = _query(filters, token, db, sort=None)
     if supplier_codes is not None:
@@ -257,8 +257,15 @@ def _timeline(filters, token, staff, db, kind, log_q, log_type, log_from, log_to
         entries, query_error = ticket_service.staff_activity_log(db, ensure_ticket_access(staff)), False
     except HTTPException:
         entries, query_error = [], True
-    return invoice_events.timeline(rows, kind, entries, search=log_q, log_type=log_type, date_from=log_from,
-                                   date_to=log_to, oldest_first=order == "asc"), query_error
+    return invoice_events.timeline(rows, kind, entries, group=group, search=log_q, log_type=log_type,
+                                   date_from=log_from, date_to=log_to, oldest_first=order == "asc"), query_error
+
+
+def _event_json(event: dict) -> dict:
+    item = {**event, "when": event["when"].isoformat()}
+    if "trail" in event:
+        item["trail"] = [{"event": step["event"], "when": step["when"].isoformat()} for step in event["trail"]]
+    return item
 
 
 @router.get("/events", operation_id="listInvoiceEvents", summary="Logs / History: invoice milestones and query activity")
@@ -269,6 +276,7 @@ def get_invoice_events(
     log_from: date | None = None,
     log_to: date | None = None,
     order: Literal["desc", "asc"] = "desc",
+    group: Literal["event", "invoice"] = "event",
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=500),
     filters: dict = Depends(invoice_filters),
@@ -277,10 +285,12 @@ def get_invoice_events(
     db: Session = Depends(get_db),
 ):
     """`kind`: "global" for Logs, "srm" / "po" for the channel History tabs (which also need a ticket's
-    vendor code and channel to match the invoice). Newest first unless order=asc."""
-    events, query_error = _timeline(filters, token, staff, db, kind, log_q, log_type, log_from, log_to, order)
+    vendor code and channel to match the invoice). Newest first unless order=asc. group=invoice lists
+    each invoice once (its latest milestone in range, with the full `trail`); the export stays per event."""
+    events, query_error = _timeline(filters, token, staff, db, kind, log_q, log_type, log_from, log_to, order,
+                                    group=group == "invoice")
     start = (page - 1) * page_size
-    items = [{**event, "when": event["when"].isoformat()} for event in events[start:start + page_size]]
+    items = [_event_json(event) for event in events[start:start + page_size]]
     return {"items": items, "total": len(events), "page": page, "page_size": page_size, "queryError": query_error}
 
 

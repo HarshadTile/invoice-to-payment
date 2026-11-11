@@ -7,6 +7,7 @@ import { workspaceApi } from '../../api/workspaceApi';
 import { USE_FASTAPI_INVOICES } from '../../api/invoiceApi';
 import { downloadInvoiceEvents, useGetInvoiceEventsQuery } from '../../api/invoicesQueryApi';
 import { timestampedExportName } from '../../utils/csv';
+import { getFiscalYear } from '../../utils/fiscalYear';
 import {
   formatDay, formatDayTime, invoiceLogRows, logRowFilter, logRowsToCsv, staffQueryLogRows,
 } from '../../utils/supplierLog';
@@ -110,6 +111,36 @@ function Actor({ name }) {
 // The channel comes from the top-bar filter, which already narrows the invoices (and their queries) shown here
 const NO_FILTERS = { search: '', type: 'all', from: '', to: '' };
 
+/** yyyy-mm-dd for a local date (what the date inputs and the server use). */
+export function localIsoDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/** The quick date ranges for the live log. "Last 7 days" includes today. */
+export function logRanges(today = new Date()) {
+  const daysBack = (n) => localIsoDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() - (n - 1)));
+  const to = localIsoDate(today);
+  const fyStart = `${getFiscalYear(`${to}T00:00:00`).split("-")[0]}-04-01`;
+  return [
+    { key: 'd7', label: 'Last 7 days', from: daysBack(7), to },
+    { key: 'd30', label: '30 days', from: daysBack(30), to },
+    { key: 'd90', label: '90 days', from: daysBack(90), to },
+    { key: 'fy', label: 'This FY', from: fyStart, to },
+    { key: 'all', label: 'All dates', from: '', to: '' },
+  ];
+}
+
+/** "Uploaded 03 Nov → Booked 04 Nov → Paid 05 Nov": an invoice's milestones on one line. */
+const STEP_LABEL = {
+  'Invoice dated': 'Dated', 'Invoice uploaded': 'Uploaded', 'Invoice approved': 'Approved', 'Sent to accounts': 'To accounts',
+  'MIRO document dated': 'MIRO dated', 'Posted in SAP': 'Posted', 'Booked in SAP': 'Booked', 'Payment cleared': 'Paid',
+  'Payment completed': 'Paid', 'Invoice rejected': 'Rejected', 'Invoice deleted': 'Deleted',
+};
+const SHORT_DAY = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' });
+export function trailText(trail = []) {
+  return trail.map((step) => `${STEP_LABEL[step.event] || step.event} ${SHORT_DAY.format(step.when)}`).join(' → ');
+}
+
 /**
  * Logs / History for the internal team: one chronological list of what actually happened,
  * from the real data only: invoice milestones and payments (with the real dates on the
@@ -178,16 +209,20 @@ function LocalLogs({ invoiceList, getInvoiceRows = invoiceLogRows, strictInvoice
 /** The log built and paged on the server: one page of rows at a time, filters and order sent along. */
 function ServerLogs({ serverQuery }) {
   const canExport = !!useSelector(selectPerm).importExport;
-  const [filters, setFilters] = useState(NO_FILTERS);
+  // Opens on the last 7 days, one row per invoice: the full history is a click (or a range chip) away.
+  const ranges = useMemo(() => logRanges(), []);
+  const defaults = useMemo(() => ({ ...NO_FILTERS, from: ranges[0].from, to: ranges[0].to }), [ranges]);
+  const [filters, setFilters] = useState(defaults);
   const [page, setPage] = useState(1);
   const [dateDir, setDateDir] = useState('desc');
   const setFilter = (key) => (e) => { setFilters((prev) => ({ ...prev, [key]: e.target.value })); setPage(1); };
-  const filtersActive = Object.keys(NO_FILTERS).some((key) => filters[key] !== NO_FILTERS[key]);
+  const pickRange = (range) => { setFilters((prev) => ({ ...prev, from: range.from, to: range.to })); setPage(1); };
+  const filtersActive = Object.keys(defaults).some((key) => filters[key] !== defaults[key]);
   const deferredFilters = useDeferredValue(filters);
   const params = useMemo(() => ({
     ...serverQuery.filters, kind: serverQuery.kind, log_q: deferredFilters.search.trim() || undefined,
     log_type: deferredFilters.type, log_from: deferredFilters.from || undefined, log_to: deferredFilters.to || undefined,
-    order: dateDir,
+    order: dateDir, group: 'invoice',
   }), [serverQuery, deferredFilters, dateDir]);
   // A different invoice selection starts the log on its first page.
   const selectionKey = JSON.stringify(serverQuery);
@@ -197,7 +232,8 @@ function ServerLogs({ serverQuery }) {
   const total = result.data?.total ?? 0;
   const pageRows = result.data?.items || [];
 
-  const exportCsv = () => downloadInvoiceEvents(params, timestampedExportName('Logs'));
+  // The CSV is the detailed record: one row per event, whatever the screen groups.
+  const exportCsv = () => downloadInvoiceEvents({ ...params, group: undefined }, timestampedExportName('Logs'));
   return (
     <>
       {result.isError && (
@@ -205,7 +241,8 @@ function ServerLogs({ serverQuery }) {
           <button type="button" className="btn btn-sm btn-ghost" onClick={() => result.refetch()}>Retry</button></p>
       )}
       <LogView
-        filters={filters} setFilter={setFilter} filtersActive={filtersActive} onClear={() => { setFilters(NO_FILTERS); setPage(1); }}
+        filters={filters} setFilter={setFilter} filtersActive={filtersActive} onClear={() => { setFilters(defaults); setPage(1); }}
+        ranges={ranges} onRange={pickRange} exportCount={total ? null : 0} countLabel="invoices and queries"
         onExport={canExport ? exportCsv : undefined} total={total} queryError={!!result.data?.queryError} busy={result.isFetching}
         pageRows={pageRows} page={Math.min(page, Math.max(1, Math.ceil(total / PAGE_SIZE)))} onPage={setPage}
         dateDir={dateDir} onToggleDate={() => { setDateDir((dir) => (dir === 'desc' ? 'asc' : 'desc')); setPage(1); }}
@@ -217,15 +254,27 @@ function ServerLogs({ serverQuery }) {
 
 /** Filter bar, table and pager, shared by both versions. `pageRows` is the page to show. */
 function LogView({ filters, setFilter, filtersActive, onClear, onExport, total, queryError, pageRows, page, onPage,
-  dateDir, onToggleDate, busy = false, emptyText }) {
+  dateDir, onToggleDate, busy = false, emptyText, ranges, onRange, exportCount = total, countLabel }) {
   const dispatch = useDispatch();
   const currentPage = page;
+  const activeRange = ranges?.find((range) => range.from === filters.from && range.to === filters.to);
   return (
     <div className="card" aria-busy={busy}>
       <LogFilterBar
         filters={filters} onChange={setFilter} filtersActive={filtersActive}
-        onClear={onClear} onExport={onExport} exportCount={total}
+        onClear={onClear} onExport={onExport} exportCount={exportCount}
       />
+      {ranges && (
+        <div className="log-ranges">
+          <div className="sm-filter" role="group" aria-label="Date range">
+            {ranges.map((range) => (
+              <button key={range.key} type="button" className={`sm-chip${activeRange === range ? ' active' : ''}`}
+                aria-pressed={activeRange === range} onClick={() => onRange(range)}>{range.label}</button>
+            ))}
+          </div>
+          {countLabel && <span className="cell-muted">{total.toLocaleString('en-IN')} {countLabel}{activeRange && activeRange.key !== 'all' ? ` · ${activeRange.label.toLowerCase()}` : ''}</span>}
+        </div>
+      )}
       {queryError && (
         <p style={{ color: 'var(--text-muted)', fontSize: '0.78125rem', margin: '0 0 0.625rem' }}>Query activity couldn't be loaded right now. Invoice and payment activity is shown below.</p>
       )}
@@ -256,7 +305,10 @@ function LogView({ filters, setFilter, filtersActive, onClear, onExport, total, 
                 </td>
                 <td>{row.po}</td>
                 <td><TypeBadge type={row.type} /></td>
-                <td><EventLabel event={row.event} type={row.type} /></td>
+                <td>
+                  <EventLabel event={row.event} type={row.type} />
+                  {row.trail && row.trail.length > 1 && <div className="log-trail" title="This invoice's milestones, oldest first">{trailText(row.trail)}</div>}
+                </td>
                 <td><Actor name={row.performedBy} /></td>
                 <td style={{ color: 'var(--text-muted)' }} title={row.channel ? CHANNEL_LABEL[row.channel] : undefined}>{row.detail || '-'}</td>
               </tr>

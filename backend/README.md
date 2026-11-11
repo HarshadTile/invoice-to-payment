@@ -323,3 +323,13 @@ in the `audit_log` table (UTC time, category, action, who, detail, **IP address*
   background job. Set the period your compliance policy requires.
 - **IP address**: taken from the connection. Behind a reverse proxy, run uvicorn with
   `--proxy-headers --forwarded-allow-ips=<proxy address>` or every row will show the proxy's address.
+
+## Logs / History
+
+Logs / History (and the History tab of each channel) is not stored: `app/services/invoice_events.py`
+builds it from the invoice data (every dated milestone) plus query activity, cached per data load.
+The screen opens on the **last 7 days** and asks for `group=invoice`, so each invoice appears
+**once**: its latest milestone in the range, with its whole trail
+(`Uploaded 03 Nov → Booked 04 Nov → Paid 05 Nov`). Query activity stays one row per action. Range
+chips widen it (30 / 90 days, this FY, all dates). `GET /api/v1/invoices/events` defaults to one row
+per event; the CSV export is always one row per event (the detailed record).

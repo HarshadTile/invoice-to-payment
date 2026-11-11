@@ -302,7 +302,14 @@ export const invoicesQueryApi = createApi({
         async () => {
           const page = await api.get(`${BASE}/events${invoiceQueryString(params)}`);
           // naive ISO times are the server's local time, which new Date() reads as local too
-          return { ...page, items: page.items.map((row) => ({ ...row, when: new Date(row.when) })) };
+          return {
+            ...page,
+            items: page.items.map((row) => ({
+              ...row,
+              when: new Date(row.when),
+              ...(row.trail ? { trail: row.trail.map((step) => ({ ...step, when: new Date(step.when) })) } : {}),
+            })),
+          };
         },
         () => ({ items: [], total: 0, queryError: false }),
         queryApi),

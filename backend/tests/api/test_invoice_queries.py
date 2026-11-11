@@ -252,6 +252,21 @@ def test_log_filters_order_paging_and_export(staff_activity):
     assert csv_text.startswith('﻿"Date","Invoice No"') and "TKT-1 · Where is my payment" in csv_text
 
 
+def test_logs_can_list_each_invoice_once_with_its_trail(staff_activity):
+    per_event = events("/api/v1/invoices/events?kind=global&invoice_number=INV-3")
+    grouped = events("/api/v1/invoices/events?kind=global&invoice_number=INV-3&group=invoice")
+    invoice_rows = [e for e in grouped["items"] if e["type"] != "Query"]
+    assert len(invoice_rows) == 1 and grouped["total"] < per_event["total"]
+    row = invoice_rows[0]
+    assert row["event"] == "Payment completed" and row["milestones"] == len(row["trail"]) >= 2
+    assert [step["event"] for step in row["trail"]][0] == "Invoice uploaded"  # oldest first
+    assert [step["when"] for step in row["trail"]] == sorted(step["when"] for step in row["trail"])
+    # query rows stay one per activity, and the CSV export stays one row per event
+    assert [e for e in grouped["items"] if e["type"] == "Query"] == [e for e in per_event["items"] if e["type"] == "Query"]
+    export = internal.get("/api/v1/invoices/events/export?kind=global&invoice_number=INV-3&group=invoice").text
+    assert len(export.strip().splitlines()) - 1 == per_event["total"]
+
+
 def test_logs_without_inquiry_desk_access_still_show_invoice_activity(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: {"auth_type": "internal", "ticket_role": "NONE"}
     try:

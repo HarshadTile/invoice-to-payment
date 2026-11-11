@@ -39,7 +39,7 @@ export default function LogFilterBar({
 
         <div className="log-actions">
           {filtersActive && <button type="button" className="btn btn-sm btn-ghost" onClick={onClear}><RotateCcw size={13} />Clear</button>}
-          {onExport && <button type="button" className="btn btn-sm" onClick={onExport} disabled={exportCount === 0}><Download />Export ({exportCount.toLocaleString()})</button>}
+          {onExport && <button type="button" className="btn btn-sm" onClick={onExport} disabled={exportCount === 0}><Download />{exportCount == null ? 'Export CSV' : `Export (${exportCount.toLocaleString()})`}</button>}
         </div>
       </div>
     </div>
