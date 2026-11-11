@@ -179,4 +179,15 @@ describe('Internal admin - Settings: roles, users and permissions', () => {
     await user.click(panel.getByRole('button', { name: /Sync now/ }));
     expect(await screen.findByText(/Sync started/)).toBeInTheDocument();
   });
+  it('Audit Logs loads a page from the server, shows the IP and filters by type', async () => {
+    const { user } = await loginAdmin();
+    await user.click(screen.getAllByText('Settings')[0]);
+    await user.click(document.querySelector('.nav-item[aria-label="Audit Logs"]'));
+    expect(await screen.findByText('Added supplier')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'IP address' })).toBeInTheDocument();
+    expect(screen.getAllByText('10.0.0.5').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Export CSV/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Failed' }));
+    expect(await screen.findByText('No events')).toBeInTheDocument();
+  });
 });

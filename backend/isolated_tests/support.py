@@ -82,6 +82,8 @@ def supplier_auth_headers(vendor_code: str) -> dict:
 @pytest.fixture(autouse=True)
 def _reset_rate_limits():
     """Login and public-endpoint rate limits are per process; start every test with a clean slate."""
+    from app.core.audit import reset_throttle
     from app.core.rate_limit import reset_rate_limits
     reset_rate_limits()
+    reset_throttle()
     yield

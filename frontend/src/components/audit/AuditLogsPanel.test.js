@@ -1,23 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { auditCategory, auditDay } from './AuditLogsPanel.jsx';
+import { formatAuditTime, startOfToday } from './AuditLogsPanel.jsx';
+import { auditQuery } from '../../api/auditApi';
 
-describe('audit log helpers', () => {
-  it('groups actions into the filter chips', () => {
-    expect(auditCategory('Logged in')).toBe('signin');
-    expect(auditCategory('Login')).toBe('signin');
-    expect(auditCategory('Failed login')).toBe('failed');
-    expect(auditCategory('Approved supplier access request')).toBe('suppliers');
-    expect(auditCategory('Changed supplier vendor codes')).toBe('suppliers');
-    expect(auditCategory('Removed user')).toBe('users');
-    expect(auditCategory('Generated reset link')).toBe('users');
-    expect(auditCategory('Updated notification rules')).toBe('settings');
-    expect(auditCategory('Something new')).toBe('other');
+describe('audit log page helpers', () => {
+  it('shows UTC times in the viewer’s time zone', () => {
+    expect(formatAuditTime('2026-11-11T09:00:00+00:00', 'en-GB')).toMatch(/11 Nov 2026/);
+    expect(formatAuditTime('not a time')).toBe('');
   });
 
-  it('reads both timestamp formats as a day', () => {
-    expect(auditDay('31 Oct 2026, 04:52:10 PM')).toBe('2026-10-31');
-    expect(auditDay('6 Aug 2026, 07:10:00 AM')).toBe('2026-08-06');
-    expect(auditDay('2026-08-06 07:10')).toBe('2026-08-06');
-    expect(auditDay('')).toBe('');
+  it('counts "today" from the viewer’s local midnight', () => {
+    const start = new Date(startOfToday(new Date(2026, 10, 11, 15, 30)));
+    expect([start.getFullYear(), start.getMonth(), start.getDate(), start.getHours(), start.getMinutes()]).toEqual([2026, 10, 11, 0, 0]);
+  });
+
+  it('sends only the filters that are set', () => {
+    expect(auditQuery({ page: 2, category: 'all', q: '', since: undefined })).toBe('page=2');
+    expect(auditQuery({ category: 'failed', q: 'ravi k' })).toBe('category=failed&q=ravi+k');
   });
 });

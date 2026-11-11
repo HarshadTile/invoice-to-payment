@@ -14,6 +14,7 @@ from app.core import password_reset
 from app.core.database import SessionLocal
 from app.core.security import create_access_token, get_password_hash
 from app.main import app
+from app.models.audit_log import AuditLog
 from app.models.settings import TableRow
 from app.models.user import PasswordResetToken, User
 
@@ -105,6 +106,7 @@ def test_invite_link_is_hashed_private_expiring_and_single_use(admin_client, iss
         assert record.token == password_reset.token_digest(token)
         assert consume(record.token).status_code == 400  # digest is not a bearer token
         assert all(token not in str(row.cells_json) for row in db.query(TableRow).all())
+        assert all(token not in (row.detail or "") for row in db.query(AuditLog).all())
     assert all("setupLink" not in user for user in admin_client.get("/api/v1/users/").json())
     assert consume(token).status_code == 200
     assert consume(token).status_code == 400
@@ -180,54 +182,35 @@ def test_unexpired_legacy_link_still_works(admin_client, issued_links):
     assert consume(raw(account)).status_code == 400
 
 
-def test_audit_retry_preserves_pending_user_changes(monkeypatch):
-    from sqlalchemy.exc import IntegrityError
+def test_audit_row_is_saved_together_with_the_callers_pending_changes():
     from app.core.audit import write_audit
 
     with SessionLocal() as db:
         name = "pending_" + uuid4().hex
         db.add(User(username=name, email=name + "@example.com", name="Pending User",
                     password_hash=get_password_hash("Placeholder1!"), role="Invoice Team L1", status="Invited"))
-        original_flush = db.flush
-        failed_once = False
-
-        def flush(*args, **kwargs):
-            nonlocal failed_once
-            audit_pending = any(isinstance(row, TableRow) for row in db.new)
-            original_flush(*args, **kwargs)
-            if audit_pending and not failed_once:
-                failed_once = True
-                raise IntegrityError("simulated audit index collision", {}, Exception("collision"))
-
-        monkeypatch.setattr(db, "flush", flush)
-        write_audit(db, "Test", "Created user", name)
-        assert failed_once
+        write_audit(db, "Test", "Created user", name)  # commits both
+    with SessionLocal() as db:
         assert db.query(User).filter_by(username=name).count() == 1
-        assert db.query(TableRow).filter(TableRow.cells_json.contains(name)).count() == 1
+        assert db.query(AuditLog).filter(AuditLog.detail == name).count() == 1
 
 
-def test_mysql_concurrent_audit_appends_from_stale_snapshots():
+def test_mysql_concurrent_audit_appends_all_land():
     from threading import Barrier
-    from app.core.audit import AUDIT_TABLE_KEY, write_audit
+    from app.core.audit import write_audit
     from app.core.database import engine
     if engine.dialect.name != 'mysql':
-        pytest.skip('Checks MySQL repeatable-read locking')
-    with SessionLocal() as db:
-        db.query(TableRow).filter_by(table_key=AUDIT_TABLE_KEY).delete()
-        db.commit()
+        pytest.skip('Checks MySQL concurrency')
     barrier = Barrier(5)
     label = uuid4().hex
 
     def append(index):
         with SessionLocal() as db:
-            # Establish a snapshot before competing writers start appending.
-            db.query(TableRow).filter_by(table_key=AUDIT_TABLE_KEY).all()
             barrier.wait(timeout=10)
             write_audit(db, 'Concurrency test', 'Concurrent audit', f'{label}:{index}')
 
     with ThreadPoolExecutor(max_workers=5) as pool:
         list(pool.map(append, range(5)))
     with SessionLocal() as db:
-        rows = db.query(TableRow).filter_by(table_key=AUDIT_TABLE_KEY).all()
-        assert len(rows) == 5
-        assert {row.cells_json[3] for row in rows} == {f'{label}:{index}' for index in range(5)}
+        details = {d for (d,) in db.query(AuditLog.detail).filter(AuditLog.detail.like(f'{label}:%')).all()}
+        assert details == {f'{label}:{index}' for index in range(5)}

@@ -304,3 +304,22 @@ manuals show real screens, so they live in `backend/manuals/` and are served by
 `GET /api/v1/help/user-manual` only to signed-in staff, who get the manual for the portal they
 signed in to (Help in the top bar). The internal sign-in tab has no Help link. Sources and the
 build script are in `docs/user-manual/`.
+
+## Audit log
+
+Settings → Audit Logs (needs **viewAuditLog**) shows who did what, when and from where. Rows live
+in the `audit_log` table (UTC time, category, action, who, detail, **IP address**), written by
+`app/core/audit.py:write_audit` and never edited.
+
+- **Recorded**: sign-ins, sign-outs, failed sign-ins and lockouts, password / account changes, user,
+  supplier and supplier-request changes, settings and role changes, audit exports. Read-only actions
+  and query (ticket) activity are not, the latter being kept in each ticket's own history.
+- **Flooding is prevented**: failed sign-ins for unknown accounts (per IP) and attempts on a locked
+  account are written once per 5 minutes; the next row says how many were not written separately.
+- **Reading**: `GET /api/v1/audit-logs` (paged, filtered by type / date / search, with today's counts)
+  and `GET /api/v1/audit-logs/export` (CSV, up to 100,000 rows; the export itself is audited).
+  The screen loads one page at a time and refreshes every 30 seconds.
+- **Retention**: rows older than `AUDIT_RETENTION_DAYS` (default 365) are removed daily by the
+  background job. Set the period your compliance policy requires.
+- **IP address**: taken from the connection. Behind a reverse proxy, run uvicorn with
+  `--proxy-headers --forwarded-allow-ips=<proxy address>` or every row will show the proxy's address.

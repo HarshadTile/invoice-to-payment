@@ -109,6 +109,19 @@ def send_notification_emails() -> int:
         db.close()
 
 
+def purge_audit_log() -> int:
+    """Daily: remove audit rows older than AUDIT_RETENTION_DAYS (default 365)."""
+    from app.core.audit import purge_old_entries
+    db = SessionLocal()
+    try:
+        removed = purge_old_entries(db)
+        if removed:
+            logger.info("Removed %s audit log rows past the retention period", removed)
+        return removed
+    finally:
+        db.close()
+
+
 def _loop():
     minute = 0
     while not _stop_event.wait(60):
@@ -119,6 +132,8 @@ def _loop():
                 scan_sla_breaches()
             if minute % 60 == 0:
                 auto_close_resolved()
+            if minute % 1440 == 2:
+                purge_audit_log()
         except Exception:
             logger.exception("Inquiry Desk background job failed")
 

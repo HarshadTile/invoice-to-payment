@@ -10,7 +10,8 @@ from app.main import app
 from app.core.database import SessionLocal
 from app.core.security import create_access_token, get_password_hash
 from app.core.channels import DEFAULT_CHANNEL_AVAILABILITY
-from app.models.settings import AppSettings, TableRow
+from app.models.audit_log import AuditLog
+from app.models.settings import AppSettings
 from app.models.user import User
 from app.models.supplier import Supplier
 
@@ -58,7 +59,7 @@ def test_portal_defaults_saved_settings_public_login_options_and_audit(accounts)
     assert admin.get('/api/v1/load-workspace-data').json()['settings']['channelAvailability']['mfoxPortal'] is True
     with SessionLocal() as db:
         assert db.get(AppSettings, 1).channel_availability['mfoxPortal'] is True
-        assert any('Changed portal availability' in str(row.cells_json) for row in db.query(TableRow).all())
+        assert any('Changed portal availability' in f'{row.action} {row.detail}' for row in db.query(AuditLog).all())
 
 
 def test_disabled_portal_rejects_internal_and_supplier_signin_until_enabled(accounts):

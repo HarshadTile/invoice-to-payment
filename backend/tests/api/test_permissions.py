@@ -7,9 +7,10 @@ from app.core.database import Base, SessionLocal, engine
 from app.core.permissions import CAPABILITIES, DEFAULT_ROLE_MATRIX, load_role_matrix, normalize_matrix
 from app.core.security import create_access_token, get_password_hash
 from app.main import app
-from app.models.settings import AppSettings, TableRow
+from app.models.settings import AppSettings
 from app.models.user import User
 from app.services.ticket_permissions import permission_matrix
+from tests.helpers.audit import audit_count, audit_rows
 from tests.helpers.suppliers import supplier_headers_for_code
 
 Base.metadata.create_all(bind=engine)
@@ -104,20 +105,16 @@ def test_role_matrix_edits_are_validated_and_audited(restore_settings):
     fake_cap["Invoice Team L1"]["deleteEverything"] = True
     assert as_admin.put("/api/v1/settings", json={"roleMatrix": fake_cap}).status_code == 400
 
-    db = SessionLocal()
-    before = db.query(TableRow).filter(TableRow.table_key == "settings-audit").count()
-    db.close()
+    before = audit_count()
     edited = copy.deepcopy(matrix)
     edited["Invoice Team L1"]["importExport"] = not matrix["Invoice Team L1"]["importExport"]
     assert as_admin.put("/api/v1/settings", json={"roleMatrix": edited}).status_code == 200
     assert _matrix()["Invoice Team L1"]["importExport"] == edited["Invoice Team L1"]["importExport"]
 
-    db = SessionLocal()
-    rows = db.query(TableRow).filter(TableRow.table_key == "settings-audit").order_by(TableRow.row_index).all()
-    db.close()
+    rows = audit_rows()
     assert len(rows) == before + 1
-    assert rows[-1].cells_json[2] == "Changed role permissions"
-    assert "Invoice Team L1: importExport" in rows[-1].cells_json[3]
+    assert rows[-1][1] == "Changed role permissions"
+    assert "Invoice Team L1: importExport" in rows[-1][2]
 
 
 def test_managing_users_alone_does_not_allow_changing_role_permissions(restore_settings):
@@ -138,14 +135,15 @@ def test_admin_cannot_lose_role_management(restore_settings):
 
 
 def test_audit_log_needs_the_view_audit_log_capability(restore_settings):
-    assert as_admin.get("/api/v1/tables/settings-audit").status_code == 200
-    assert as_viewer.get("/api/v1/tables/settings-audit").status_code == 403
-    assert as_supplier.get("/api/v1/tables/settings-audit").status_code == 403
+    assert as_admin.get("/api/v1/audit-logs").status_code == 200
+    assert as_viewer.get("/api/v1/audit-logs").status_code == 403
+    assert as_supplier.get("/api/v1/audit-logs").status_code == 403
+    assert as_viewer.get("/api/v1/audit-logs/export").status_code == 403
 
     matrix = _matrix()
     matrix["Invoice Team L1"]["viewAuditLog"] = True
     assert as_admin.put("/api/v1/settings", json={"roleMatrix": matrix}).status_code == 200
-    assert as_viewer.get("/api/v1/tables/settings-audit").status_code == 200
+    assert as_viewer.get("/api/v1/audit-logs").status_code == 200
 
 
 def test_an_older_saved_matrix_still_works_without_a_migration():

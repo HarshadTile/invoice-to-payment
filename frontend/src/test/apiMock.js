@@ -24,6 +24,11 @@ const TABLE_SEED = {
   ],
 };
 
+const AUDIT_EVENTS = [
+  { id: 2, when: '2026-08-06T01:40:00+00:00', who: 'Ravi Kulkarni', whoType: 'user', action: 'Logged in', detail: 'Admin, portal all', category: 'signin', ip: '10.0.0.5' },
+  { id: 1, when: '2026-08-05T12:32:00+00:00', who: 'Ravi Kulkarni', whoType: 'user', action: 'Added supplier', detail: 'Demo Supplier Pvt Ltd', category: 'suppliers', ip: '10.0.0.5' },
+];
+
 const DEFAULT_USER = {
   name: 'Ravi Kulkarni', initials: 'RK', title: 'MDE Invoice Lead',
   dept: 'Procurement', email: 'r.kulkarni@company.com',
@@ -145,6 +150,13 @@ export function installApiMock() {
 
   const get = vi.fn(async (path) => {
     if (path === '/v1/load-workspace-data') return bootstrap();
+    if (path.startsWith('/v1/audit-logs')) {
+      const params = new URLSearchParams(path.split('?')[1] || '');
+      const category = params.get('category');
+      const items = AUDIT_EVENTS.filter((e) => !category || e.category === category);
+      return { items, total: items.length, page: 1, pageSize: 25, logTotal: AUDIT_EVENTS.length,
+        summary: { total: 0, signin: 0, failed: 0, changes: 0 } };
+    }
     if (path === '/v1/invoice-sync/status') return structuredClone(syncStatus);
     if (path === '/v1/auth/me') throw Object.assign(new Error('no session'), { status: 401 });
     if (path === '/v1/users/list-users') return persistedUsers;

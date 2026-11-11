@@ -5,7 +5,6 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_ticket_user
-from app.core.audit import write_audit
 from app.core.database import get_db
 from app.repositories import ticket_repository
 from app.schemas.ticket import (
@@ -31,12 +30,6 @@ from app.services import attachment_service, ticket_service
 
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
-
-
-def _audit_actor(user: dict) -> str:
-    if user["auth_type"] == "supplier":
-        return f"Supplier {user['pan'] if user.get('supplier_id') else user['vendor_code']}"
-    return user.get("name") or user.get("email") or f"User #{user.get('id')}"
 
 
 def _filters(
@@ -85,12 +78,7 @@ def create_ticket(
     db: Session = Depends(get_db),
 ):
     ticket = ticket_service.create_ticket(db, user, ticket_in, idempotency_key)
-    write_audit(
-        db,
-        _audit_actor(user),
-        "Raised query",
-        f"{ticket['ticket_no']} on invoice {ticket['invoice']['invoice_no']}",
-    )
+    # Query activity is recorded in the ticket's own activity history, not the audit log.
     return ticket
 
 
@@ -167,12 +155,7 @@ def add_comment(
     db: Session = Depends(get_db),
 ):
     ticket = ticket_service.add_comment(db, user, ticket_id, comment_in)
-    write_audit(
-        db,
-        _audit_actor(user),
-        "Commented on query",
-        f"{ticket['ticket_no']} on invoice {ticket['invoice']['invoice_no']}",
-    )
+    # Query activity is recorded in the ticket's own activity history, not the audit log.
     return ticket
 
 

@@ -13,7 +13,8 @@ from isolated_tests.support import supplier_auth_headers
 from app.core.database import SessionLocal
 from app.core.security import create_access_token, get_password_hash
 from app.core.permissions import DEFAULT_ROLE_MATRIX
-from app.models.settings import AppSettings, TableRow
+from app.models.audit_log import AuditLog
+from app.models.settings import AppSettings
 from app.models.user import User, PasswordResetToken
 
 
@@ -64,7 +65,7 @@ def test_saved_expiry_applies_to_new_links_and_email_changes(clients, issued_lin
     assert workspace['resetLinkExpiryMinutes'] == 4320
     with SessionLocal() as db:
         assert db.get(PasswordResetToken, token_id).expires_at == expiry
-        assert any('Changed password link expiry' in str(row.cells_json) for row in db.query(TableRow).all())
+        assert any('Changed password link expiry' in f'{row.action} {row.detail}' for row in db.query(AuditLog).all())
     assert manager.post(f"/api/v1/users/{account['id']}/reset-password").status_code == 200
     fresh = issued_links[-1]
     assert fresh['expiryMinutes'] == 60

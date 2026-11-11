@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 from app.core.database import Base, SessionLocal, engine
 from app.core.security import create_access_token, get_password_hash
 from app.main import app
-from app.models.settings import TableRow
 from app.models.user import PasswordResetToken, User
+from tests.helpers.audit import audit_count, audit_rows
 from tests.helpers.suppliers import supplier_headers_for_code
 
 
@@ -367,9 +367,7 @@ def test_admin_reset_on_a_still_invited_user_resends_the_invite_instead(issued_l
 
 
 def test_user_management_actions_are_written_to_the_audit_log():
-    db = SessionLocal()
-    before = db.query(TableRow).filter(TableRow.table_key == "settings-audit").count()
-    db.close()
+    before = audit_count()
 
     _cleanup("temp_user_7")
     created = as_admin.post("/api/v1/users/", json={
@@ -380,11 +378,8 @@ def test_user_management_actions_are_written_to_the_audit_log():
     as_admin.patch(f"/api/v1/users/{user_id}", json={"role": "Invoice Team L2"})
     as_admin.delete(f"/api/v1/users/{user_id}")
 
-    db = SessionLocal()
-    after = db.query(TableRow).filter(TableRow.table_key == "settings-audit").count()
-    actions = [row.cells_json[2] for row in db.query(TableRow)
-               .filter(TableRow.table_key == "settings-audit").order_by(TableRow.row_index).all()]
-    db.close()
+    after = audit_count()
+    actions = [row[1] for row in audit_rows()]
     assert after == before + 3
     assert actions[-3:] == ["Invited user", "Updated user", "Removed user"]
 

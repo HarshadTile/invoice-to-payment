@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
-from app.core.audit import write_audit
+from app.core.audit import current_ip, write_audit
 from app.core.channels import channel_availability, require_enabled_channel
 from app.core.email import is_configured as smtp_is_configured, send_email
 from app.core.email_templates import password_reset_email
@@ -110,10 +110,12 @@ def login_internal(db: Session, username: str, password: str, requested_scope: s
     user = db.query(User).filter((User.username == login_id) | (User.email == login_id)).first()
     if not user:
         verify_password(password, _DUMMY_HASH)  # same timing as a wrong password
-        write_audit(db, login_id, "Failed login", "no account with that username/email")
+        write_audit(db, login_id, "Failed login", "no account with that username/email",
+                    throttle_key=f"unknown-user|{current_ip()}")
         _fail(401, INTERNAL_LOGIN_FAILED)
     if _user_is_locked(user):
-        write_audit(db, user, "Failed login", "account is locked after too many wrong passwords")
+        write_audit(db, user, "Failed login", "account is locked after too many wrong passwords",
+                    throttle_key=f"locked-user|{user.id}")
         _fail(401, INTERNAL_LOGIN_FAILED)
     if not verify_password(password, user.password_hash):
         _register_user_failure(db, user)
@@ -232,10 +234,12 @@ def login_supplier_password(db: Session, email: str, password: str) -> dict:
     actor = f"Supplier {email}"
     supplier = db.query(Supplier).filter(func.lower(Supplier.email) == email).first() if email else None
     if not supplier or supplier.status != "Active" or not supplier.password_hash:
-        write_audit(db, actor, "Failed login", "unknown email, not active, or no password set")
+        write_audit(db, actor, "Failed login", "unknown email, not active, or no password set",
+                    throttle_key=f"unknown-supplier|{current_ip()}")
         _fail(401, GENERIC_LOGIN_ERROR)
     if is_locked(supplier):
-        write_audit(db, actor, "Failed login", "account is locked after too many wrong attempts")
+        write_audit(db, actor, "Failed login", "account is locked after too many wrong attempts",
+                    throttle_key=f"locked-supplier|{supplier.id}")
         _fail(401, GENERIC_LOGIN_ERROR)
     if not verify_password(password, supplier.password_hash):
         register_failure(db, supplier)

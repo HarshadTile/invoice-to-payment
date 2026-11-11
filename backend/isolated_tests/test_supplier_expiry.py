@@ -15,7 +15,8 @@ from isolated_tests.support import supplier_auth_headers
 from app.core.database import SessionLocal
 from app.core.permissions import DEFAULT_ROLE_MATRIX
 from app.core.security import create_access_token, get_password_hash
-from app.models.settings import AppSettings, TableRow
+from app.models.audit_log import AuditLog
+from app.models.settings import AppSettings
 from app.models.supplier import Supplier, SupplierSetupToken
 from app.models.user import User
 from app.services import vendor_directory
@@ -102,7 +103,7 @@ def test_supplier_policy_persists_and_applies_to_setup_reset_and_replacements(cl
     assert saved['resetLinkExpiryMinutes'] == before['resetLinkExpiryMinutes']
     with SessionLocal() as db:
         assert db.get(SupplierSetupToken, old_id).expires_at == old_expiry
-        assert any('supplierResetLinkExpiryMinutes' in str(row.cells_json) for row in db.query(TableRow).all())
+        assert any('supplierResetLinkExpiryMinutes' in f'{row.action} {row.detail}' for row in db.query(AuditLog).all())
     replacement = send(manager, issued_links, f"{BASE}/{original['id']}/generate-setup-link")
     assert replacement['expiryMinutes'] == 60 and replacement['linkType'] == 'invite'
     assert timedelta(minutes=59) < datetime.fromisoformat(replacement['expiresAt'])-datetime.now(timezone.utc) <= timedelta(minutes=60)

@@ -23,6 +23,9 @@ from app.api.v1.sync_log import router as sync_log_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.invoice_sync import readiness, router as invoice_sync_router
 from app.api.v1.help import router as help_router
+from app.api.v1.audit_logs import router as audit_logs_router
+from app.core.audit import reset_request_ip, set_request_ip
+from app.core.rate_limit import client_ip
 from app.jobs.ticket_jobs import start_jobs, stop_jobs
 
 # Schema is owned by Alembic now (see alembic/), not created here. Run
@@ -65,6 +68,17 @@ app.include_router(sync_log_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(invoice_sync_router, prefix="/api/v1")
 app.include_router(help_router, prefix="/api/v1")
+app.include_router(audit_logs_router, prefix="/api/v1")
+
+
+@app.middleware("http")
+async def remember_caller_ip(request, call_next):
+    """Makes the caller's address available to the audit log for this request."""
+    token = set_request_ip(client_ip(request))
+    try:
+        return await call_next(request)
+    finally:
+        reset_request_ip(token)
 
 
 @app.exception_handler(HTTPException)
