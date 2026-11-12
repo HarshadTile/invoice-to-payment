@@ -36,11 +36,30 @@ def _set(username, **fields):
 def test_five_wrong_passwords_lock_a_staff_account_then_it_unlocks():
     for _ in range(5):
         assert _login(password="wrong").status_code == 401
-    locked = _login()  # right password, but locked
-    assert locked.status_code == 401
-    assert locked.json()["error"]["message"] == "Invalid username or password."
+    # A wrong guess on the locked account still looks like any other wrong password.
+    guess = _login(password="still-wrong")
+    assert guess.status_code == 401
+    assert guess.json()["error"]["message"] == "Invalid username or password."
+    # The right password is told why it can't get in, and for how long.
+    locked = _login()
+    assert locked.status_code == 423
+    assert locked.json()["error"]["message"].startswith("Too many wrong attempts. This account is locked for 15 more minutes.")
     _set("admin", locked_until=datetime.utcnow() - timedelta(minutes=1))
     assert _login().status_code == 200
+
+
+def test_a_locked_supplier_with_the_right_password_is_told_it_is_locked():
+    get_or_create_supplier("LOCKS1234A", ["LOCK-V1"], email="locked.supplier@example.com", password="Passw0rd!")
+    url = "/api/v1/auth/supplier/login-with-password"
+    for _ in range(5):
+        assert client.post(url, json={"email": "locked.supplier@example.com", "password": "wrong"}).status_code == 401
+    guess = client.post(url, json={"email": "locked.supplier@example.com", "password": "wrong"})
+    unknown = client.post(url, json={"email": "nobody.here@example.com", "password": "wrong"})
+    assert guess.status_code == unknown.status_code == 401
+    assert guess.json() == unknown.json()  # a stranger can't tell the account exists or is locked
+    right = client.post(url, json={"email": "locked.supplier@example.com", "password": "Passw0rd!"})
+    assert right.status_code == 423
+    assert "locked for 15 more minutes" in right.json()["error"]["message"]
 
 
 def test_a_successful_login_resets_the_failure_count():
@@ -78,6 +97,27 @@ def test_a_deactivated_account_is_cut_off_everywhere_at_once():
     _set("admin", status="Inactive")
     for path in ("/api/v1/invoices/list-invoices?page_size=1", "/api/v1/auth/me", "/api/v1/workspace"):
         assert client.get(path, headers=_bearer(token)).status_code == 403, path
+
+
+def test_moving_a_user_to_another_channel_cuts_off_the_old_session_everywhere():
+    as_admin = _bearer(_login().json()["token"])
+    created = client.post("/api/v1/users/add-user", headers=as_admin, json={
+        "name": "Channel Mover", "email": "channel.mover@example.com", "role": "Invoice Team L1",
+        "channels": ["msetuSrm"], "ticketRole": "ASSIGNEE"})
+    assert created.status_code == 200, created.text
+    user_id = created.json()["user"]["id"] if "user" in created.json() else created.json()["id"]
+    from app.core.security import get_password_hash
+    _set("channel.mover", status="Active", password_hash=get_password_hash("Mover-Pass-2026"))
+    token = client.post(LOGIN, json={"username": "channel.mover", "password": "Mover-Pass-2026",
+                                     "channelScope": "msetuSrm"}).json()["token"]
+    paths = ("/api/v1/invoices/list-invoices?page_size=1", "/api/v1/invoices/dashboard", "/api/v1/invoices/export")
+    for path in paths:
+        assert client.get(path, headers=_bearer(token)).status_code == 200, path
+    assert client.patch(f"/api/v1/users/{user_id}/update-user", headers=as_admin, json={"channels": ["poPortal"]}).status_code == 200
+    for path in (*paths, "/api/v1/auth/me"):
+        moved = client.get(path, headers=_bearer(token))
+        assert moved.status_code == 403, path
+        assert moved.json()["error"]["message"] == "Workspace access is no longer authorised."
 
 
 def test_supplier_logout_ends_the_session_on_the_server():

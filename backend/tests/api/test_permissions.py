@@ -27,7 +27,8 @@ def _user_id(username, role):
     user = db.query(User).filter(User.username == username).first()
     if not user:
         user = User(username=username, password_hash=get_password_hash("Passw0rd!"), name=username.title(),
-                    email=f"{username}@example.com", role=role, status="Active", channel_scope="all")
+                    email=f"{username}@example.com", role=role, status="Active",
+                    channel_scope="all" if role == "Admin" else "msetuSrm")
         db.add(user)
         db.commit()
         db.refresh(user)
@@ -39,7 +40,8 @@ def _user_id(username, role):
 admin_id = _user_id("perm_admin", "Admin")
 viewer_id = _user_id("perm_viewer", "Invoice Team L1")
 as_admin = TestClient(app, headers=_auth("internal", admin_id, {"channelScope": "all"}))
-as_viewer = TestClient(app, headers=_auth("internal", viewer_id, {"channelScope": "all"}))
+# A non-Admin works in one channel (it can't sign in to HQ), so its session is for that channel.
+as_viewer = TestClient(app, headers=_auth("internal", viewer_id, {"channelScope": "msetuSrm"}))
 as_supplier = TestClient(app, headers=_auth("supplier", "DIM00505AA", {"company": "Vendor"}))
 anonymous = TestClient(app)
 

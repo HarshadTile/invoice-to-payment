@@ -96,11 +96,11 @@ describe('restoreSession', () => {
     expect(mockApi.clearToken).toHaveBeenCalled();
   });
 
-  it('keeps the token through a network blip or a busy server, so a refresh can recover', async () => {
+  it('keeps the token through a network blip or a busy server, and reports the server unreachable', async () => {
     mockApi.hasToken.mockReturnValue(true);
     for (const error of [failing(503), new TypeError('Failed to fetch')]) {
       mockApi.get.mockRejectedValue(error);
-      expect(await makeStore().dispatch(restoreSession())).toBe(false);
+      expect(await makeStore().dispatch(restoreSession())).toBe('unreachable');
     }
     expect(mockApi.clearToken).not.toHaveBeenCalled();
   });

@@ -4,6 +4,7 @@ import { handlerFor } from '../../features/invoices/invoice';
 import { useInvoice } from '../../features/invoices/useInvoice';
 import InvoiceLoading from './InvoiceLoading.jsx';
 import PoPortalDetails from '../invoices/PoPortalDetails.jsx';
+import SrmDetails from '../invoices/SrmDetails.jsx';
 import { closeModal } from '../../features/ui/uiSlice';
 import ModalShell from './ModalShell.jsx';
 import { useLocation } from 'react-router-dom';
@@ -106,6 +107,7 @@ export default function InvoiceDetailModal({ ctx }) {
       </div>
 
       <PoPortalDetails invoice={inv} internal={authType !== 'supplier'} />
+      <SrmDetails invoice={inv} internal={authType !== 'supplier'} />
     </ModalShell>
   );
 }

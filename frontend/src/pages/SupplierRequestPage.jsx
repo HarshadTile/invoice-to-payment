@@ -86,7 +86,7 @@ export default function SupplierRequestPage() {
         <p className="lgn-form-hint">Your email becomes your sign-in. Each account needs its own email.</p>
         <p className="lgn-form-section">Vendor details</p>
         <FormField id="req-pan" label="PAN" icon={<HashIcon className="lgn-ic" />}
-          error={fieldErr.pan} placeholder="ABCDE1234F" maxLength={10}
+          error={fieldErr.pan} placeholder="ABCDE1234F" maxLength={20}
           value={form.pan} onChange={set('pan')} />
         <div className="lgn-field">
           <div className="lgn-label-row"><label htmlFor="req-codes">Vendor codes</label></div>

@@ -31,13 +31,13 @@ def _user(username, role):
         db.close()
 
 
-def _client(user_id):
-    token = create_access_token(subject=user_id, auth_type="internal", scope={"channelScope": "all"})
+def _client(user_id, channel="all"):
+    token = create_access_token(subject=user_id, auth_type="internal", scope={"channelScope": channel})
     return TestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
 admin = _client(_user("roles_admin", "Admin"))
-team = _client(_user("roles_team", "Invoice Team L2"))
+team = _client(_user("roles_team", "Invoice Team L2"), "msetuSrm")
 
 
 @pytest.fixture(autouse=True)

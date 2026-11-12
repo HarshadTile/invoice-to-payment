@@ -71,8 +71,10 @@ def test_five_wrong_passwords_lock_the_account_then_it_unlocks():
     sid = _supplier()
     for _ in range(5):
         assert _login(password="wrong-pass").status_code == 401
-    locked = _login()  # correct password, but locked: same message
-    assert locked.status_code == 401 and _message(locked) == GENERIC_LOGIN_ERROR
+    guess = _login(password="wrong-pass")  # a wrong guess while locked still looks generic
+    assert guess.status_code == 401 and _message(guess) == GENERIC_LOGIN_ERROR
+    locked = _login()  # the right password is told the account is locked, and for how long
+    assert locked.status_code == 423 and "locked for 15 more minutes" in _message(locked)
     db = SessionLocal()
     db.get(Supplier, sid).locked_until = datetime.utcnow() - timedelta(minutes=1)
     db.commit()

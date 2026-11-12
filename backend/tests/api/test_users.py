@@ -25,6 +25,7 @@ def _get_or_create(db, username, role):
     user = User(
         username=username, password_hash=get_password_hash("Blue-Harbor-71"),
         name=username.title(), email=f"{username}@example.com", role=role,
+        channel_scope="all" if role == "Admin" else "msetuSrm",
     )
     db.add(user)
     db.commit()
@@ -44,7 +45,7 @@ _db.close()
 
 anonymous = TestClient(app)
 as_admin = TestClient(app, headers=_auth("internal", admin_id, {"channelScope": "all"}))
-as_viewer = TestClient(app, headers=_auth("internal", viewer_id, {"channelScope": "all"}))
+as_viewer = TestClient(app, headers=_auth("internal", viewer_id, {"channelScope": "msetuSrm"}))
 as_supplier = TestClient(app, headers=_auth("supplier", "DIM00505AA", {"company": "Vendor"}))
 
 

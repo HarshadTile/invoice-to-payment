@@ -251,7 +251,7 @@ export default function SearchInvoicePage() {
               onRemove={() => dispatch(setScopeFilter({ key: 'channel', value: '' }))} />}
             {pickedMonth && <FilterChip label="Month" value={`${pickedMonth.label} · ${dateLabel}`} tone="brand"
               onRemove={() => { handleDateFrom(''); handleDateTo(''); }} />}
-            {nextHint && !parsed.item && (
+            {nextHint && !parsed.utr && (
               <span style={{ fontSize: '0.71875rem', color: 'var(--text-muted)', fontStyle: 'italic', alignSelf: 'center' }}>
                 {nextHint}
               </span>
@@ -293,6 +293,7 @@ export default function SearchInvoicePage() {
           invoices={results.data?.items || []}
           tableKey="searchInvoice"
           mode="full"
+          bulk
           hideSearch
           busy={updating}
           server={server}

@@ -116,7 +116,7 @@ describe('Internal admin - Invoice tracking, search and invoice details', () => 
       expect(screen.getByLabelText(/Date From$/)).toHaveValue('2026-03-01');
       expect(screen.getByLabelText(/Date To$/)).toHaveValue('2026-03-31');
       expect(screen.getByRole('button', { name: 'Filter by status' })).toHaveTextContent('Paid');
-      expect(screen.getByRole('button', { name: 'MAR-PAID' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'MAR-PAID' })).toBeInTheDocument(); // rows render after the filter applies
       expect(screen.queryByRole('button', { name: 'MAR-OPEN' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'APR-PAID' })).not.toBeInTheDocument();
       expect(screen.getByText(/Mar 2026 ·/)).toBeInTheDocument();
