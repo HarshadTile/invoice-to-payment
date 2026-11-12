@@ -120,7 +120,7 @@ export default function SupplierDashboardPage() {
           {m.months.length
             ? <ColumnChart columns={m.months} series={MONTH_SERIES} label={`Your invoices per month by ${dateTypeLabel}. Click a month to open its invoices`}
               onColumnClick={(column) => { const { from, to } = monthDateRange(column.key); openList({ date_from: from, date_to: to }); }} />
-            : <p className="chart-empty">No invoices with a {dateTypeLabel} to chart.</p>}
+            : <p className="chart-empty">Nothing to chart: no {dateTypeLabel} is recorded on these invoices.</p>}
         </ChartCard>
 
         <ChartCard

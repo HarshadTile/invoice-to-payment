@@ -205,7 +205,7 @@ export default function InvoiceTrackingPage() {
             ? <ColumnChart columns={m.months} label={`Invoices per month by ${dateTypeLabel}, by product type. Click a month to open its invoices`}
               onColumnClick={canSearch ? openMonth : undefined} selectedKey={selectedMonth?.key}
               series={productParts.map((p) => ({ key: p.key, label: p.label, color: p.color }))} />
-            : <p className="chart-empty">No invoices with a {dateTypeLabel} to chart.</p>}
+            : <p className="chart-empty">Nothing to chart: no {dateTypeLabel} is recorded on these invoices.</p>}
         </ChartCard>
 
         <ChartCard

@@ -44,6 +44,12 @@ def load_active_internal_user(db: Session, payload: dict) -> User:
         raise HTTPException(status_code=403, detail="This account has been deactivated.")
     if token_session_version(payload) != (user.session_version or 0):
         raise HTTPException(status_code=401, detail="Your session has ended. Please sign in again.")
+    # The workspace the session was opened for must still be one this person may use, on every
+    # route (invoices and exports included), so moving someone to another channel cuts the old
+    # session off at once instead of when the token expires.
+    requested_scope = (payload.get("scope") or {}).get("channelScope", "all")
+    if ticket_role_of(user) != "ADMIN" and requested_scope not in allowed_channels_of(user):
+        raise HTTPException(status_code=403, detail="Workspace access is no longer authorised.")
     return user
 
 
@@ -88,13 +94,11 @@ def get_current_user(payload: dict = Depends(get_current_user_token), db: Sessio
 
     if auth_type != "internal":
         raise HTTPException(status_code=401, detail="Invalid authentication context.")
-    user = load_active_internal_user(db, payload)
+    user = load_active_internal_user(db, payload)  # also checks the workspace is still allowed
 
     ticket_role = ticket_role_of(user)
     allowed_channels = allowed_channels_of(user)
     requested_scope = (payload.get("scope") or {}).get("channelScope", "all")
-    if ticket_role != "ADMIN" and requested_scope not in allowed_channels:
-        raise HTTPException(status_code=403, detail="Workspace access is no longer authorised.")
 
     return {
         "auth_type": "internal",

@@ -65,9 +65,13 @@ export const restoreSession = () => async (dispatch) => {
   try {
     ({ auth } = await authApi.me());
   } catch (error) {
-    // Only a rejected token ends the session; a network blip or busy server leaves it for a retry.
-    if (error?.status === 401 || error?.status === 403) api.clearToken();
-    return false;
+    // Only a rejected token ends the session; a network blip or busy server leaves it for a retry,
+    // and the app says the server can't be reached instead of showing the sign-in page.
+    if (error?.status === 401 || error?.status === 403) {
+      api.clearToken();
+      return false;
+    }
+    return 'unreachable';
   }
   dispatch(ticketsApi.util.resetApiState());
   dispatch(invoicesQueryApi.util.resetApiState());

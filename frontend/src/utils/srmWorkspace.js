@@ -36,8 +36,8 @@ export const SRM_COLUMNS = [
   column('accountType', 'Account Type', (i) => i.sap?.account_type),
 ];
 
-export const SRM_APPROVAL_COLUMNS = ['invoice', 'vendor', 'vcode', 'po', 'item', 'status', 'approvalStatus',
-  ...Array.from({ length: 7 }, (_, index) => `approver${index + 1}`), 'pending', 'approvedBy', 'approvalDate', 'remarks', 'rejection'];
+export const SRM_APPROVAL_COLUMNS = ['invoice', 'vendor', 'vcode', 'po', 'item', 'status', 'statusFlag', 'approvalStatus',
+  ...Array.from({ length: 7 }, (_, index) => `approver${index + 1}`), 'pending', 'approvedBy', 'approvalDate', 'accountsDate', 'remarks', 'rejection'];
 export const SRM_VIEW_COLUMNS = {
   'Invoice Log': ['invoice', 'vendor', 'vcode', 'pan', 'po', 'item', 'product', 'plant', 'division',
     'invoiceDate', 'uploadDate', 'amount', 'currency', 'status', 'pending', 'approvalDate', 'dueDate', 'utr', 'rejection'],

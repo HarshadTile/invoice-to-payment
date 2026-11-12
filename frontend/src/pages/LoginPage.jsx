@@ -5,6 +5,7 @@ import { useDispatch } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { loginThunk } from '../features/bootstrap/hydrateThunks';
 import { pushToast } from '../features/ui/uiSlice';
+import { SESSION_MESSAGE_KEY } from '../api/client';
 import AuthLayout from '../components/login/AuthLayout.jsx';
 import SupportFooter from '../components/login/SupportFooter.jsx';
 import AccountTypeSelector from '../components/login/AccountTypeSelector.jsx';
@@ -23,7 +24,14 @@ export default function LoginPage() {
   const tab = searchParams.get('account') === 'internal' ? 'internal' : 'supplier';
   const setupComplete = tab === 'supplier' && searchParams.get('setup') === 'complete';
   const [status, setStatus] = useState('idle'); // idle | busy | success
-  const [error, setError] = useState('');
+  // Why the last session ended (signed out elsewhere, deactivated, access changed), shown once.
+  const [error, setError] = useState(() => {
+    try {
+      const reason = sessionStorage.getItem(SESSION_MESSAGE_KEY) || '';
+      sessionStorage.removeItem(SESSION_MESSAGE_KEY);
+      return reason;
+    } catch { return ''; }
+  });
   const [fieldErr, setFieldErr] = useState({});
   const [remember, setRemember] = useState(true);
   const [showPw, setShowPw] = useState(false);

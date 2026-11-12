@@ -45,6 +45,14 @@ def _fail(status: int, detail: str):
     raise HTTPException(status_code=status, detail=detail)
 
 
+def locked_message(locked_until: datetime) -> str:
+    """Told only to someone who typed the right password into a locked account, so it never
+    reveals to a stranger that the account exists (wrong guesses keep the generic message)."""
+    minutes = max(1, -(-int((locked_until - datetime.utcnow()).total_seconds()) // 60))
+    return (f"Too many wrong attempts. This account is locked for {minutes} more "
+            f"minute{'s' if minutes != 1 else ''}. Try again after that.")
+
+
 def _require_strong_password(password: str, personal: list[str | None] = ()) -> None:
     """The rules in app/core/password_policy.py; every broken rule is listed for the person."""
     broken = password_policy.problems(password, personal)
@@ -116,6 +124,8 @@ def login_internal(db: Session, username: str, password: str, requested_scope: s
     if _user_is_locked(user):
         write_audit(db, user, "Failed login", "account is locked after too many wrong passwords",
                     throttle_key=f"locked-user|{user.id}")
+        if verify_password(password, user.password_hash):
+            _fail(423, locked_message(user.locked_until))
         _fail(401, INTERNAL_LOGIN_FAILED)
     if not verify_password(password, user.password_hash):
         _register_user_failure(db, user)
@@ -240,6 +250,8 @@ def login_supplier_password(db: Session, email: str, password: str) -> dict:
     if is_locked(supplier):
         write_audit(db, actor, "Failed login", "account is locked after too many wrong attempts",
                     throttle_key=f"locked-supplier|{supplier.id}")
+        if verify_password(password, supplier.password_hash):
+            _fail(423, locked_message(supplier.locked_until))
         _fail(401, GENERIC_LOGIN_ERROR)
     if not verify_password(password, supplier.password_hash):
         register_failure(db, supplier)

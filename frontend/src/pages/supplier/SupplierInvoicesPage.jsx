@@ -130,7 +130,7 @@ export default function SupplierInvoicesPage() {
           onAllDates={showAllDates} onClear={clearFilters}
           statusCountBase={inRange} resultCount={shown.length} rangeLabel={rangeLabel}
         />
-        <InvoiceTable invoices={shown} tableKey={`supplierAllInvoices-${activeKpi}`} mode="supplierSafe" />
+        <InvoiceTable invoices={shown} tableKey={`supplierAllInvoices-${activeKpi}`} mode="supplierSafe" bulk />
       </div>
     </div>
   );
