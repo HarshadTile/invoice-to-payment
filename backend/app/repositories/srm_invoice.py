@@ -53,6 +53,7 @@ def text_value(value):
 _DAY_MONTH_YEAR = re.compile(r"^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b")
 # The source's UTR_CLEARING_DATE_PAID is often the UTR with the date glued on the end,
 # e.g. "HDFCH008095981872026-02-17" -> 2026-02-17.
+_LEADING_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}(?!\d)")
 _TRAILING_ISO_DATE = re.compile(r"(\d{4}-\d{2}-\d{2})(?:[ T]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$")
 
 
@@ -64,7 +65,9 @@ def date_value(value):
     value = text_value(value)
     if not value:
         return None
-    candidates = [value[:10]]
+    # Only a real YYYY-MM-DD counts: date.fromisoformat also reads bare digits ("6082012777" -> 6082-01-27),
+    # so an all-digit UTR with the date glued on must not be read from its start.
+    candidates = [value[:10]] if _LEADING_ISO_DATE.match(value) else []
     if match := _TRAILING_ISO_DATE.search(value):
         candidates.append(match.group(1))
     for candidate in candidates:
