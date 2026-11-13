@@ -187,7 +187,7 @@ function search(ws) {
     ...steps([
       'Click **Search Invoice(s)** in the left menu.',
       'Type in the search box: invoice number, PO number, status, date or amount. To search several fields at once, separate them with commas in this order: **invoice, PO, item, UTR**.',
-      'Narrow the list with the chips: **Status**, **Product**, **Date** (Invoice, Upload, Approval, MIRO booking, Payment Due or UTR clearing date) and a date range.',
+      'Narrow the list with the chips: **Status**, **Product**, **Date** (Invoice, Upload, Approval, MIRO booking, Payment Due or Clearing date) and a date range.',
       'Click an **invoice number** (or the eye icon) to open its details.',
       'Click **Clear** to remove all filters, or **All dates** to remove the date range.',
     ]),

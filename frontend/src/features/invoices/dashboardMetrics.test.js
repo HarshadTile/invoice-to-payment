@@ -60,15 +60,15 @@ describe('dashboard metrics', () => {
       inv({ rawDate: '2026-01-05', rawUploadDate: '2026-03-02' }),
       inv({ rawDate: '2026-01-06', rawUploadDate: '2026-04-09', productType: 'M' }),
       inv({ rawDate: '2026-01-07', rawUploadDate: undefined }),
-      inv({ rawDate: '2026-01-08', rawUploadDate: undefined, sap: { utr_clearing_date_paid: '2026-04-20' } }),
+      inv({ rawDate: '2026-01-08', rawUploadDate: undefined, sap: { clearing_date: '2026-04-20' } }),
     ];
     const byUpload = dashboardMetrics(list, [], 'upload');
     expect(byUpload.months.at(-1)).toMatchObject({ key: '2026-04', Service: 0, Material: 1 });
     expect(byUpload.months.at(-2)).toMatchObject({ key: '2026-03', Service: 1 });
     expect(byUpload.monthsCoverage).toEqual({ inWindow: 2, withoutDate: 2 });
-    const byUtr = dashboardMetrics(list, [], 'utr_clearing');
-    expect(byUtr.months.at(-1)).toMatchObject({ key: '2026-04', Service: 1 });
-    expect(byUtr.monthsCoverage).toEqual({ inWindow: 1, withoutDate: 3 });
+    const byClearing = dashboardMetrics(list, [], 'clearing');
+    expect(byClearing.months.at(-1)).toMatchObject({ key: '2026-04', Service: 1 });
+    expect(byClearing.monthsCoverage).toEqual({ inWindow: 1, withoutDate: 3 });
   });
 
 

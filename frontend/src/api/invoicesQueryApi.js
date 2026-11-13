@@ -53,7 +53,8 @@ const detach = (invoice) => (invoice ? structuredClone(invoice) : invoice);
 const SORT_READ = {
   invoice: (inv) => inv.rawDate, upload: (inv) => inv.rawUploadDate, status: (inv) => inv.date,
   due: (inv) => inv.sap?.net_due_date, approval: (inv) => invoiceFilterDate(inv, 'approval'),
-  miro: (inv) => invoiceFilterDate(inv, 'miro'), utr_clearing: (inv) => invoiceFilterDate(inv, 'utr_clearing'),
+  miro: (inv) => invoiceFilterDate(inv, 'miro'), utr_clearing: (inv) => inv.sap?.utr_clearing_date_paid,
+  clearing: (inv) => inv.sap?.clearing_date,
   accounts: (inv) => inv.workflow?.document_sent_to_accounts_date, miro_document: (inv) => inv.sap?.document_date,
   posting: (inv) => inv.sap?.posting_date, payment: (inv) => inv.sap?.clearing_date,
   po_entry: (inv) => inv.poPortal?.entry_sheet_creation_date, po_miro_created: (inv) => inv.poPortal?.miro_created_on,

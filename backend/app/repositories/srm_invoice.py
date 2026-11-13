@@ -39,7 +39,7 @@ DATE_FIELDS = {
     "approval": ("FINAL_APPRPVAL_DATE",), "miro": ("MIRO_DOCUMENT_DATE",),
     "due": ("NETDT", "NET_DUE_DATE", "Payment_Due_Date"), "payment": ("CLEARING_DATE",),
     "posting": ("POSTING_DATE",), "accounts": ("DOC_SENT_ACCOUNT_DATE",),
-    "utr_clearing": ("UTR_CLEARING_DATE_PAID",),
+    "clearing": ("CLEARING_DATE",),
 }
 
 

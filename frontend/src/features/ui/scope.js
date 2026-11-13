@@ -12,7 +12,9 @@ export function resolveScope(scope) {
     fyChosen: !!raw.fy,
     channel: raw.channel || '',
     vcode: raw.vcode || '',
-    dateField: ['posting', 'payment', 'accounts'].includes(raw.dateField) ? 'invoice' : (raw.dateField || 'invoice'),
+    // The filter dates are the INVOICE_DATE_FIELDS; an older saved choice falls back to the nearest one.
+    dateField: raw.dateField === 'utr_clearing' ? 'clearing'
+      : ['posting', 'payment', 'accounts'].includes(raw.dateField) ? 'invoice' : (raw.dateField || 'invoice'),
   };
 }
 

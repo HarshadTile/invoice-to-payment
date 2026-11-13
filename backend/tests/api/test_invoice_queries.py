@@ -91,7 +91,9 @@ def test_date_sort_puts_undated_rows_last():
 
 def test_date_range_uses_the_chosen_date_type_without_fallback():
     assert numbers(internal.get("/api/v1/invoices/list-invoices?date_type=invoice&date_from=2026-05-01&date_to=2026-05-31")) == ["INV-1"]
-    assert numbers(internal.get("/api/v1/invoices/list-invoices?date_type=utr_clearing&date_from=2026-01-01")) == []
+    assert numbers(internal.get("/api/v1/invoices/list-invoices?date_type=clearing&date_from=2026-07-01")) == ["INV-3"]
+    assert numbers(internal.get("/api/v1/invoices/list-invoices?date_type=clearing&date_from=2026-07-02")) == []
+    assert internal.get("/api/v1/invoices/list-invoices?date_type=utr_clearing&date_from=2026-01-01").status_code == 422
 
 
 def test_dashboard_matches_the_browser_metrics():

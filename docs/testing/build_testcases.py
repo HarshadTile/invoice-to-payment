@@ -376,7 +376,7 @@ HQ = [
        'Latest 5 invoices shown; clicking opens its details.'),
     tc('Medium', 'Search – Status, Product and Date chips', ADMIN,
        ['Pick Status = Paid.', 'Product = Service.', 'Date = Approval date with a range.'],
-       'Filters combine (AND); Date options: Invoice, Upload, Approval, MIRO booking, Payment Due, UTR clearing date.'),
+       'Filters combine (AND); Date options: Invoice, Upload, Approval, MIRO booking, Payment Due, Clearing date.'),
     tc('Medium', 'Search – date range boundary', ADMIN,
        ['Set From = To = a date with known invoices.', 'Try To earlier than From.'],
        'Same-day range returns invoices of that date (inclusive). To cannot be before From.'),
