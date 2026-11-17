@@ -12,11 +12,12 @@ from app.services.invoice_service import map_invoice_to_response
 
 INDEX_KEY = "__ix"
 # The frontend's date types (utils/invoiceDates.js); a missing date never falls back to another.
-DATE_TYPES = ("invoice", "upload", "approval", "miro", "due", "utr_clearing")
+DATE_TYPES = ("invoice", "upload", "approval", "miro", "due", "clearing")
 # Further date columns the channel registers sort by (SRM / PO Portal column definitions).
 EXTRA_SORT_DATES = {
     "accounts": ("workflow", "document_sent_to_accounts_date"), "miro_document": ("sap", "document_date"),
     "posting": ("sap", "posting_date"), "payment": ("sap", "clearing_date"),
+    "utr_clearing": ("sap", "utr_clearing_date_paid"),
     "po_entry": ("po_portal", "entry_sheet_creation_date"), "po_miro_created": ("po_portal", "miro_created_on"),
     "po_miro_posting": ("po_portal", "miro_posting_date"), "po_parking": ("po_portal", "parking_date"),
     "po_posting": ("po_portal", "posting_date"), "po_rseg_posting": ("po_portal", "rseg_posting_date"),
@@ -219,7 +220,7 @@ def build_index(row: dict) -> InvoiceIndex:
         "approval": workflow.get("final_approval_date"),
         "miro": sap.get("miro_booking_date") or sap.get("document_date"),
         "due": sap.get("net_due_date"),
-        "utr_clearing": sap.get("utr_clearing_date_paid"),
+        "clearing": sap.get("clearing_date"),
     }
     dates = tuple(_shared(dates[name][:10]) if dates[name] else None for name in DATE_TYPES)
     sections = {"workflow": workflow, "sap": sap, "po_portal": portal}

@@ -91,7 +91,7 @@ def invoice_filters(
     upload_date_from: date | None = None,
     upload_date_to: date | None = None,
     filter_fiscal_year: int | None = None,
-    date_type: Literal["invoice", "upload", "approval", "miro", "due", "payment", "posting", "accounts", "utr_clearing"] = "invoice",
+    date_type: Literal["invoice", "upload", "approval", "miro", "due", "payment", "posting", "accounts", "clearing"] = "invoice",
     date_from: date | None = None,
     date_to: date | None = None,
     approver: str | None = None,

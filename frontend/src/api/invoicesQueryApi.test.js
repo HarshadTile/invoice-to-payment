@@ -50,7 +50,7 @@ describe('local invoice rules (the same as the server)', () => {
 
   it('uses only the chosen date type for a date range', () => {
     expect(numbers(filterLocalInvoices(list, { date_type: 'invoice', date_from: '2026-06-01', date_to: '2026-06-30' }))).toEqual(['B']);
-    expect(numbers(filterLocalInvoices(list, { date_type: 'utr_clearing', date_from: '2026-01-01' }))).toEqual([]);
+    expect(numbers(filterLocalInvoices(list, { date_type: 'clearing', date_from: '2026-01-01' }))).toEqual([]);
   });
 
   it('matches PO Portal approvers across HOD1, HOD2 and accounts', () => {

@@ -56,6 +56,8 @@ def test_status_precedence(changes, label):
     ("16/10/2026", date(2026, 10, 16)),
     (datetime(2026, 10, 16, 9, 30), date(2026, 10, 16)),
     ("HDFCH00809598187", None),   # a UTR alone carries no date
+    ("6082012777492026-08-20", date(2026, 8, 20)),   # all-digit UTR + date: not year 6082
+    ("608201277749", None),
     ("31-02-2026", None),
     ("-", None),
 ])

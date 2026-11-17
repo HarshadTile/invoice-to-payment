@@ -4,7 +4,7 @@ export const INVOICE_DATE_FIELDS = [
   { value: 'approval', label: 'Approval date', read: (inv) => inv.workflow?.final_approval_date },
   { value: 'miro', label: 'MIRO booking date', read: (inv) => inv.sap?.miro_booking_date || inv.sap?.document_date },
   { value: 'due', label: 'Payment Due date', read: (inv) => inv.sap?.net_due_date },
-  { value: 'utr_clearing', label: 'UTR clearing date', read: (inv) => inv.sap?.utr_clearing_date_paid },
+  { value: 'clearing', label: 'Clearing date', read: (inv) => inv.sap?.clearing_date },
 ];
 
 export function invoiceDateTypeLabel(type = 'invoice') {

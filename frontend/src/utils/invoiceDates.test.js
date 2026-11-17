@@ -9,9 +9,13 @@ describe('date type selection', () => {
   it.each([
     ['invoice', '2026-01-01'], ['upload', '2026-02-02'], ['approval', '2026-03-03'],
     ['miro', '2026-05-05'],
-    ['due', '2026-06-06'], ['utr_clearing', '2026-09-09'],
+    ['due', '2026-06-06'], ['clearing', '2026-07-07'],
   ])('uses the actual %s date', (type, expected) => {
     expect(invoiceFilterDate(inv, type)).toBe(expected);
+  });
+  it('offers Clearing date, not UTR clearing date', () => {
+    expect(INVOICE_DATE_FIELDS.map((field) => field.label)).toContain('Clearing date');
+    expect(INVOICE_DATE_FIELDS.some((field) => field.value === 'utr_clearing')).toBe(false);
   });
   it('does not substitute invoice date for missing milestone dates', () => {
     for (const field of INVOICE_DATE_FIELDS.filter((entry) => entry.value !== 'invoice')) {

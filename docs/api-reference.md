@@ -56,7 +56,7 @@ The list, summary, and recent invoice endpoints also accept `product_type` (`S` 
 `M` = Material), `plant`, `dv_type` (Division, from `DV_TYPE`), `upload_date_from`, `upload_date_to` (inclusive ISO dates),
 and `filter_fiscal_year` (source ending year, e.g. `2027` for FY 2026–27).
 Choose a date with `date_type` (`invoice`, `upload`, `approval`, `miro`, `due`,
-`payment`, `posting`, `accounts`, or `utr_clearing`), then supply `date_from`
+`payment`, `posting`, `accounts`, or `clearing` = SAP `CLEARING_DATE`), then supply `date_from`
 and/or `date_to` as inclusive ISO dates. Rows without the selected date are
 excluded when either bound is supplied. `accounts` is internal-only. Existing
 `upload_date_from`/`upload_date_to` remain available as independent upload filters.
