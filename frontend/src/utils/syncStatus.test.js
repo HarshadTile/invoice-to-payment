@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatAge, formatSyncTime, freshnessLabel } from './syncStatus';
+import { formatAge, formatSyncTime, freshnessLabel, overallProgress, sourceProgress } from './syncStatus';
 
 const NOW = new Date('2026-11-10T09:00:00Z');
 
@@ -44,5 +44,24 @@ describe('invoice data freshness wording', () => {
     expect(label.tone).toBe('ok');
     expect(label.title).toMatch(/updated on request/);
     expect(label.title).toMatch(/4 days ago/);
+  });
+});
+
+describe('sync progress', () => {
+  it('turns each stage into a percent and a sentence', () => {
+    expect(sourceProgress(null)).toBeNull();
+    expect(sourceProgress({ stage: 'waiting', done: 0, total: 0 })).toEqual({ percent: 0, text: 'Waiting for the other source…' });
+    expect(sourceProgress({ stage: 'downloading', done: 40000, total: 80000 })).toEqual({ percent: 44, text: 'Downloading 40,000 of 80,000 rows' });
+    expect(sourceProgress({ stage: 'preparing', done: 80000, total: 80000 }).percent).toBe(97);
+    expect(sourceProgress({ stage: 'saving', done: 5, total: 5 })).toEqual({ percent: 99, text: 'Saving…' });
+  });
+
+  it('weights the overall percent by source size and counts finished sources as done', () => {
+    const status = { running: true, sources: [
+      { source: 'srm', rows: 15000, progress: null }, // finished in this run
+      { source: 'po-portal', rows: 75000, progress: { stage: 'downloading', done: 0, total: 75000 } },
+    ] };
+    expect(overallProgress(status)).toBe(18); // (15k x 100% + 75k x 2%) / 90k
+    expect(overallProgress({ ...status, running: false })).toBeNull();
   });
 });

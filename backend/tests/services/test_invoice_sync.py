@@ -114,6 +114,73 @@ def test_every_attempt_is_recorded_with_the_reason(monkeypatch):
     assert sync_status.consecutive_failures() == 1
 
 
+def _progress_of(name):
+    return {s["source"]: s for s in sync_status.snapshot(include_error=False)["sources"]}[name]["progress"]
+
+
+def test_a_sync_reports_each_stage_for_the_progress_bar(monkeypatch):
+    from app.core import bigquery_api
+    seen = []
+    monkeypatch.setattr(invoice_refresh.api_snapshot, "save", lambda name, rows: seen.append((name, _progress_of(name))))
+    monkeypatch.setattr(invoice_refresh, "index_of", lambda row: None)
+
+    def download(name, total):
+        def refresh(prepare):
+            seen.append(("other", _progress_of("po-portal" if name == "srm" else "srm")))
+            report = bigquery_api._progress.get()  # what fetch_columns reports while pages arrive
+            report(0, total)
+            report(total // 2, total)
+            seen.append((name, _progress_of(name)))
+            rows = _rows(total)
+            prepare(rows)
+            seen.append((name, _progress_of(name)))
+            return rows
+        return refresh
+    monkeypatch.setattr(srm, "refresh_from_api", download("srm", 4))
+    monkeypatch.setattr(po, "refresh_from_api", download("po-portal", 6))
+
+    assert invoice_refresh.refresh_all() is True
+    assert seen == [
+        ("other", {"stage": "waiting", "done": 0, "total": 0}),          # PO Portal queued behind SRM
+        ("srm", {"stage": "downloading", "done": 2, "total": 4}),
+        ("srm", {"stage": "preparing", "done": 4, "total": 4}),
+        ("srm", {"stage": "saving", "done": 4, "total": 4}),
+        ("other", None),                                                  # SRM finished: its bar is gone
+        ("po-portal", {"stage": "downloading", "done": 3, "total": 6}),
+        ("po-portal", {"stage": "preparing", "done": 6, "total": 6}),
+        ("po-portal", {"stage": "saving", "done": 6, "total": 6}),
+    ]
+    assert _progress_of("srm") is None and _progress_of("po-portal") is None
+
+
+def test_a_failed_source_clears_its_progress(monkeypatch):
+    monkeypatch.setattr(invoice_refresh.api_snapshot, "save", lambda *a: None)
+    monkeypatch.setattr(srm, "refresh_from_api", lambda prepare: (_ for _ in ()).throw(RuntimeError("down")))
+    monkeypatch.setattr(po, "refresh_from_api", lambda prepare: _rows(1))
+    invoice_refresh.refresh_all()
+    assert _progress_of("srm") is None and _progress_of("po-portal") is None
+
+
+def test_bigquery_download_reports_rows_as_pages_arrive(monkeypatch):
+    from app.core import bigquery_api
+    monkeypatch.setattr(bigquery_api, "PAGE_SIZE", 2)
+    monkeypatch.setattr(bigquery_api, "WORKERS", 1)
+    monkeypatch.setattr(bigquery_api, "make_client", lambda: type("C", (), {"close": lambda self: None})())
+
+    def run_sql(sql, client=None):
+        if "COUNT(*)" in sql:
+            return [{"n": 5}]
+        offset = int(sql.rsplit("OFFSET ", 1)[1])
+        return [{"A": i} for i in range(offset, min(offset + 2, 5))]
+    monkeypatch.setattr(bigquery_api, "run_sql", run_sql)
+    calls = []
+    with bigquery_api.reporting_progress(lambda done, total: calls.append((done, total))):
+        rows = bigquery_api.fetch_columns("tbl", ("A",))
+    assert len(rows) == 5
+    assert calls == [(0, 5), (2, 5), (4, 5), (5, 5)]
+    assert bigquery_api._progress.get() is None  # only inside the sync
+
+
 def test_only_one_sync_runs_at_a_time():
     assert invoice_refresh._sync_lock.acquire(blocking=False)
     try:

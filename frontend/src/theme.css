@@ -1854,6 +1854,14 @@ tbody tr{transition:background .12s ease;}
 .data-freshness.is-warn{color:var(--amber);background:var(--amber-bg);border-color:transparent;}
 .set-card-head .sync-now{margin-left:auto;display:inline-flex;align-items:center;gap:0.375rem;}
 .set-int-name .sync-error{display:block;color:var(--red);margin-top:0.125rem;}
+/* Sync now: progress while BigQuery is read (Settings > Integrations) */
+.set-int-name .sync-progress{display:flex;flex-direction:column;gap:0.25rem;margin-top:0.375rem;max-width:26rem;}
+.sync-progress-bar{display:block;height:0.375rem;border-radius:999px;background:#ECEDEF;overflow:hidden;}
+.sync-progress-bar > span{display:block;height:100%;border-radius:inherit;background:var(--brand);transition:width .6s ease;}
+.sync-progress small{color:var(--text-muted);}
+.sync-now .spin{animation:sync-spin 1s linear infinite;}
+@keyframes sync-spin{to{transform:rotate(360deg);}}
+@media (prefers-reduced-motion: reduce){.sync-now .spin{animation:none;}.sync-progress-bar > span{transition:none;}}
 
 /* ── Logs / History: quick date ranges and the one-line milestone trail ── */
 .log-ranges{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin:-0.25rem 0 0.875rem;}
