@@ -74,7 +74,7 @@ Secrets come from **Secret Manager**, the rest are plain variables.
 | `SMTP_PASSWORD` | yes | company SMTP |
 | `BIGQUERY_API_URL` | no | BigQuery query API address |
 | `INVOICE_SOURCE` | no | `api` |
-| `INVOICE_AUTO_SYNC` | no | `false` until the GCP team approves automatic use of the API; then also `INVOICE_SYNC_TIMES` (e.g. `06:30,14:30`) and `INVOICE_SYNC_UTC_OFFSET=+05:30` |
+| `INVOICE_AUTO_SYNC` | no | `true` (approved by the GCP team, 18 Nov 2026), with `INVOICE_SYNC_TIMES=08:00` and `INVOICE_SYNC_UTC_OFFSET=+05:30`: daily at 8:00 am IST, an hour after their 6-7 am table load |
 | `INVOICE_CACHE_DIR` | no | on the bucket, see above |
 | `TICKET_ATTACHMENT_DIR` | no | on the bucket, see above |
 | `FRONTEND_URL` | no | the public address, e.g. `https://i2p.example.com` (used in email links and CORS) |
