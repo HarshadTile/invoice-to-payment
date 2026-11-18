@@ -264,7 +264,12 @@ export function installApiMock() {
       return { token: 'test-token', auth: authFor(form) };
     }
     if (path === '/v1/auth/logout') return { ok: true };
-    if (path === '/v1/invoice-sync/run') { syncStatus.running = true; return { msg: 'Sync started. Fresh data appears in 1-2 minutes.' }; }
+    if (path === '/v1/invoice-sync/run') {
+      syncStatus.running = true; // part-way through: SRM downloading, PO Portal queued behind it
+      syncStatus.sources[0].progress = { stage: 'downloading', done: 100, total: 214 };
+      syncStatus.sources[1].progress = { stage: 'waiting', done: 0, total: 0 };
+      return { msg: 'Sync started. Fresh data appears in 1-2 minutes.' };
+    }
     if (path === '/v1/notifications/mark-all-as-read') {
       notifications.forEach((n) => { n.read_at = n.read_at || new Date().toISOString(); });
       return { read: true };

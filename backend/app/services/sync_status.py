@@ -30,6 +30,8 @@ class SourceStatus:
     last_success_at: datetime | None = None
     last_error: str | None = None
     consecutive_failures: int = 0
+    # While a sync runs: {"stage": waiting | counting | downloading | preparing | saving, "done", "total"}.
+    progress: dict | None = None
 
     def to_dict(self, include_error: bool) -> dict:
         return {
@@ -39,6 +41,7 @@ class SourceStatus:
             "lastSyncOk": self.consecutive_failures == 0,
             "consecutiveFailures": self.consecutive_failures,
             "lastError": self.last_error if include_error else None,
+            "progress": dict(self.progress) if self.progress else None,
         }
 
 
@@ -82,6 +85,17 @@ def set_running(running: bool) -> None:
 def set_next_sync(moment: datetime | None) -> None:
     with _lock:
         _state.next_sync_at = moment
+
+
+def set_progress(name: str, stage: str, done: int = 0, total: int = 0) -> None:
+    """How far this source's sync is, for the progress bar on Settings > Integrations."""
+    with _lock:
+        _source(name).progress = {"stage": stage, "done": done, "total": total}
+
+
+def clear_progress(name: str) -> None:
+    with _lock:
+        _source(name).progress = None
 
 
 def record_loaded(name: str, rows: int, data_as_of: datetime | None, loaded_from: str) -> None:

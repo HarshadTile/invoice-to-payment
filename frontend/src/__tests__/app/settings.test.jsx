@@ -178,6 +178,12 @@ describe('Internal admin - Settings: roles, users and permissions', () => {
     expect(panel.getByText('Failing')).toBeInTheDocument();
     await user.click(panel.getByRole('button', { name: /Sync now/ }));
     expect(await screen.findByText(/Sync started/)).toBeInTheDocument();
+    // while it runs: a small bar per source, what it is doing, and the overall percent on the button
+    const bar = await panel.findByRole('progressbar', { name: 'Msetu / SRM sync progress' });
+    expect(bar).toHaveAttribute('aria-valuenow', '41'); // 100 of 214 rows: 2% + 83% x 100/214
+    expect(panel.getByText('Downloading 100 of 214 rows · 41%')).toBeInTheDocument();
+    expect(panel.getByText('Waiting for the other source… · 0%')).toBeInTheDocument();
+    expect(panel.getByRole('button', { name: /Syncing… \d+%/ })).toBeDisabled();
   });
   it('Audit Logs loads a page from the server, shows the IP and filters by type', async () => {
     const { user } = await loginAdmin();

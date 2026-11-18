@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timezone
 from threading import Event, Lock, Thread
 
-from app.core.bigquery_api import use_api
+from app.core.bigquery_api import reporting_progress, use_api
 from app.repositories import api_snapshot, po_portal_invoice, srm_invoice
 from app.services import sync_status
 from app.services.invoice_index import index_of
@@ -33,9 +33,26 @@ _sync_lock = Lock()
 _thread: Thread | None = None
 
 
-def _index_all(rows):
-    for row in rows:
+PROGRESS_EVERY = 5000  # rows indexed between progress updates
+
+
+def _index_all(rows, on_progress=None):
+    total = len(rows)
+    for done, row in enumerate(rows, 1):
         index_of(row)
+        if on_progress and (done % PROGRESS_EVERY == 0 or done == total):
+            on_progress(done, total)
+
+
+def _refresh_one(repository, name):
+    """One source from BigQuery, telling sync_status each stage so the screen can show a progress bar."""
+    sync_status.set_progress(name, "counting")
+    with reporting_progress(lambda done, total: sync_status.set_progress(name, "downloading", done, total)):
+        rows = repository.refresh_from_api(
+            prepare=lambda rows: _index_all(rows, lambda done, total: sync_status.set_progress(name, "preparing", done, total)))
+    sync_status.set_progress(name, "saving", len(rows), len(rows))
+    api_snapshot.save(name, rows)
+    return rows
 
 
 def _schedule() -> Schedule:
@@ -79,11 +96,12 @@ def refresh_all() -> bool:
     sync_status.set_running(True)
     try:
         for repository, _ in SOURCES:
+            sync_status.set_progress(repository.SNAPSHOT_NAME, "waiting")
+        for repository, _ in SOURCES:
             name = repository.SNAPSHOT_NAME
             started = datetime.now(timezone.utc)
             try:
-                rows = repository.refresh_from_api(prepare=_index_all)
-                api_snapshot.save(name, rows)
+                rows = _refresh_one(repository, name)
                 sync_status.record_attempt(name, ok=True, rows=len(rows), started=started,
                                            display_time=schedule.local_display(started))
                 logger.info("Refreshed %s %s invoices from BigQuery", len(rows), name)
@@ -92,7 +110,11 @@ def refresh_all() -> bool:
                 logger.debug("Invoice refresh failure detail", exc_info=True)
                 sync_status.record_attempt(name, ok=False, error=_error_text(exc), started=started,
                                            display_time=schedule.local_display(started))
+            finally:
+                sync_status.clear_progress(name)  # this source is done, whatever happened
     finally:
+        for repository, _ in SOURCES:
+            sync_status.clear_progress(repository.SNAPSHOT_NAME)
         sync_status.set_running(False)
         _sync_lock.release()
     return True

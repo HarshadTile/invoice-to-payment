@@ -2,11 +2,14 @@
 
 Only fixed queries built from code constants are sent; nothing from a request ever reaches the SQL.
 """
+import contextvars
 import logging
 import os
 import re
 import ssl
+import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
@@ -24,6 +27,18 @@ TIMEOUT = float(os.getenv("BIGQUERY_TIMEOUT", "120"))
 WORKERS = int(os.getenv("BIGQUERY_WORKERS", "4"))
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# Who to tell how a download is going: fn(rows_done, rows_total). Set by the sync around one source
+# (reporting_progress), so the repositories that call fetch_columns need no change.
+_progress = contextvars.ContextVar("bigquery_progress", default=None)
+
+
+@contextmanager
+def reporting_progress(callback):
+    token = _progress.set(callback)
+    try:
+        yield
+    finally:
+        _progress.reset(token)
 
 
 class InvoiceSourceError(RuntimeError):
@@ -92,14 +107,27 @@ def fetch_columns(table: str, columns: tuple[str, ...], *, client: httpx.Client 
         if not _IDENTIFIER.match(name):
             raise ValueError(f"Unsafe SQL identifier: {name!r}")
     column_list = ", ".join(columns)
+    report = _progress.get()  # read here: the worker threads below don't see this context
     owns_client = client is None
     client = client or make_client()
     try:
         total = int(run_sql(f"SELECT COUNT(*) AS n FROM {table}", client=client)[0]["n"])
         queries = [f"SELECT {column_list} FROM {table} ORDER BY {column_list} LIMIT {PAGE_SIZE} OFFSET {offset}"
                    for offset in range(0, total, PAGE_SIZE)]
+        done, done_lock = [0], threading.Lock()
+        if report:
+            report(0, total)
+
+        def page(sql):
+            rows = run_sql(sql, client=client)
+            if report:
+                with done_lock:
+                    done[0] += len(rows)
+                    report(min(done[0], total), total)
+            return rows
+
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-            pages = list(pool.map(lambda sql: run_sql(sql, client=client), queries))
+            pages = list(pool.map(page, queries))
     finally:
         if owns_client:
             client.close()
