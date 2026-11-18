@@ -62,6 +62,20 @@ bucket so that user can write (gcsfuse mount options `uid=10001,gid=10001`).
 invoices are read, the saved data no longer matches and the first start reads BigQuery once (1–2 min).
 Use it for monitoring/alerts (anything but `"ready"`), not as the startup probe.
 
+### Settings files per environment
+
+| `APP_ENV` | File read (if it exists) | Template in git |
+|---|---|---|
+| not set / `local` | `backend/.env` | `.env.example` |
+| `dev` | `backend/.env.dev` | `.env.dev.example` |
+| `uat` | `backend/.env.uat` | `.env.uat.example` |
+| `prod` | `backend/.env.prod` | `.env.prod.example` |
+
+The real files hold passwords, so they are gitignored and never in the image; only the templates are
+committed. On Cloud Run set `APP_ENV` and the variables below on the service: a real variable always
+wins over a file, so no file is needed there. Each template lists that environment's values (its own
+SMTP server and sender, address, sync, bucket paths) with the secrets left empty.
+
 ### Environment variables
 
 Secrets come from **Secret Manager**, the rest are plain variables.

@@ -1,15 +1,14 @@
 import os
 import re
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Union
 
 import bcrypt
 import jwt
-from dotenv import load_dotenv
+from app.core.env_file import load_env_file
 
 # backend/.env is gitignored and holds this machine's secrets (see .env.example).
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env")
+load_env_file()
 
 # Password hashing uses bcrypt directly (passlib, used before, is no longer maintained).
 # Hashes are the standard $2b$ format with cost 12, exactly what passlib produced, so every
