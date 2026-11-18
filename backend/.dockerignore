@@ -1,0 +1,25 @@
+# Never in the image: secrets, local environments, test material, local data.
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+tests/
+isolated_tests/
+pytest.ini
+requirements-dev.txt
+data/
+docs/
+sql/
+dev/
+*.bak*
+*.log
+.git/
+.gitignore
+.vscode/
+.idea/
+Dockerfile
+.dockerignore

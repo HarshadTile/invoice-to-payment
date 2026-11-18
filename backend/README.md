@@ -140,6 +140,13 @@ signs traffic with a root certificate that Python's own certificate list doesn't
 When the code starts reading a new source column, add it to the matching column list.
 `tests/core/test_bigquery_api.py` fails if a column the code reads is missing from the list.
 
+## Deployment (Docker / Cloud Run)
+
+`Dockerfile` builds the backend image (Python 3.14, uvicorn on `$PORT` 8080, no secrets inside). The
+database is external (`DATABASE_URL`, Cloud SQL); migrations run as a separate step with the same image
+(`alembic upgrade head`). Settings, Cloud Run values (1 instance, CPU always on), the bucket for
+`INVOICE_CACHE_DIR` / `TICKET_ATTACHMENT_DIR` and post-deploy checks: [docs/deployment.md](docs/deployment.md).
+
 ## Tests
 
 For isolated password-link, user-management, and permission tests, run:

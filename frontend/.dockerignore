@@ -1,0 +1,14 @@
+# Never in the image: dependencies (installed fresh by npm ci), old builds, local settings, editor files.
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+.git/
+.gitignore
+.vscode/
+.idea/
+Dockerfile
+.dockerignore
