@@ -10,13 +10,13 @@ import ssl
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from pathlib import Path
 
 import httpx
 import truststore
-from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env")
+from app.core.env_file import load_env_file
+
+load_env_file()
 
 logger = logging.getLogger("app.bigquery")
 

@@ -14,3 +14,9 @@ data/tbl_dw_inv_paymt_SRM.xlsx
 data/tbl_dw_inv_paymt_PO_PORTAL.csv
 data/tbl_dw_inv_paymt_PO_PORTAL.xlsx
 data/gcp_invoice_data.xlsx
+
+# Settings per environment (.env.dev, .env.uat, .env.prod) hold passwords: never committed.
+# Only the templates without secrets are: .env.example, .env.dev.example, .env.uat.example, .env.prod.example.
+.env.*
+!.env.example
+!.env.*.example

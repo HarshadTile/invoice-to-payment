@@ -73,6 +73,10 @@ If you'd rather not keep it in a file (e.g. a one-off terminal session), you
 can still set `$env:DATABASE_URL = "..."` before running a command instead —
 that overrides `.env` for that terminal only.
 
+**Other environments.** `APP_ENV=dev|uat|prod` makes the backend read `.env.dev`, `.env.uat` or
+`.env.prod` instead (each from its committed `*.example` template; all gitignored). Real environment
+variables always win, which is how Cloud Run is configured. See [docs/deployment.md](docs/deployment.md).
+
 ### 2. Build the schema
 
 ```powershell

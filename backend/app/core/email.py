@@ -11,15 +11,13 @@ import queue
 import smtplib
 import threading
 import time
-from pathlib import Path
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
-from dotenv import load_dotenv
+from app.core.env_file import load_env_file
 
-BACKEND_ENV = Path(__file__).resolve().parents[2] / ".env"
-load_dotenv(dotenv_path=BACKEND_ENV)
+load_env_file()  # backend/.env, or .env.dev / .env.uat / .env.prod by APP_ENV
 
 logger = logging.getLogger("app.email")
 
