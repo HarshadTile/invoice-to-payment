@@ -1858,3 +1858,10 @@ tbody tr{transition:background .12s ease;}
 /* ── Logs / History: quick date ranges and the one-line milestone trail ── */
 .log-ranges{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin:-0.25rem 0 0.875rem;}
 .log-trail{margin-top:0.25rem;font-size:0.71875rem;line-height:1.4;color:var(--text-muted);white-space:nowrap;}
+
+/* Edge (and old IE) add their own "show password" eye and clear (x) buttons inside password fields;
+   our fields have their own eye toggle, so hide the browser ones to avoid two overlapping icons. */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}

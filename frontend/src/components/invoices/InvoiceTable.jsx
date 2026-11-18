@@ -12,7 +12,8 @@ import Badge from '../common/Badge.jsx';
 import PagerFoot from '../common/PagerFoot.jsx';
 import SortDateTh from '../common/SortDateTh.jsx';
 import { useDateColumnSort } from '../../utils/dateSort';
-import { invoiceDateLabel, formatInvoiceDate } from '../../utils/invoiceDates';
+import { invoiceDateLabel, formatInvoiceDate, invoiceFilterDate } from '../../utils/invoiceDates';
+import { useScope } from '../../features/ui/scope';
 import { totalsByCurrency } from '../../utils/amounts';
 import { isSupplierVisibleInvoice } from '../../utils/invoiceVisibility';
 import { Flag, Eye, Download, Inbox, Search } from '../common/icons.jsx';
@@ -61,7 +62,12 @@ export default function InvoiceTable({ invoices, tableKey, mode = 'full', bulk =
   const searchBusy = busy || deferredSearch !== search;
   const visibleInvoices = useMemo(() => isSupplierUser ? invoices.filter(isSupplierVisibleInvoice) : invoices, [invoices, isSupplierUser]);
   const matched = useMemo(() => (server ? visibleInvoices : filterInvoiceQuery(visibleInvoices, deferredSearch)), [server, visibleInvoices, deferredSearch]);
-  const clientSort = useDateColumnSort(matched, DATE_COLUMNS);
+  // Not paged on the server: order by the date type the page filters on (top bar), oldest first,
+  // until a date column is clicked; the server does the same for paged lists.
+  const { dateField } = useScope();
+  const clientSort = useDateColumnSort(matched, DATE_COLUMNS, {
+    fallback: (inv) => invoiceFilterDate(inv, dateField), resetKey: dateField,
+  });
   const filtered = server ? matched : clientSort.sorted;
   const toggleDate = server ? server.onSort : clientSort.toggle;
   const dirFor = server ? (key) => (server.sort?.key === key ? server.sort.dir : null) : clientSort.dirFor;

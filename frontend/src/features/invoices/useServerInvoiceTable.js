@@ -21,17 +21,21 @@ export default function useServerInvoiceTable({ tableKey, filters: pageFilters, 
     dispatch(setTablePage({ key: tableKey, page: 1 }));
   }, [dispatch, tableKey, filterKey]);
 
-  const [sort, setSort] = useState({ key: null, dir: null });
+  // A clicked date column; none = the server's order (the filter's date type, oldest first). Picking
+  // another date type drops the click, so the list follows the new choice.
+  const dateType = pageFilters?.date_type;
+  const [clicked, setSort] = useState({ key: null, dir: null, dateType });
+  const sort = useMemo(() => (clicked.dateType === dateType ? clicked : { key: null, dir: null, dateType }), [clicked, dateType]);
   const sortParam = sort.key ? `${sort.key}:${sort.dir}` : undefined;
   const result = useGetInvoicePageQuery({ ...filters, sort: sortParam, page, page_size: PAGE_SIZE }, { skip });
   const total = result.data?.total ?? 0;
   const server = useMemo(() => ({
     total,
     sort,
-    onSort: (key) => setSort((cur) => ({ key, dir: cur.key === key && cur.dir === 'desc' ? 'asc' : 'desc' })),
+    onSort: (key) => setSort((cur) => ({ key, dir: cur.key === key && cur.dateType === dateType && cur.dir === 'desc' ? 'asc' : 'desc', dateType })),
     onExport: ({ invoiceNumbers, filename }) => exportInvoices({ ...filters, sort: sortParam },
       { getState: store.getState, invoiceNumbers, filename }),
-  }), [total, sort, filters, sortParam, store]);
+  }), [total, sort, filters, sortParam, store, dateType]);
   return {
     invoices: result.data?.items || [], server, total, query: filters, isFetching: result.isFetching,
     error: result.isError ? result.error : null, refetch: result.refetch,

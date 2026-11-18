@@ -146,7 +146,10 @@ export default function SearchInvoicePage() {
 
   // ── Filter logic: the server searches, filters, counts and pages; this page shows one page ──
   const parsed = parseInvoiceQuery(query);
-  const [sort, setSort] = useState({ key: null, dir: null });
+  // A clicked date column; none = the server's order (the top-bar date type, oldest first). Another
+  // date type drops the click.
+  const [clicked, setSort] = useState({ key: null, dir: null, dateField });
+  const sort = useMemo(() => (clicked.dateField === dateField ? clicked : { key: null, dir: null, dateField }), [clicked, dateField]);
   const filters = useMemo(() => ({
     ...scopeParams,
     fy_strict: true, // Search lists only invoices of the chosen year (the dashboard also keeps undated ones)
@@ -183,7 +186,7 @@ export default function SearchInvoicePage() {
   const server = {
     total,
     sort,
-    onSort: (key) => setSort((cur) => ({ key, dir: cur.key === key && cur.dir === 'desc' ? 'asc' : 'desc' })),
+    onSort: (key) => setSort((cur) => ({ key, dir: cur.key === key && cur.dateField === dateField && cur.dir === 'desc' ? 'asc' : 'desc', dateField })),
     onExport: ({ invoiceNumbers, filename }) => exportInvoices({ ...filters, sort: sortParam }, { getState: store.getState, invoiceNumbers, filename }),
   };
   const updating = searchPending || results.isFetching;

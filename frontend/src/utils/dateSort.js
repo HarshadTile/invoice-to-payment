@@ -38,13 +38,16 @@ export function useDateSort(rows, getDate, initialDir = null) {
 /** Click-to-sort for a table with several date columns. `getters` maps a column key to the
  *  function that reads that column's date, e.g. { invoice: (r) => r.rawDate, status: (r) => r.date }.
  *  One column is active at a time; its first click shows newest first, then it flips. Rows without a
- *  readable date always go last, and with no column chosen the source order is kept. */
-export function useDateColumnSort(rows, getters) {
-  const [sort, setSort] = useState({ key: null, dir: null });
+ *  readable date always go last. With no column chosen, `fallback` (the date the page filters on)
+ *  orders the rows oldest first, as the server does; without it the source order is kept. A new
+ *  `resetKey` (e.g. a different date type) drops the clicked column. */
+export function useDateColumnSort(rows, getters, { fallback, resetKey } = {}) {
+  const [sort, setSort] = useState({ key: null, dir: null, resetKey });
+  const active = sort.resetKey === resetKey ? sort : { key: null, dir: null, resetKey };
   const sorted = useMemo(() => {
-    const read = sort.key && getters[sort.key];
+    const read = (active.key && getters[active.key]) || (!active.key && fallback);
     if (!read) return rows;
-    const factor = sort.dir === 'asc' ? 1 : -1;
+    const factor = active.key && active.dir !== 'asc' ? -1 : 1;
     return rows
       .map((row, index) => ({ row, index, ms: dateValue(read(row)) }))
       .sort((a, b) => {
@@ -52,10 +55,13 @@ export function useDateColumnSort(rows, getters) {
         return (a.ms - b.ms) * factor || a.index - b.index;
       })
       .map((item) => item.row);
-  // getters are stable accessors at every call site
+  // getters are stable accessors at every call site; `fallback` changes only with `resetKey`
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, sort]);
-  const toggle = (key) => setSort((cur) => ({ key, dir: cur.key === key && cur.dir === 'desc' ? 'asc' : 'desc' }));
-  const dirFor = (key) => (sort.key === key ? sort.dir : null);
+  }, [rows, active.key, active.dir, resetKey, !!fallback]);
+  const toggle = (key) => setSort((cur) => {
+    const current = cur.resetKey === resetKey ? cur : { key: null, dir: null };
+    return { key, dir: current.key === key && current.dir === 'desc' ? 'asc' : 'desc', resetKey };
+  });
+  const dirFor = (key) => (active.key === key ? active.dir : null);
   return { sorted, toggle, dirFor };
 }

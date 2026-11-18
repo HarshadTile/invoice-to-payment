@@ -35,9 +35,9 @@ describe('local invoice rules (the same as the server)', () => {
   ];
 
   it('keeps invoices with no year for internal users, unless strict, and never for suppliers', () => {
-    expect(numbers(filterLocalInvoices(list, { fy: '2026-27' }, true))).toEqual(['A', 'B', 'C', 'D']);
-    expect(numbers(filterLocalInvoices(list, { fy: '2026-27', fy_strict: true }, true))).toEqual(['A', 'B', 'D']);
-    expect(numbers(filterLocalInvoices(list, { fy: '2026-27' }, false))).toEqual(['A', 'B', 'D']);
+    expect(numbers(filterLocalInvoices(list, { fy: '2026-27' }, true))).toEqual(['A', 'D', 'B', 'C']); // invoice date, oldest first; undated last
+    expect(numbers(filterLocalInvoices(list, { fy: '2026-27', fy_strict: true }, true))).toEqual(['A', 'D', 'B']);
+    expect(numbers(filterLocalInvoices(list, { fy: '2026-27' }, false))).toEqual(['A', 'D', 'B']);
     expect(numbers(filterLocalInvoices(list, { fy: '2025-26' }, true))).toEqual(['C']);
   });
 
@@ -46,6 +46,12 @@ describe('local invoice rules (the same as the server)', () => {
     expect(numbers(filterLocalInvoices(list, { channel: 'all', statuses: ['Paid'] }))).toEqual(['B']);
     expect(numbers(filterLocalInvoices(list, { pan: 'zzzzz9999z' }))).toEqual(['B']);
     expect(numbers(filterLocalInvoices(list, { vendor_name: 'Tata Steel' }))).toEqual(['B']);
+  });
+
+  it('orders by the chosen date type, oldest first, unless a column was clicked (as the server)', () => {
+    const dated = [inv('late', { rawUploadDate: '2026-09-01' }), inv('none', { rawUploadDate: null }), inv('early', { rawUploadDate: '2026-01-01' })];
+    expect(numbers(filterLocalInvoices(dated, { date_type: 'upload' }))).toEqual(['early', 'late', 'none']);
+    expect(numbers(filterLocalInvoices(dated, { date_type: 'upload', sort: 'upload:desc' }))).toEqual(['late', 'early', 'none']);
   });
 
   it('uses only the chosen date type for a date range', () => {
