@@ -5,7 +5,7 @@ import { useInvoice } from '../../features/invoices/useInvoice';
 import InvoiceLoading from './InvoiceLoading.jsx';
 import ModalShell from './ModalShell.jsx';
 import Badge from '../common/Badge.jsx';
-import { closeModal, ensureNavExpanded } from '../../features/ui/uiSlice';
+import { closeModal, ensureNavExpanded, openModal } from '../../features/ui/uiSlice';
 import { useNavigate } from 'react-router-dom';
 
 export default function InvoiceStageModal({ ctx }) {
@@ -26,9 +26,12 @@ export default function InvoiceStageModal({ ctx }) {
             type="button"
             className="btn"
             onClick={() => {
-              dispatch(closeModal());
               dispatch(ensureNavExpanded('channels'));
               navigate(`/app/channel/${inv.channel}`);
+              // ...and show this invoice's full details there, not just the channel's list.
+              dispatch(openModal({ kind: 'invoiceDetail', ctx: {
+                no: inv.no, poItem: inv.poItem, vcode: inv.vcode, po: inv.po, channel: inv.channel, sourceId: inv.sourceId,
+              } }));
             }}
           >
             Open in {CHANNEL_LABEL[inv.channel]} →

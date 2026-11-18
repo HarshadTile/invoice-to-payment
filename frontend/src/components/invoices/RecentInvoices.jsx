@@ -17,7 +17,10 @@ const DATE_COLUMNS = { invoice: (inv) => inv.rawDate, status: (inv) => inv.date 
 export default function RecentInvoices({ rows = [] }) {
   const dispatch = useDispatch();
   const { sorted, toggle, dirFor } = useDateColumnSort(rows, DATE_COLUMNS);
-  const openStage = (no, poItem) => dispatch(openModal({ kind: 'invoiceStage', ctx: { no, poItem } }));
+  // The full identity: one invoice number can appear on several PO items, vendor codes or channels.
+  const openStage = (inv) => dispatch(openModal({ kind: 'invoiceStage', ctx: {
+    no: inv.no, poItem: inv.poItem, vcode: inv.vcode, po: inv.po, channel: inv.channel, sourceId: inv.sourceId,
+  } }));
   const openVendorCode = (code) => dispatch(openModal({ kind: 'vendorCodePreview', ctx: { code } }));
 
   return (
@@ -44,7 +47,7 @@ export default function RecentInvoices({ rows = [] }) {
             )}
             {sorted.map((inv, rowIndex) => (
               <tr key={`${inv.no}-${rowIndex}`}>
-                <td><button type="button" className="link-hero" title="Open current stage" onClick={() => openStage(inv.no, inv.poItem)}>{inv.no}</button></td>
+                <td><button type="button" className="link-hero" title="Open current stage" onClick={() => openStage(inv)}>{inv.no}</button></td>
                 <td className="cell-muted" style={{ whiteSpace: 'nowrap' }}>{invoiceDateLabel(inv)}</td>
                 <td><button type="button" className="vcode-chip link-hero" title={`Preview ${inv.vcode}`} onClick={() => openVendorCode(inv.vcode)}>{inv.vcode}</button></td>
                 <td className="cell-muted">{CHANNEL_LABEL[inv.channel]}</td>
@@ -53,7 +56,7 @@ export default function RecentInvoices({ rows = [] }) {
                 <td className="cell-muted">{inv.date}</td>
                 <td className="col-actions">
                   <div className="row-actions">
-                    <button type="button" className="kebab" title="Open current stage" aria-label="View invoice" onClick={() => openStage(inv.no, inv.poItem)}><Eye /></button>
+                    <button type="button" className="kebab" title="Open current stage" aria-label="View invoice" onClick={() => openStage(inv)}><Eye /></button>
                   </div>
                 </td>
               </tr>
