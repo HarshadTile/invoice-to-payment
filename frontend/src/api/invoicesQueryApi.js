@@ -121,7 +121,8 @@ export function filterLocalInvoices(list, params = {}, internal = true) {
     return true;
   });
   if (q) rows = filterInvoiceQuery(rows, q);
-  return sort ? sortLocal(rows, sort) : rows;
+  // As the server (list_sort): the clicked column, else the filter's date type, oldest first.
+  return sortLocal(rows, sort || `${dateType}:asc`);
 }
 
 const FACET_READ = {

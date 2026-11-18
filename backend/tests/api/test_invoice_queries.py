@@ -68,7 +68,7 @@ def test_commas_search_by_position():
 
 
 def test_suppliers_cannot_find_invoices_by_internal_fields():
-    assert numbers(internal.get("/api/v1/invoices/list-invoices?q=asha rao")) == ["INV-1", "INV-2", "INV-3", "INV-4", "INV-5"]
+    assert numbers(internal.get("/api/v1/invoices/list-invoices?q=asha rao")) == ["INV-4", "INV-1", "INV-2", "INV-3", "INV-5"]
     assert numbers(supplier.get("/api/v1/invoices/list-invoices?q=asha rao")) == []
 
 
@@ -87,6 +87,15 @@ def test_date_sort_puts_undated_rows_last():
     assert numbers(internal.get("/api/v1/invoices/list-invoices?sort=invoice:desc")) == ["INV-2", "INV-1", "INV-4", "INV-3", "INV-5"]
     assert numbers(internal.get("/api/v1/invoices/list-invoices?sort=invoice:asc")) == ["INV-4", "INV-1", "INV-2", "INV-3", "INV-5"]
     assert internal.get("/api/v1/invoices/list-invoices?sort=amount:desc").status_code == 422
+
+
+def test_lists_follow_the_chosen_date_type_oldest_first():
+    # no column clicked: the date type the filter uses, ascending; invoices without that date last
+    assert numbers(internal.get("/api/v1/invoices/list-invoices")) == ["INV-4", "INV-1", "INV-2", "INV-3", "INV-5"]
+    by_upload = numbers(internal.get("/api/v1/invoices/list-invoices?date_type=upload"))
+    assert by_upload == numbers(internal.get("/api/v1/invoices/list-invoices?sort=upload:asc"))
+    # a clicked column still wins
+    assert numbers(internal.get("/api/v1/invoices/list-invoices?sort=invoice:desc")) == ["INV-2", "INV-1", "INV-4", "INV-3", "INV-5"]
 
 
 def test_date_range_uses_the_chosen_date_type_without_fallback():
@@ -136,9 +145,9 @@ def test_export_streams_the_filtered_rows_as_excel_friendly_csv():
     response = internal.get("/api/v1/invoices/export?statuses=Approved&statuses=Rejected")
     assert response.status_code == 200 and response.text.startswith("﻿Invoice No,Vendor")
     rows = list(csv.reader(io.StringIO(response.text.lstrip("﻿"))))
-    assert [row[0] for row in rows[1:]] == ["INV-2", "INV-4"]
-    assert rows[1][9] == "02 Jun 2026" and rows[1][12] == "₹2,500.50"
-    assert rows[2][-1] == "Not provided"  # rejected without a reason
+    assert [row[0] for row in rows[1:]] == ["INV-4", "INV-2"]  # oldest invoice date first
+    assert rows[2][9] == "02 Jun 2026" and rows[2][12] == "₹2,500.50"
+    assert rows[1][-1] == "Not provided"  # rejected without a reason
     assert supplier.get("/api/v1/invoices/export").status_code == 403
 
 
@@ -319,7 +328,7 @@ def test_channel_locked_users_stay_in_their_channel():
 def test_export_of_selected_invoices_has_only_those():
     response = internal.get("/api/v1/invoices/export?invoice_numbers=INV-1&invoice_numbers=INV-4")
     rows = list(csv.reader(io.StringIO(response.text.lstrip("﻿"))))
-    assert [row[0] for row in rows[1:]] == ["INV-1", "INV-4"]
+    assert [row[0] for row in rows[1:]] == ["INV-4", "INV-1"]
 
 
 def test_po_portal_rows_export_with_their_channel_and_item():

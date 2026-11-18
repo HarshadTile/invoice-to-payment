@@ -5,6 +5,7 @@ import { SRM_COLUMNS, srmColumns, srmCell } from '../../utils/srmWorkspace';
 import { downloadCSV, timestampedExportName } from '../../utils/csv';
 import { dateValue } from '../../utils/dateSort';
 import { STATUS_CHIP } from '../../data/constants';
+import { useScope } from '../../features/ui/scope';
 import PagerFoot from '../common/PagerFoot.jsx';
 import SortDateTh from '../common/SortDateTh.jsx';
 import Badge from '../common/Badge.jsx';
@@ -28,7 +29,11 @@ export default function SrmDataTable({ invoices, view, canExport, config, server
   const pageKey = pageKeyFor(namespace, view);
   const page = useSelector((state) => state.ui.tablePage[pageKey] || 1);
   const columns = useMemo(() => resolveColumns(view, selection), [view, selection, resolveColumns]);
-  const [sort, setSort] = useState({ key: null, dir: 'desc' });
+  // A clicked date column; none = the register's order (the top-bar date type, oldest first, from the
+  // server or filterLocalInvoices). Another date type drops the click.
+  const { dateField } = useScope();
+  const [clicked, setSort] = useState({ key: null, dir: 'desc', dateField });
+  const sort = useMemo(() => (clicked.dateField === dateField ? clicked : { key: null, dir: 'desc', dateField }), [clicked, dateField]);
   // The Columns panel closes on a click anywhere outside it or on Escape, not only on its button.
   const [columnsOpen, setColumnsOpen] = useState(false);
   const columnsRef = useRef(null);
@@ -114,7 +119,7 @@ export default function SrmDataTable({ invoices, view, canExport, config, server
       <table className="data-table srm-data-table">
         <thead><tr>{columns.map((entry) => entry.type === 'date'
           ? <SortDateTh key={entry.key} label={entry.label} dir={sort.key === entry.key ? sort.dir : null}
-            onToggle={() => setSort((current) => ({ key: entry.key, dir: current.key === entry.key && current.dir === 'desc' ? 'asc' : 'desc' }))} />
+            onToggle={() => setSort((current) => ({ key: entry.key, dir: current.key === entry.key && current.dateField === dateField && current.dir === 'desc' ? 'asc' : 'desc', dateField }))} />
           : <th key={entry.key} className={entry.key === 'invoice' ? 'srm-pin-invoice' : entry.key === 'vendor' ? 'srm-pin-vendor' : undefined}>{entry.label}</th>)}
           <th>Actions</th></tr></thead>
         <tbody>

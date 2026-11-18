@@ -158,13 +158,19 @@ def get_all_invoices(
     user: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
 ):
-    rows, supplier_codes = _query(filters, user, db)
+    rows, supplier_codes = _query(filters, user, db, sort=list_sort(filters))
     start = (page - 1) * page_size
     invoices = [map_invoice_to_response(row) for row in rows[start:start + page_size]]  # map the page only
     if supplier_codes is not None:
         invoices = [_redact_for_supplier(i) for i in invoices]
     return InvoiceListResponse(items=invoices, total=len(rows), page=page, page_size=page_size,
                                total_pages=ceil(len(rows) / page_size) if rows else 0)
+
+
+def list_sort(filters) -> str:
+    """The order of an invoice list or export: the date column the user clicked, else the chosen date
+    type (the one the date filter uses), oldest first. Invoices without that date go last."""
+    return filters.get("sort") or f"{filters.get('date_type') or 'invoice'}:asc"
 
 
 def _query(filters, user, db, **changes):
@@ -319,7 +325,7 @@ def export_invoices(
     user: dict = Depends(get_current_user_token),
     db: Session = Depends(get_db),
 ):
-    rows, supplier_codes = _query(filters, user, db)
+    rows, supplier_codes = _query(filters, user, db, sort=list_sort(filters))
     if supplier_codes is not None:  # the supplier export has its own columns (Phase 2)
         raise HTTPException(status_code=403, detail="Export is available on the supplier invoice pages")
     stamp = datetime.now().strftime("%Y-%m-%d_%H-%M")

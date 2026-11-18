@@ -35,4 +35,22 @@ describe('useDateColumnSort', () => {
     expect(result.current.dirFor('status')).toBe('desc');
     expect(result.current.dirFor('invoice')).toBeNull();
   });
+
+  it('with a fallback (the date the page filters on) it starts oldest first, blanks last', () => {
+    const { result } = renderHook(() => useDateColumnSort(rows, getters, { fallback: (r) => r.rawDate, resetKey: 'invoice' }));
+    expect(ids(result.current)).toBe('bacd');
+    act(() => result.current.toggle('invoice'));
+    expect(ids(result.current)).toBe('cabd'); // a clicked column still wins
+  });
+
+  it('a new date type drops the clicked column and follows the new fallback', () => {
+    const { result, rerender } = renderHook(({ type }) => useDateColumnSort(rows, getters, {
+      fallback: type === 'status' ? (r) => r.date : (r) => r.rawDate, resetKey: type,
+    }), { initialProps: { type: 'invoice' } });
+    act(() => result.current.toggle('invoice'));
+    expect(result.current.dirFor('invoice')).toBe('desc');
+    rerender({ type: 'status' });
+    expect(result.current.dirFor('invoice')).toBeNull();
+    expect(ids(result.current)).toBe('bdac'); // 12 Jun, 05 Aug, 30 Oct, then "-" last
+  });
 });
