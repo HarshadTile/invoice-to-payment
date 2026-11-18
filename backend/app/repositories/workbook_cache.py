@@ -9,7 +9,9 @@ from pathlib import Path
 import tempfile
 
 logger = logging.getLogger(__name__)
-CACHE_DIR = Path(__file__).resolve().parents[2] / 'data' / '.invoice-cache'
+# Saved invoice data (the BigQuery snapshot, the parsed workbooks). INVOICE_CACHE_DIR moves it, e.g. to a
+# mounted Cloud Storage bucket on Cloud Run, whose own disk is wiped on every restart.
+CACHE_DIR = Path(os.getenv('INVOICE_CACHE_DIR') or Path(__file__).resolve().parents[2] / 'data' / '.invoice-cache')
 CACHE_VERSION = 1
 
 

@@ -118,6 +118,18 @@ domain, memoized selectors (`createSelector`) wherever a selector derives a
 new array, and all business rules live in plain, tested functions under
 `utils/` rather than inside components.
 
+## Deployment (Docker / Cloud Run)
+
+`Dockerfile` builds the app with Node and serves the files with nginx on port 8080 (`nginx.conf`: security
+headers, app routes fall back to `index.html`, long cache for `/assets/`). `VITE_USE_FASTAPI_INVOICES=true`
+is baked in at build time. The load balancer must send `/api/*` to the backend service. Full guide:
+the backend's `docs/deployment.md`.
+
+```bash
+docker build -t i2p-frontend .
+docker run -p 8080:8080 i2p-frontend
+```
+
 ## Testing
 
 Run `npm test` (Vitest + React Testing Library). Tests are organised as:
