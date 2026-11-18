@@ -44,6 +44,19 @@ describe('Internal admin - Invoice tracking, search and invoice details', () => 
     expect(screen.queryByText(/Open in /)).not.toBeInTheDocument();
   });
 
+  it('"Open in <channel>" goes to that channel and opens the invoice\'s full details there', async () => {
+    const { store, user } = await loginAdmin();
+    await user.click((await screen.findAllByTitle('Open current stage'))[0]);
+    const stage = store.getState().ui.modal.ctx;
+    await user.click(await screen.findByRole('button', { name: /Open in / }));
+    const { modal } = store.getState().ui;
+    expect(modal.kind).toBe('invoiceDetail');
+    expect(modal.ctx).toMatchObject({ no: stage.no, poItem: stage.poItem, channel: stage.channel });
+    expect(await screen.findByText('Invoice Progress')).toBeInTheDocument(); // the full Invoice Detail window
+    expect(screen.queryByRole('heading', { name: 'Invoice Tracking' })).not.toBeInTheDocument(); // left the dashboard
+    expect(screen.queryByText(/Open in /)).not.toBeInTheDocument();
+  });
+
   it('opens the full Invoice Detail modal from Search Invoice(s)', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Search Invoice(s)')[0]);
