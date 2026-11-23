@@ -12,7 +12,8 @@ from app.core.email import wait_for_outgoing_email
 from app.core.security import get_secret_key
 from app.core.security_headers import SecurityHeadersMiddleware, api_docs_enabled
 from app.api.v1.invoice import router as invoice_router
-from app.api.v1.auth import router as auth_router
+from app.api.v1.auth import router as auth_router, sso_callback
+from app.services.sso_service import callback_path as sso_callback_path
 from app.api.v1.users import router as users_router
 from app.api.v1.suppliers import router as suppliers_router
 from app.api.v1.supplier_requests import router as supplier_requests_router
@@ -37,7 +38,7 @@ get_secret_key()
 
 _docs = api_docs_enabled()
 app = FastAPI(
-    title="M&M Invoice-to-Payment Tracker",
+    title="MPayVision",
     # Interactive docs only when ENABLE_API_DOCS=true (developer machines); see security_headers.py.
     docs_url="/docs" if _docs else None,
     redoc_url="/redoc" if _docs else None,
@@ -69,6 +70,9 @@ app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(invoice_sync_router, prefix="/api/v1")
 app.include_router(help_router, prefix="/api/v1")
 app.include_router(audit_logs_router, prefix="/api/v1")
+# Single sign-on callback: its path is a setting (SSO_CALLBACK_PATH) because it must match the URL
+# registered with CC Services for each environment.
+app.add_api_route(sso_callback_path(), sso_callback, methods=["GET", "POST"], include_in_schema=False)
 
 
 @app.middleware("http")

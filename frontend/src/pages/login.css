@@ -677,3 +677,31 @@
   outline: 0.125rem solid var(--brand);
   outline-offset: -0.125rem;
 }
+
+/* Single sign-on (CC Services): an "or" divider and an outlined button under the staff form. */
+.lgn-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.25rem 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.lgn-divider::before,
+.lgn-divider::after { content: ""; flex: 1; border-top: 0.0625rem solid currentColor; opacity: .35; }
+.lgn-sso {
+  height: 2.875rem;
+  border: 0.0625rem solid var(--brand);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--brand);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .18s ease;
+}
+.lgn-sso:hover:not(:disabled) { background: var(--red-bg); }
+.lgn-sso:focus-visible { outline: 0.125rem solid var(--ink); outline-offset: 0.125rem; }
+.lgn-sso:disabled { opacity: .6; cursor: not-allowed; }

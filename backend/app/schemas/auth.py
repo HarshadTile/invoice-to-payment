@@ -29,6 +29,11 @@ class TokenRequest(BaseModel):
     token: str
 
 
+class SsoExchangeRequest(BaseModel):
+    """The one-time code from the SSO callback redirect."""
+    code: str
+
+
 class ResetPasswordRequest(BaseModel):
     token: str
     password: str

@@ -8,6 +8,10 @@ os.environ["ENABLE_API_DOCS"] = "false"  # tests check the deployed default, wha
 os.environ["SMTP_HOST"] = ""
 # Tests read the fixture files, never the live BigQuery API.
 os.environ["INVOICE_SOURCE"] = "file"
+# SSO is off in tests unless a test switches it on (tests/helpers/sso.py), whatever a dev .env says.
+os.environ["SSO_ENABLED"] = "false"
+os.environ["SSO_CALLBACK_PATH"] = "/api/v1/auth/sso/callback"
+os.environ["SSO_TOKEN_PARAM"] = ""
 
 import pytest
 from alembic import command

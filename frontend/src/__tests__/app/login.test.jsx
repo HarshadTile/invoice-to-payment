@@ -65,6 +65,43 @@ describe('Login flows', () => {
     expect(await screen.findByText(/Invalid email or password/)).toBeInTheDocument();
   });
 
+  it('shows the SSO button only when the server has SSO on, and sends the browser there', async () => {
+    const { unmount } = renderApp(freshStore());
+    await screen.findByLabelText('Enter Email ID');
+    expect(screen.queryByRole('button', { name: /company account/ })).not.toBeInTheDocument();
+    unmount();
+
+    const realGet = api.get.getMockImplementation();
+    api.get.mockImplementation((path) => (path === '/v1/auth/sso/status' ? Promise.resolve({ enabled: true }) : realGet(path)));
+    const assign = vi.fn();
+    const location = vi.spyOn(window, 'location', 'get').mockReturnValue({ ...window.location, assign });
+    try {
+      renderApp(freshStore());
+      await userEvent.click(await screen.findByRole('button', { name: /company account/ }));
+      expect(assign).toHaveBeenCalledWith('/api/v1/auth/sso/login?scope=all&remember=true');
+    } finally {
+      api.get.mockImplementation(realGet);
+      location.mockRestore();
+    }
+  });
+
+  it('explains why single sign-on sent the person back', async () => {
+    renderApp(freshStore(), '/login?account=internal&sso_error=no_account');
+    expect(await screen.findByText(/has no access to this portal yet/)).toBeInTheDocument();
+  });
+
+  it('swaps the SSO one-time code for a session and lands on Invoice Tracking', async () => {
+    renderApp(freshStore(), '/sso/callback?code=good-code');
+    expect(await screen.findByRole('heading', { name: 'Invoice Tracking' })).toBeInTheDocument();
+    expect(api.setToken).toHaveBeenCalledWith('test-sso-token', { persist: true });
+  });
+
+  it('a used or made-up SSO code shows an error and a way back', async () => {
+    renderApp(freshStore(), '/sso/callback?code=bad-code');
+    expect(await screen.findByText(/invalid or has expired/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to sign in' })).toBeInTheDocument();
+  });
+
   it('logs in as internal Admin (All Channels) and lands on Invoice Tracking', async () => {
     const user = userEvent.setup();
     renderApp(freshStore());

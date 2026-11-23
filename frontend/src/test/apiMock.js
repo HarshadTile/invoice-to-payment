@@ -264,6 +264,12 @@ export function installApiMock() {
       return { token: 'test-token', auth: authFor(form) };
     }
     if (path === '/v1/auth/logout') return { ok: true };
+    if (path === '/v1/auth/sso/exchange') {
+      if (body?.code !== 'good-code') {
+        throw Object.assign(new Error('This sign-in link is invalid or has expired. Sign in again.'), { status: 401 });
+      }
+      return { token: 'test-sso-token', auth: authFor({ mode: 'internal', username: 'admin' }), remember: true };
+    }
     if (path === '/v1/invoice-sync/run') {
       syncStatus.running = true; // part-way through: SRM downloading, PO Portal queued behind it
       syncStatus.sources[0].progress = { stage: 'downloading', done: 100, total: 214 };

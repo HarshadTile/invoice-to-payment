@@ -142,8 +142,17 @@ def login_internal(db: Session, username: str, password: str, requested_scope: s
         user.failed_attempts, user.locked_until = 0, None
         db.commit()
 
+    login_by = "username" if user.username.lower() == login_id else "email"
+    return issue_internal_session(db, user, requested_scope, login_by=login_by, login_id=login_id)
+
+
+def issue_internal_session(db: Session, user: User, requested_scope: str | None, *,
+                           login_by: str, login_id: str, via: str = "") -> dict:
+    """Workspace checks, then the login token and audit entry. Shared by password login and SSO,
+    so both follow the same rules once the person's identity is proven. `via` labels the audit
+    entries (e.g. " (SSO)")."""
     if requested_scope and requested_scope not in VALID_CHANNEL_SCOPES:
-        write_audit(db, user, "Failed login", f"requested unknown workspace '{requested_scope}'")
+        write_audit(db, user, "Failed login", f"requested unknown workspace '{requested_scope}'{via}")
         _fail(403, "Unknown workspace.")
 
     ticket_role = ticket_role_of(user)
@@ -153,15 +162,14 @@ def login_internal(db: Session, username: str, password: str, requested_scope: s
     else:
         final_scope = requested_scope or user.channel_scope
         if final_scope == "all" or final_scope not in allowed_channels:
-            write_audit(db, user, "Failed login", f"tried workspace '{final_scope}' outside assigned ticket channels")
+            write_audit(db, user, "Failed login", f"tried workspace '{final_scope}' outside assigned ticket channels{via}")
             _fail(403, "This account can only sign in to its assigned portal.")
 
     require_enabled_channel(db, final_scope)
-    login_by = "username" if user.username.lower() == login_id else "email"
     token = create_access_token(subject=user.id, auth_type="internal",
                                 scope={"channelScope": final_scope, "loginBy": login_by, "loginId": login_id,
                                        "sv": user.session_version or 0})
-    write_audit(db, user, "Logged in", f"{user.role}, portal {final_scope}")
+    write_audit(db, user, "Logged in", f"{user.role}, portal {final_scope}{via}")
     identity = {"auth_type": "internal", "user_id": user.id, "username": user.username, "name": user.name,
                 "email": user.email, "role": user.role, "title": user.title, "dept": user.dept,
                 "channel_scope": final_scope, "ticket_role": ticket_role, "allowed_channels": allowed_channels}

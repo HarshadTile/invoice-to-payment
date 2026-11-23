@@ -99,6 +99,14 @@ Secrets come from **Secret Manager**, the rest are plain variables.
 | `LOGIN_ATTEMPTS_PER_IP` | no | optional, default 30 per 5 minutes |
 | `AUDIT_RETENTION_DAYS` | no | optional, default 365 |
 | `INVOICE_STALE_AFTER_MINUTES`, `BIGQUERY_PAGE_SIZE`, `BIGQUERY_TIMEOUT`, `BIGQUERY_WORKERS`, `AUTO_CLOSE_DAYS` | no | optional tuning, defaults are fine |
+| `SSO_TOKEN_DECRYPT_SECRET` | yes | CC Services decrypt key for **this** environment (from the CC Services team) |
+| `SSO_ENABLED`, `SSO_LOGIN_URL`, `SSO_CC_SERVICES_LEGACY_ENABLED` | no | staff single sign-on; `SSO_LOGIN_URL` carries our app id and `env=DEV/UAT/PROD` |
+| `SSO_CALLBACK_PATH` | no | default `/api/v1/auth/sso/callback`; register `FRONTEND_URL` + this path with CC Services |
+| `SSO_TOKEN_PARAM`, `SSO_STATE_PARAM`, `SSO_TOKEN_KEY_ENCODING`, `SSO_TOKEN_MAX_AGE_SECONDS`, `SSO_*_FIELDS`, `SSO_COOKIE_SAMESITE` | no | optional, see `.env.example` |
+
+Single sign-on is described in `app/services/sso_service.py`. SSO only signs in people who already
+have an Active account here (matched by username = employee ID, then email); password login stays
+available as a fallback.
 
 Outbound network: the backend needs Cloud SQL (private IP, via Serverless VPC Access), the BigQuery
 API host (HTTPS) and the SMTP server.
