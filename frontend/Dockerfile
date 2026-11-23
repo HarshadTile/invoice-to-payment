@@ -1,4 +1,4 @@
-# Invoice to Payment Tracker - frontend (React) image for Cloud Run.
+# MPayVision (Invoice to Payment Tracker) - frontend (React) image for Cloud Run.
 #
 #   docker build -t i2p-frontend .
 #   docker run -p 8080:8080 i2p-frontend

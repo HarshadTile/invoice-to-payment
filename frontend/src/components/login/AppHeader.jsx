@@ -28,13 +28,12 @@ export default function AppHeader() {
             <small>DIGITAL ENGINE</small>
           </span>
         </span>
-        <span className="lgn-hdr-title">Invoice to Payment Tracker</span>
       </div>
       <nav className="lgn-hdr-nav" aria-label="Support">
         {manual && (
           <a href={manual} target="_blank" rel="noreferrer" title="Supplier user manual" aria-label="Help: open the supplier user manual">Help</a>
         )}
-        <a href={`mailto:${SUPPORT_EMAIL}?subject=Invoice%20Tracker%20support`}>Contact Us</a>
+        <a href={`mailto:${SUPPORT_EMAIL}?subject=MPayVision%20support`}>Contact Us</a>
       </nav>
     </header>
   );

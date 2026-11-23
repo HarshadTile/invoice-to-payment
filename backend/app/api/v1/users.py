@@ -136,12 +136,12 @@ def _send_account_link(user: User, link: dict, admin_initiated: bool = True) -> 
         return False
     if link.get("linkType") == "invite":
         text, html = invite_email(user.name, user.role, link["setupLink"], link["expiryMinutes"], _access_note(user))
-        subject = "Set up your Invoice to Payment Tracker account"
+        subject = "Set up your MPayVision account"
     else:
         text, html = password_reset_email(
             user.name, link["setupLink"], link["expiryMinutes"], admin_initiated=admin_initiated,
         )
-        subject = "Reset your Invoice to Payment Tracker password"
+        subject = "Reset your MPayVision password"
     try:
         send_email(user.email, subject, text, html)
         return True

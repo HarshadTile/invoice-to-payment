@@ -185,7 +185,7 @@ def forgot_password(db: Session, email: str) -> None:
         link = issue_password_reset(db, user, admin_initiated=False)
         db.commit()
         text, html = password_reset_email(user.name, link["setupLink"], link["expiryMinutes"], admin_initiated=False)
-        send_email(user.email, "Reset your Invoice to Payment Tracker password", text, html)
+        send_email(user.email, "Reset your MPayVision password", text, html)
     except Exception:
         db.rollback()
         logger.exception("Forgot-password email delivery failed")
