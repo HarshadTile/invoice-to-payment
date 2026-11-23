@@ -37,6 +37,10 @@ MarkupSafe==3.0.3
 # Sign-in and passwords
 PyJWT==2.15.1
 bcrypt==4.1.2
+# Single sign-on: decrypts CC Services tokens (AES)
+cryptography==49.0.0
+cffi==2.1.1
+pycparser==3.12
 
 # Invoice sources: Excel / CSV files, the BigQuery query API over HTTPS
 openpyxl==3.1.5

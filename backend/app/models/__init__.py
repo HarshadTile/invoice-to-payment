@@ -1,5 +1,5 @@
 from app.models.audit_log import AuditLog
-from app.models.user import OTPCode, PasswordResetToken, User, UserChannelAccess
+from app.models.user import OTPCode, PasswordResetToken, SsoLogin, User, UserChannelAccess
 from app.models.supplier import Supplier, SupplierVendorCode, SupplierSetupToken
 from app.models.ticket import Ticket, TicketComment
 from app.models.ticket_activity import (
@@ -14,7 +14,7 @@ from app.models.ticket_activity import (
 
 __all__ = [
     "AuditLog",
-    "User", "OTPCode", "PasswordResetToken", "UserChannelAccess", "Ticket", "TicketComment",
+    "User", "OTPCode", "PasswordResetToken", "SsoLogin", "UserChannelAccess", "Ticket", "TicketComment",
     "Notification", "SlaPolicy", "TicketActivity", "TicketAttachment",
     "TicketIdempotency", "TicketJobRun", "TicketRead",
     "Supplier", "SupplierVendorCode", "SupplierSetupToken",

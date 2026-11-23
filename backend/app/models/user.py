@@ -59,6 +59,23 @@ class PasswordResetToken(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class SsoLogin(Base):
+    """One single sign-on (CC Services) round trip. `token_hash` blocks the same CC Services token
+    from being used twice within its lifetime; `code_hash` is the one-time code the browser swaps
+    for a login token. Only hashes are stored; rows are removed after a day."""
+    __tablename__ = "sso_logins"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code_hash = Column(String(64), unique=True, nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    channel_scope = Column(String(32), nullable=True)
+    remember = Column(Boolean, nullable=False, default=False)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 def ticket_admin_clause():
     """SQL for "acts as a ticket Admin": ticket role ADMIN, or application role Admin (whose ticket role
     may be unset, e.g. the first account from seed_admin.py). The same rule as auth_service.ticket_role_of,

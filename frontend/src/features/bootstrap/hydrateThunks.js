@@ -43,6 +43,17 @@ export const loadBootstrap = (auth) => async (dispatch) => {
 export const loginThunk = (form, opts = {}) => async (dispatch) => {
   const body = form.mode === 'supplierPassword' ? { email: form.email, password: form.password } : form;
   const { token, auth } = await authApi.login(form.mode, body);
+  await dispatch(startSession(token, auth, opts));
+};
+
+/** Single sign-on: swap the one-time code from the SSO redirect for the normal login reply.
+ *  "Remember me" was chosen before leaving for CC Services and comes back with the reply. */
+export const ssoLoginThunk = (code) => async (dispatch) => {
+  const { token, auth, remember } = await authApi.ssoExchange(code);
+  await dispatch(startSession(token, auth, { remember }));
+};
+
+const startSession = (token, auth, opts = {}) => async (dispatch) => {
   api.setToken(token, { persist: opts.remember !== false });
   dispatch(ticketsApi.util.resetApiState());
   dispatch(invoicesQueryApi.util.resetApiState());

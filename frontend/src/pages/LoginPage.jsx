@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { settingsApi } from '../api/settingsApi';
+import { authApi } from '../api/authApi';
 import { DEFAULT_CHANNEL_AVAILABILITY } from '../data/constants';
 import { useDispatch } from 'react-redux';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -16,6 +17,19 @@ import PrimaryButton from '../components/login/PrimaryButton.jsx';
 import { IdIcon, MailIcon, AlertIcon, CheckIcon } from '../components/login/icons.jsx';
 import './login.css';
 
+// Why single sign-on sent the person back here (?sso_error=… from the backend callback).
+const SSO_ERRORS = {
+  disabled: 'Single sign-on is not available right now. Sign in with your email and password.',
+  state: 'The sign-in took too long or was started in another window. Please try again.',
+  expired: 'The sign-in took too long. Please try again.',
+  replay: 'That sign-in was already used. Please try again.',
+  no_account: 'Your company account has no access to this portal yet. Ask an administrator to add you.',
+  inactive: 'This account is not active. Contact an administrator.',
+  locked: 'This account is locked after too many wrong passwords. Try again later.',
+  busy: 'Too many sign-in attempts. Wait a few minutes and try again.',
+};
+const SSO_FAILED = 'Single sign-on could not confirm your identity. Please try again.';
+
 export default function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -26,6 +40,8 @@ export default function LoginPage() {
   const [status, setStatus] = useState('idle'); // idle | busy | success
   // Why the last session ended (signed out elsewhere, deactivated, access changed), shown once.
   const [error, setError] = useState(() => {
+    const ssoError = searchParams.get('sso_error');
+    if (ssoError) return SSO_ERRORS[ssoError] || SSO_FAILED;
     try {
       const reason = sessionStorage.getItem(SESSION_MESSAGE_KEY) || '';
       sessionStorage.removeItem(SESSION_MESSAGE_KEY);
@@ -48,6 +64,28 @@ export default function LoginPage() {
     }).catch(() => { if (!stale) setError('Unable to load portal options. Refresh the page to try again.'); });
     return () => { stale = true; };
   }, [tab]);
+  // The SSO button shows only when the backend has single sign-on switched on and configured.
+  const [ssoEnabled, setSsoEnabled] = useState(false);
+  const [ssoLeaving, setSsoLeaving] = useState(false);
+  useEffect(() => {
+    if (tab !== 'internal') return undefined;
+    let stale = false;
+    authApi.ssoStatus().then((data) => { if (!stale) setSsoEnabled(!!data?.enabled); }).catch(() => {});
+    return () => { stale = true; };
+  }, [tab]);
+  useEffect(() => {
+    // Coming "Back" from the CC Services page restores this page from the browser cache.
+    const reset = () => setSsoLeaving(false);
+    window.addEventListener('pageshow', reset);
+    return () => window.removeEventListener('pageshow', reset);
+  }, []);
+
+  function startSso() {
+    setError('');
+    setSsoLeaving(true);
+    window.location.assign(authApi.ssoLoginUrl({ scope: channelScope, remember }));
+  }
+
   const [empId, setEmpId] = useState('');
   const [supplierEmail, setSupplierEmail] = useState(searchParams.get('email') || '');
   const [password, setPassword] = useState('');
@@ -176,6 +214,14 @@ export default function LoginPage() {
           {passwordField}
           {rememberRow}
           <PrimaryButton loading={busy} done={done} />
+          {ssoEnabled && (
+            <>
+              <div className="lgn-divider">or</div>
+              <button type="button" className="lgn-sso" onClick={startSso} disabled={busy || done || ssoLeaving}>
+                {ssoLeaving ? 'Opening company sign-in…' : 'Sign in with company account (SSO)'}
+              </button>
+            </>
+          )}
         </form>
       ) : (
         <form className="lgn-form" onSubmit={submitSupplier} noValidate>

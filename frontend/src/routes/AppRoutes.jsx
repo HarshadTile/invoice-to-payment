@@ -14,6 +14,7 @@ import AppLayout from '../components/layout/AppLayout.jsx';
 import LoginPage from '../pages/LoginPage.jsx';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage from '../pages/ResetPasswordPage.jsx';
+import SsoCallbackPage from '../pages/SsoCallbackPage.jsx';
 import InvoiceTrackingPage from '../pages/InvoiceTrackingPage.jsx';
 import SearchInvoicePage from '../pages/SearchInvoicePage.jsx';
 import ChannelPage from '../pages/ChannelPage.jsx';
@@ -43,6 +44,7 @@ export default function AppRoutes() {
       {/* Always reachable, even mid-session — an emailed reset link shouldn't get bounced by a stale login. */}
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/sso/callback" element={<SsoCallbackPage />} />
       {/* The link a team member shares with a new supplier; public, like reset-password. */}
       <Route path="/supplier/setup" element={<SupplierSetupPage />} />
       <Route path="/supplier/request-access" element={<SupplierRequestPage />} />
