@@ -192,13 +192,13 @@ describe('Internal admin - Navigation, top bar and account menu', () => {
     await user.click(screen.getByRole('button', { name: /Account menu for/ }));
     await user.click(screen.getByRole('menuitem', { name: 'Logout' }));
     await user.click(await screen.findByRole('button', { name: 'Log Out' }));
-    expect(await screen.findByText('Sign in to Invoice to Payment Tracker')).toBeInTheDocument();
+    expect(await screen.findByText('Sign in to MPayVision')).toBeInTheDocument();
   });
 
   it('logs out and returns to login screen', async () => {
     const { user } = await loginAdmin();
     await user.click(screen.getAllByText('Logout')[0]);
     await user.click(await screen.findByRole('button', { name: 'Log Out' }));
-    expect(await screen.findByText('Sign in to Invoice to Payment Tracker')).toBeInTheDocument();
+    expect(await screen.findByText('Sign in to MPayVision')).toBeInTheDocument();
   });
 });

@@ -2,7 +2,7 @@ from html import escape
 """HTML/plain-text bodies for transactional emails. Kept separate from the endpoints
 that trigger them so the copy/design can change without touching request handling."""
 
-BRAND = "Invoice to Payment Tracker"
+BRAND = "MPayVision"
 BRAND_RED = "#C4122E"  # matches the app's own brand color (frontend/src/theme.css --brand)
 
 

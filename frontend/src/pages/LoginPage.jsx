@@ -190,7 +190,7 @@ export default function LoginPage() {
   return (
     <AuthLayout
       kicker="Welcome back"
-      title="Sign in to Invoice to Payment Tracker"
+      title="Sign in to MPayVision"
       subtitle="Sign in to continue."
       footer={<SupportFooter />}
     >

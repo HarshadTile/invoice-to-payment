@@ -1,4 +1,4 @@
-# Mahindra I2P — Invoice to Payment Tracker
+# MPayVision — Mahindra Invoice to Payment Tracker
 
 A complete React + Redux application for tracking supplier invoices end-to-end —
 from upload through approval, booking, and payment — across four processing

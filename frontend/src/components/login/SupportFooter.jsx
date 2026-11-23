@@ -15,7 +15,7 @@ export default function SupportFooter() {
         <span>© 2026 Mahindra</span>
         <button type="button" onClick={() => setPolicy('Privacy')}>Privacy</button>
         <button type="button" onClick={() => setPolicy('Terms')}>Terms</button>
-        <a className="lgn-legal-help" href={`mailto:${SUPPORT_EMAIL}?subject=Invoice%20to%20Payment%20Tracker%20help`}>Need help?</a>
+        <a className="lgn-legal-help" href={`mailto:${SUPPORT_EMAIL}?subject=MPayVision%20help`}>Need help?</a>
       </div>
       {policy && (
         <ModalShell title={`${policy} notice`} width={520} onClose={() => setPolicy(null)}

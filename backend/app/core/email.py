@@ -28,7 +28,7 @@ SMTP_USER = (os.getenv("SMTP_USER") or "").strip() or None
 # before SMTP AUTH while leaving other providers' password characters intact.
 SMTP_PASSWORD = (os.getenv("SMTP_PASSWORD") or "").replace(" ", "") or None
 EMAIL_FROM = (os.getenv("EMAIL_FROM") or SMTP_USER or "").strip()
-EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "Invoice to Payment Tracker")
+EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "MPayVision")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
 
 
