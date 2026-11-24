@@ -20,6 +20,11 @@ class Supplier(Base):
     password_hash = Column(String(255), nullable=True)
     failed_attempts = Column(Integer, nullable=False, default=0)
     locked_until = Column(DateTime, nullable=True)
+    # Password expiry (SUPPLIER_PASSWORD_MAX_AGE_DAYS): when the password was last set, and when
+    # the "expires soon" reminder / "has expired" email went out (cleared on every new password).
+    password_changed_at = Column(DateTime, nullable=True)
+    password_reminder_sent_at = Column(DateTime, nullable=True)
+    password_expiry_notified_at = Column(DateTime, nullable=True)
     # Copied into each login token; raising it (logout) ends older sessions.
     session_version = Column(Integer, nullable=False, default=0, server_default="0")
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
