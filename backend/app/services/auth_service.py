@@ -17,13 +17,19 @@ from app.core.security import create_access_token, get_password_hash, token_sess
 from app.models.supplier import Supplier, SupplierSetupToken
 from app.models.user import PasswordResetToken, User
 from app.services.supplier_service import (
+    EXPIRED_EMAIL_GAP_MINUTES,
     GENERIC_LOGIN_ERROR,
+    PASSWORD_EXPIRED_MESSAGE,
     build_session,
     clear_failures,
     is_locked,
+    mark_password_changed,
     normalize_email,
+    password_expired,
+    password_max_age_days,
     register_failure,
     send_access_email,
+    send_password_expiry_email,
     supplier_channels,
 )
 
@@ -265,6 +271,18 @@ def login_supplier_password(db: Session, email: str, password: str) -> dict:
         register_failure(db, supplier)
         write_audit(db, actor, "Failed login", "wrong password")
         _fail(401, GENERIC_LOGIN_ERROR)
+    if password_expired(supplier):
+        # Only told after the right password, so this never reveals anything to a guesser.
+        clear_failures(db, supplier)
+        now = datetime.utcnow()
+        last = supplier.password_expiry_notified_at
+        if not last or last <= now - timedelta(minutes=EXPIRED_EMAIL_GAP_MINUTES):
+            if send_password_expiry_email(db, supplier, expired=True, now=now):
+                supplier.password_expiry_notified_at = now
+                db.commit()
+        write_audit(db, actor, "Failed login", "password expired (older than "
+                    f"{password_max_age_days()} days)", throttle_key=f"expired-supplier|{supplier.id}")
+        _fail(403, PASSWORD_EXPIRED_MESSAGE)
 
     channels = supplier_channels(supplier)
     available = channel_availability(db)
@@ -303,6 +321,7 @@ def complete_supplier_setup(db: Session, token: str, email: str, password: str) 
 
     _require_strong_password(password, [supplier.email, supplier.name])
     supplier.password_hash = get_password_hash(password)
+    mark_password_changed(supplier)
     supplier.status = "Active"
     supplier.failed_attempts, supplier.locked_until = 0, None
     record.used = True

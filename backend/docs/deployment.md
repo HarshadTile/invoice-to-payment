@@ -98,6 +98,7 @@ Secrets come from **Secret Manager**, the rest are plain variables.
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | no | optional, default 480 |
 | `LOGIN_ATTEMPTS_PER_IP` | no | optional, default 30 per 5 minutes |
 | `AUDIT_RETENTION_DAYS` | no | optional, default 365 |
+| `SUPPLIER_PASSWORD_MAX_AGE_DAYS`, `SUPPLIER_PASSWORD_REMINDER_DAYS` | no | optional, default 90 and 5: supplier password expiry (0 = off) and the reminder email that many days before |
 | `INVOICE_STALE_AFTER_MINUTES`, `BIGQUERY_PAGE_SIZE`, `BIGQUERY_TIMEOUT`, `BIGQUERY_WORKERS`, `AUTO_CLOSE_DAYS` | no | optional tuning, defaults are fine |
 | `SSO_TOKEN_DECRYPT_SECRET` | yes | CC Services decrypt key for **this** environment (from the CC Services team) |
 | `SSO_ENABLED`, `SSO_LOGIN_URL`, `SSO_CC_SERVICES_LEGACY_ENABLED` | no | staff single sign-on; `SSO_LOGIN_URL` carries our app id and `env=DEV/UAT/PROD` |

@@ -136,4 +136,14 @@ describe('Login flows', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByText('Total Invoices')).toBeInTheDocument();
   });
+
+  it('tells a supplier whose password expired to use the emailed link', async () => {
+    const user = userEvent.setup();
+    renderApp(freshStore(), '/supplier/login');
+    await user.type(screen.getByLabelText('Email'), 'expired@example.com');
+    await user.type(screen.getByLabelText('Password'), 'supplier123');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByText(/Your password has expired/)).toBeInTheDocument();
+    expect(screen.queryByText('Total Invoices')).not.toBeInTheDocument();
+  });
 });

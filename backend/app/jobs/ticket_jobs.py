@@ -122,6 +122,19 @@ def purge_audit_log() -> int:
         db.close()
 
 
+def notify_supplier_password_expiry() -> dict:
+    """Hourly: supplier "password expires soon" reminders and "password has expired" emails."""
+    from app.services.supplier_service import notify_password_expiry
+    db = SessionLocal()
+    try:
+        sent = notify_password_expiry(db)
+        if any(sent.values()):
+            logger.info("Supplier password expiry emails sent: %s", sent)
+        return sent
+    finally:
+        db.close()
+
+
 def _loop():
     minute = 0
     while not _stop_event.wait(60):
@@ -132,6 +145,8 @@ def _loop():
                 scan_sla_breaches()
             if minute % 60 == 0:
                 auto_close_resolved()
+            if minute % 60 == 3:
+                notify_supplier_password_expiry()
             if minute % 1440 == 2:
                 purge_audit_log()
         except Exception:

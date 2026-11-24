@@ -6,6 +6,7 @@ passwordless vendor-code login and its tokens were removed; such a token is reje
 """
 import hashlib
 import logging
+import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -180,7 +181,8 @@ def set_vendor_codes(db: Session, supplier: Supplier, wanted: list[str]) -> tupl
     return added, removed
 
 
-def send_access_email(db: Session, supplier: Supplier, kind: str | None = None, note: str = "") -> bool:
+def send_access_email(db: Session, supplier: Supplier, kind: str | None = None, note: str = "",
+                      subject: str = "", intro: str = "") -> bool:
     """Issue a setup / reset link and email it to the supplier (with an optional note from the
     team). False when it couldn't be sent."""
     link = issue_setup_link(db, supplier, kind)
@@ -189,9 +191,9 @@ def send_access_email(db: Session, supplier: Supplier, kind: str | None = None, 
     try:
         text, html = supplier_access_email(
             supplier.name, supplier.email, link["setupLink"], link["expiryMinutes"],
-            reset=link["linkType"] == "reset", note=note,
+            reset=link["linkType"] == "reset", note=note, intro=intro,
         )
-        subject = "Reset your supplier portal password" if link["linkType"] == "reset" else "Set up your supplier portal access"
+        subject = subject or ("Reset your supplier portal password" if link["linkType"] == "reset" else "Set up your supplier portal access")
         send_email(supplier.email, subject, text, html)
         return True
     except Exception:
@@ -273,6 +275,107 @@ def clear_failures(db: Session, supplier: Supplier) -> None:
     if supplier.failed_attempts or supplier.locked_until:
         supplier.failed_attempts, supplier.locked_until = 0, None
         db.commit()
+
+
+# ---------- password expiry (suppliers only) ----------
+
+PASSWORD_EXPIRED_MESSAGE = (
+    "Your password has expired. Use the link we've emailed you to set a new one, or choose Forgot password."
+)
+EXPIRED_EMAIL_GAP_MINUTES = 15  # at most one "expired" email per this many minutes from the login page
+
+
+def _env_days(name: str, default: int) -> int:
+    try:
+        return max(0, int(os.getenv(name, str(default)).strip() or default))
+    except ValueError:
+        return default
+
+
+def password_max_age_days() -> int:
+    """SUPPLIER_PASSWORD_MAX_AGE_DAYS (default 90); 0 turns expiry off."""
+    return _env_days("SUPPLIER_PASSWORD_MAX_AGE_DAYS", 90)
+
+
+def password_reminder_days() -> int:
+    """SUPPLIER_PASSWORD_REMINDER_DAYS (default 5): the "expires soon" email goes this many days before."""
+    return _env_days("SUPPLIER_PASSWORD_REMINDER_DAYS", 5)
+
+
+def password_expires_at(supplier: Supplier) -> datetime | None:
+    """None when expiry is off or the date is unknown (unknown never locks anyone out)."""
+    days = password_max_age_days()
+    if not days or not supplier.password_changed_at:
+        return None
+    return supplier.password_changed_at + timedelta(days=days)
+
+
+def password_expired(supplier: Supplier, now: datetime | None = None) -> bool:
+    expires = password_expires_at(supplier)
+    return bool(expires and (now or datetime.utcnow()) >= expires)
+
+
+def mark_password_changed(supplier: Supplier) -> None:
+    """Start a new expiry period (caller commits)."""
+    supplier.password_changed_at = datetime.utcnow()
+    supplier.password_reminder_sent_at = None
+    supplier.password_expiry_notified_at = None
+
+
+def send_password_expiry_email(db: Session, supplier: Supplier, expired: bool, now: datetime | None = None) -> bool:
+    """Email a reset link: "has expired" or "expires in N days". False when it couldn't be sent."""
+    now = now or datetime.utcnow()
+    expires = password_expires_at(supplier)
+    if expired:
+        subject = "Your supplier portal password has expired"
+        intro = (f"The password for your Mahindra Supplier Portal account ({supplier.email}) is more than "
+                 f"{password_max_age_days()} days old and has expired. Choose a new password to keep signing in.")
+    else:
+        days_left = max(1, round((expires - now).total_seconds() / 86400)) if expires else password_reminder_days()
+        subject = f"Your supplier portal password expires in {days_left} day{'s' if days_left != 1 else ''}"
+        intro = (f"The password for your Mahindra Supplier Portal account ({supplier.email}) will expire in "
+                 f"{days_left} day{'s' if days_left != 1 else ''}"
+                 + (f" (on {expires:%d %b %Y})" if expires else "")
+                 + ". Choose a new password now so your access isn't interrupted.")
+    return send_access_email(db, supplier, "reset", subject=subject, intro=intro)
+
+
+def notify_password_expiry(db: Session, now: datetime | None = None) -> dict:
+    """Background job: send the "expires soon" reminder and the "has expired" email, once each per
+    password. Nothing is marked when the email couldn't be sent, so the next run tries again."""
+    from app.core.audit import write_audit  # local: app.core.audit is not needed elsewhere here
+
+    now = now or datetime.utcnow()
+    max_age = password_max_age_days()
+    sent = {"reminders": 0, "expired": 0}
+    if not max_age or not smtp_is_configured():
+        return sent
+    window_start = now - timedelta(days=max(0, max_age - password_reminder_days()))
+    candidates = (
+        db.query(Supplier)
+        .filter(
+            Supplier.status == "Active",
+            Supplier.password_hash.isnot(None),
+            Supplier.password_changed_at.isnot(None),
+            Supplier.password_changed_at <= window_start,
+            Supplier.password_expiry_notified_at.is_(None),
+        )
+        .all()
+    )
+    for supplier in candidates:
+        actor = f"Supplier {supplier.email}"
+        if password_expired(supplier, now):
+            if send_password_expiry_email(db, supplier, expired=True, now=now):
+                supplier.password_expiry_notified_at = now
+                write_audit(db, actor, "Password expired", f"{supplier.name}: reset link emailed")
+                sent["expired"] += 1
+        elif password_reminder_days() and supplier.password_reminder_sent_at is None:
+            if send_password_expiry_email(db, supplier, expired=False, now=now):
+                supplier.password_reminder_sent_at = now
+                write_audit(db, actor, "Password expiry reminder", f"{supplier.name}: reminder emailed")
+                sent["reminders"] += 1
+    db.commit()
+    return sent
 
 
 def session_stamp(supplier: Supplier) -> str:

@@ -228,6 +228,9 @@ export function installApiMock() {
 
   const post = vi.fn(async (path, body) => {
     if (path === '/v1/auth/supplier/login-with-password') {
+      if (body.email === 'expired@example.com') {
+        throw Object.assign(new Error("Your password has expired. Use the link we've emailed you to set a new one, or choose Forgot password."), { status: 403 });
+      }
       if (body.email !== 'supplier@example.com' || body.password !== 'supplier123') {
         throw Object.assign(new Error('Email or password is incorrect, or the account is inactive.'), { status: 401 });
       }

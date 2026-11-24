@@ -127,11 +127,13 @@ def invite_email(name: str, role: str, set_password_link: str, minutes: int, acc
     return _button_email(f"Welcome to {BRAND}", intro, "Set Your Password", set_password_link, name, minutes, footer, access_note)
 
 
-def supplier_access_email(name: str, email: str, setup_link: str, minutes: int, reset: bool = False, note: str = "") -> tuple[str, str]:
-    """Supplier account setup/reset message; suppliers sign in with their email and password."""
-    if reset:
+def supplier_access_email(name: str, email: str, setup_link: str, minutes: int, reset: bool = False, note: str = "",
+                          intro: str = "") -> tuple[str, str]:
+    """Supplier account setup/reset message; suppliers sign in with their email and password.
+    `intro` replaces the opening line (used by the password-expiry reminder / expired emails)."""
+    if not intro and reset:
         intro = f"A password reset was requested for your Mahindra Supplier Portal account ({email})."
-    else:
+    elif not intro:
         intro = f"Your Mahindra Supplier Portal account is ready. Set a password, then sign in with your email {email}."
     footer = "If you weren't expecting this, you can safely ignore this email and contact your Mahindra representative."
     heading = "Reset your supplier portal password" if reset else "Set up your supplier portal access"
